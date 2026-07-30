@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.docker
+.env.lab
+.env.wallet
+coverage/
+*.log
+wallets/
+data/wallets/
+data/wallets-lab/
+.DS_Store
+*.tsbuildinfo
+.vitest/
+
+# Private local reports / scratch (never commit)
+REVIEW_REPORT_*.md
+tmp-dq*.json
+scripts/tmp-*.mjs
+.grok/

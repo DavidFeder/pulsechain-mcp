@@ -1,0 +1,78 @@
+# pulsechain-mcp — local / co-located test packaging
+#
+# One-command (from repo root):
+#   cp .env.docker.example .env.docker
+#   # edit .env.docker as needed (this file is the real compose config surface)
+#   docker compose up --build
+#
+# Config surface:
+#   - **`.env.docker` via env_file** is authoritative for container env
+#     (PULSECHAIN_RPC_URLS, AGENT_WALLET_ENABLED, LOG_LEVEL, etc.).
+#   - Do NOT re-list those keys under `environment:` with ${VAR:-default} —
+#     Compose interpolates ${…} from the *host* shell / project `.env`, which
+#     silently overrides env_file and ignores edits to `.env.docker`.
+#   - Image ENV sets AGENT_WALLET_ENABLED=false (secretless; product host default
+#     is wallets-on when unset — containers opt out unless you add a master key).
+#
+# Defaults (from .env.docker.example):
+#   - AGENT_WALLET_ENABLED=false (research-only Docker smoke)
+#   - Local-RPC-first URLs (public fallbacks included)
+#   - No secrets in the image
+#
+# Primary MCP path for Cursor / Grok / Claude remains **host stdio**
+# (node dist/index.js). Compose is for realistic process/runtime smoke and
+# co-location next to Go-Pulse / Prysm-Pulse — not a full IDE host session.
+#
+# Networking (pick one pattern):
+#   A) Docker Desktop (Windows/Mac) — default below:
+#        RPC: http://host.docker.internal:8545  (Go-Pulse on host)
+#        extra_hosts host-gateway for Linux Desktop too
+#   B) Linux host network (best for 127.0.0.1 RPC + optional HTTP health):
+#        uncomment network_mode: host and comment extra_hosts
+#   C) Public-only: set PULSECHAIN_RPC_URLS in .env.docker to public endpoints
+#
+# Wallet volume (OPTIONAL — only when you intentionally enable wallets):
+#   - Put AGENT_WALLET_* in .env.docker (not host-interpolated environment:)
+#   - One container → one unique wallet dir / volume. NEVER share a volume
+#     across containers or with a host process that also writes the same dir.
+#   - Locks are process-local; shared dirs are NOT multi-writer-safe.
+
+services:
+  pulsechain-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pulsechain-mcp:1.0.0
+    container_name: pulsechain-mcp
+    restart: "no"
+    # Authoritative config: copy .env.docker.example → .env.docker and edit it.
+    # required: true so a missing file fails loudly instead of silent host defaults.
+    env_file:
+      - path: .env.docker
+        required: true
+    # Intentionally no environment: block for RPC/wallet/log keys.
+    # Image ENV: AGENT_WALLET_ENABLED=false, LOG_LEVEL=info, NODE_ENV=production.
+    extra_hosts:
+      # Docker Desktop + modern Compose: reach host Go-Pulse / Prysm RPC
+      - "host.docker.internal:host-gateway"
+    # --- Linux co-location alternative (uncomment; comment extra_hosts above) ---
+    # network_mode: host
+    # ---------------------------------------------------------------------------
+    # Optional wallet data — enable ONLY with AGENT_WALLET_ENABLED=true in
+    # .env.docker and a unique volume/dir per container.
+    # volumes:
+    #   - pulsechain-mcp-wallets:/app/data/wallets
+    # Also set in .env.docker when enabling wallets:
+    #   AGENT_WALLET_DIR=/app/data/wallets
+    #   AGENT_WALLET_MASTER_KEY=<never commit>
+    #   AGENT_WALLET_MULTIPROC_STRICT=true
+    stdin_open: true
+    tty: true
+
+# Named volume template — create/use only for a single container instance
+# volumes:
+#   pulsechain-mcp-wallets:
+#     name: pulsechain-mcp-wallets-UNIQUE_INSTANCE
+
+
+

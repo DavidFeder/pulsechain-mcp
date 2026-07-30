@@ -1,0 +1,71 @@
+{
+  "name": "pulsechain-mcp",
+  "version": "1.0.0",
+  "description": "PulseChain MCP server for AI agents and local encrypted wallets",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pulsechain-mcp": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "pulsechain",
+    "mcp",
+    "model-context-protocol",
+    "web3",
+    "defi",
+    "hex",
+    "pulsex",
+    "agent-wallets",
+    "typescript",
+    "stdio"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidFeder/pulsechain-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DavidFeder/pulsechain-mcp/issues"
+  },
+  "homepage": "https://github.com/DavidFeder/pulsechain-mcp#readme",
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "graphql": "^16.11.0",
+    "graphql-request": "^7.2.0",
+    "viem": "^2.31.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/codemod": "2.0.0",
+    "@types/node": "^22.15.32",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
