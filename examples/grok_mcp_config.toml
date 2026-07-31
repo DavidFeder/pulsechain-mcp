@@ -17,7 +17,7 @@
 # Do NOT set HTTP_TRANSPORT_PORT (stdio clients need stdout for JSON-RPC).
 #
 # After rebuild: restart Grok Build, /mcps → refresh, or: grok mcp doctor pulsechain-mcp
-# Smoke: pulsechain_health (version 1.0.0) → agent_wallet_status → get_rpc_health
+# Smoke: pulsechain_health (version 1.0.1) → agent_wallet_status → get_rpc_health
 #
 # Dedicated wallet launcher (unique dir + multiproc strict):
 #   point args at REPLACE_WITH_ABSOLUTE_PATH/scripts/start-wallet-mcp.mjs

@@ -69,8 +69,24 @@ export interface PulseSwapQuoteData {
   toToken: string;
   slippage: number;
   mode: "standard" | "advanced";
-  /** True when inner quote success flag was true and amountOut is non-zero-ish. */
+  /**
+   * True when upstream success flags are set and amountOut is non-zero-ish.
+   * Advisory amountOut only — never means execution-ready or USD-priced.
+   * See priceUsdReady / executionReady.
+   */
   quoteReady: boolean;
+  /**
+   * True only when amountOutUSD is a finite positive number string.
+   * Zero/empty amountOutUSD → false (do not treat as USD quote).
+   */
+  priceUsdReady: boolean;
+  /**
+   * Always false for this MCP path. Quotes are advisory; this tool does not
+   * broadcast. Partial upstream (e.g. amountIn "0") never implies execution readiness.
+   */
+  executionReady: false;
+  /** True when upstream amountIn was empty/zero (amountIn field may still echo request). */
+  amountInUpstreamZero: boolean;
   /** Upstream outer + inner success flags for debugging. */
   upstream: {
     outerSuccess: boolean;
@@ -138,7 +154,10 @@ const QUOTE_NOTE =
   "amountIn/amountOut are wei strings. gasEstimate is approximate. " +
   "Upstream may return amountIn as \"0\"; amountIn then echoes amountInRequested " +
   "while amountInUpstream preserves the raw upstream value. " +
-  "quoteReady does not mean execution-ready. Prefer pulsex_v2 / mixed for liquid pairs; rate limit ~60/min.";
+  "quoteReady means advisory amountOut is non-zero only — never execution-ready " +
+  "(executionReady is always false). priceUsdReady is true only when amountOutUSD " +
+  "is a positive number; zero/empty USD is not a priced quote. " +
+  "Prefer pulsex_v2 / mixed for liquid pairs; rate limit ~60/min.";
 
 /** True when upstream amountIn is missing or a zero-ish wei string. */
 export function isEmptyOrZeroAmountIn(value: string | undefined | null): boolean {
@@ -344,9 +363,18 @@ export function normalizePulseSwapQuote(
     isEmptyOrZeroAmountIn(amountInUpstream) && requestAmountIn
       ? requestAmountIn
       : amountInUpstream || requestAmountIn || "0";
-  // Non-zero amountOut + success flags drive quoteReady — never invent readiness.
+  // Non-zero amountOut + success flags drive advisory quoteReady only.
   const amountOutNonZero =
     amountOut !== "" && amountOut !== "0" && !/^0+$/.test(amountOut);
+  const amountOutUsdRaw = str(dataRec.amountOutUSD);
+  const amountOutUsdNum =
+    amountOutUsdRaw !== "" && Number.isFinite(Number(amountOutUsdRaw))
+      ? Number(amountOutUsdRaw)
+      : NaN;
+  // USD price ready only with a finite positive amountOutUSD (0/empty → false).
+  const priceUsdReady =
+    Number.isFinite(amountOutUsdNum) && amountOutUsdNum > 0;
+  const amountInUpstreamZero = isEmptyOrZeroAmountIn(amountInUpstream);
 
   let txAdvisory: PulseSwapQuoteData["txAdvisory"] = null;
   const tx = asRecord(dataRec.tx);
@@ -367,7 +395,7 @@ export function normalizePulseSwapQuote(
     amountInRequested: requestAmountIn,
     amountInUpstream,
     amountOut,
-    amountOutUSD: str(dataRec.amountOutUSD) || null,
+    amountOutUSD: amountOutUsdRaw || null,
     gasEstimate: numOrNull(dataRec.gasEstimate),
     platform: meta.platform,
     chainId: meta.chainId,
@@ -375,7 +403,11 @@ export function normalizePulseSwapQuote(
     toToken: meta.toToken,
     slippage: meta.slippage,
     mode: meta.mode,
+    // Advisory amountOut usable — not USD-priced, not execution-ready
     quoteReady: outerSuccess && innerSuccess && amountOutNonZero,
+    priceUsdReady,
+    executionReady: false,
+    amountInUpstreamZero,
     upstream: {
       outerSuccess,
       innerSuccess,

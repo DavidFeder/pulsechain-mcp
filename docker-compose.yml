@@ -42,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: pulsechain-mcp:1.0.0
+    image: pulsechain-mcp:1.0.1
     container_name: pulsechain-mcp
     restart: "no"
     # Authoritative config: copy .env.docker.example → .env.docker and edit it.

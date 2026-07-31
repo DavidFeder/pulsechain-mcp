@@ -30,7 +30,7 @@
 #     (do not set HTTP_TRANSPORT_PORT on the Node process for IDE/CLI stdio hosts).
 #
 # After rebuild: restart Codex / extension, or check: codex mcp list
-# Smoke: pulsechain_health (version 1.0.0) → agent_wallet_status → get_rpc_health
+# Smoke: pulsechain_health (version 1.0.1) → agent_wallet_status → get_rpc_health
 #
 # Operator-trust: fund only what you accept the agent may spend. No MAX_PLS_*
 # product knobs in samples — caps are not a hard security backstop.

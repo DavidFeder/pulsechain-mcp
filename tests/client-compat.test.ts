@@ -121,7 +121,7 @@ describe("example client configs (structural, shipped files)", () => {
     expect(readme).toMatch(/codex_mcp_config\.toml/);
     expect(readme).toMatch(/HTTP_TRANSPORT_PORT/);
     expect(readme).toMatch(/AGENT_WALLET_ENABLED/);
-    expect(readme).toMatch(/1\.0\.0/);
+    expect(readme).toMatch(/1\.0\.1/);
   });
 
   it("codex TOML uses wallets-on stdio shape", () => {
@@ -160,7 +160,7 @@ describe("README + agent docs client pointers (structural)", () => {
   });
 
   it("SERVER_VERSION matches release line", () => {
-    expect(SERVER_VERSION).toBe("1.0.0");
+    expect(SERVER_VERSION).toBe("1.0.1");
   });
 });
 

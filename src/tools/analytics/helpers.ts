@@ -613,9 +613,56 @@ function compareLiquidityMapped(
 }
 
 /**
- * Sort pairs by sane liquidity descending; demoted/absurd values sink.
- * Prefer non-polluted over polluted when both have positive liquidity so
- * token liquidity does not lead with obviously polluted pools.
+ * True when a pair shows high "liquidity" with negligible cumulative volume —
+ * typical subgraph junk rails (meme-staked reserveUSD) that must not lead
+ * get_token_info or dominate total_liquidity_usd. Pure / unit-testable.
+ *
+ * Residual: ranking improves trust; subgraph can still be wrong. Not an oracle.
+ */
+export function isGhostLiquidityPair(pair: {
+  reserveUSD?: string | number;
+  reserve0?: string | number;
+  reserve1?: string | number;
+  volumeUSD?: string | number;
+  token0?: { derivedUSD?: string | number; id?: string; symbol?: string };
+  token1?: { derivedUSD?: string | number; id?: string; symbol?: string };
+}): boolean {
+  const r = resolvePairLiquidityUsd(pair);
+  const liq = r.liquidityUsd;
+  if (!(liq > 0)) return false;
+  // Without volumeUSD we cannot detect ghost rails — reserve pollution only.
+  const volRaw = pair.volumeUSD;
+  const volKnown =
+    volRaw !== undefined && volRaw !== null && String(volRaw).trim() !== "";
+  if (!volKnown) return false;
+  const vol = num(pair.volumeUSD);
+  // Large USD "liquidity" with almost no all-time volume
+  if (liq >= 1_000_000 && vol < 10_000) return true;
+  if (liq >= 100_000 && vol < 100) return true;
+  // Extreme liquidity/volume ratio (stale or fake reserveUSD)
+  if (vol > 0 && liq / vol > 50_000) return true;
+  if (vol === 0 && liq >= 50_000) return true;
+  return false;
+}
+
+/**
+ * Catalog rail preference for ranking: both sides known > one side > none.
+ * Never invents catalog labels. Pure / unit-testable.
+ */
+export function catalogRailScore(pair: {
+  token0?: { id?: string };
+  token1?: { id?: string };
+}): number {
+  let score = 0;
+  if (pair.token0?.id && tokenLabelFields(pair.token0.id)) score += 1;
+  if (pair.token1?.id && tokenLabelFields(pair.token1.id)) score += 1;
+  return score;
+}
+
+/**
+ * Sort pairs by quality then sane liquidity.
+ * Order: usable non-ghost non-polluted first → catalog rails → liquidity → volume.
+ * Demoted/ghost/polluted sink so junk cannot lead get_token_info.
  * Pure / unit-testable.
  */
 export function rankPairsBySaneLiquidity<
@@ -623,6 +670,7 @@ export function rankPairsBySaneLiquidity<
     reserveUSD?: string | number;
     reserve0?: string | number;
     reserve1?: string | number;
+    volumeUSD?: string | number;
     token0?: { derivedUSD?: string | number; id?: string; symbol?: string };
     token1?: { derivedUSD?: string | number; id?: string; symbol?: string };
   },
@@ -631,29 +679,53 @@ export function rankPairsBySaneLiquidity<
     _saneLiquidityUsd: number;
     _liquidityPolluted: boolean;
     _liquiditySource: "reserveUSD" | "estimated" | "demoted";
+    _ghostLiquidity: boolean;
+    _catalogRailScore: number;
   }
 > {
   return pairs
     .map((p) => {
       const resolved = resolvePairLiquidityUsd(p);
+      const ghost = isGhostLiquidityPair(p);
       return {
         ...p,
-        _saneLiquidityUsd: resolved.liquidityUsd,
-        _liquidityPolluted: resolved.polluted,
-        _liquiditySource: resolved.source,
+        // Ranking weight: ghost rails keep raw for debug but sort as unusable
+        _saneLiquidityUsd: ghost ? 0 : resolved.liquidityUsd,
+        _liquidityPolluted: resolved.polluted || ghost,
+        _liquiditySource: ghost
+          ? ("demoted" as const)
+          : resolved.source,
+        _ghostLiquidity: ghost,
+        _catalogRailScore: catalogRailScore(p),
+        // Preserve resolved display liquidity for totals that opt in later
+        _rawSaneLiquidityUsd: resolved.liquidityUsd,
       };
     })
     .sort((a, b) => {
-      // Prefer non-polluted over polluted when both have usable liquidity, so
-      // get_token_liquidity does not lead with obviously polluted pools.
+      // 1) Prefer pairs with positive ranking liquidity
       const aPos = a._saneLiquidityUsd > 0;
       const bPos = b._saneLiquidityUsd > 0;
-      if (aPos && bPos && a._liquidityPolluted !== b._liquidityPolluted) {
+      if (aPos !== bPos) return aPos ? -1 : 1;
+      // 2) Prefer non-polluted / non-ghost
+      if (a._liquidityPolluted !== b._liquidityPolluted) {
         return a._liquidityPolluted ? 1 : -1;
       }
+      // 3) Prefer catalog major rails (both sides known > one side)
+      if (a._catalogRailScore !== b._catalogRailScore) {
+        return b._catalogRailScore - a._catalogRailScore;
+      }
+      // 4) Higher sane liquidity
       if (b._saneLiquidityUsd !== a._saneLiquidityUsd) {
         return b._saneLiquidityUsd - a._saneLiquidityUsd;
       }
+      // 5) Higher cumulative volume (real activity)
+      const volA = num(
+        (a as { volumeUSD?: string | number }).volumeUSD,
+      );
+      const volB = num(
+        (b as { volumeUSD?: string | number }).volumeUSD,
+      );
+      if (volB !== volA) return volB - volA;
       const sourceRank = (s: typeof a._liquiditySource) =>
         s === "reserveUSD" ? 2 : s === "estimated" ? 1 : 0;
       return sourceRank(b._liquiditySource) - sourceRank(a._liquiditySource);
@@ -661,7 +733,10 @@ export function rankPairsBySaneLiquidity<
 }
 
 /**
- * Sum only sane (or estimated) pair liquidity for TVL-style totals.
+ * Sum trust-worthy pair liquidity for TVL-style totals.
+ * Excludes demoted, ghost (high-reserve / near-zero-volume), and zero rows so
+ * a single junk pair cannot dominate total_liquidity_usd.
+ * Polluted-but-estimated non-ghost rows still contribute their reduced estimate.
  * Pure / unit-testable.
  */
 export function sumSanePairLiquidity(
@@ -669,18 +744,40 @@ export function sumSanePairLiquidity(
     reserveUSD?: string | number;
     reserve0?: string | number;
     reserve1?: string | number;
+    volumeUSD?: string | number;
     token0?: { derivedUSD?: string | number; id?: string; symbol?: string };
     token1?: { derivedUSD?: string | number; id?: string; symbol?: string };
   }>,
-): { totalUsd: number; pollutedPairCount: number; pairCount: number } {
+): {
+  totalUsd: number;
+  pollutedPairCount: number;
+  ghostPairCount: number;
+  pairCount: number;
+  excludedFromTotalCount: number;
+} {
   let totalUsd = 0;
   let pollutedPairCount = 0;
+  let ghostPairCount = 0;
+  let excludedFromTotalCount = 0;
   for (const p of pairs) {
     const r = resolvePairLiquidityUsd(p);
+    const ghost = isGhostLiquidityPair(p);
+    if (ghost) ghostPairCount += 1;
+    if (r.polluted || ghost) pollutedPairCount += 1;
+    // Do not let demoted or ghost rails inflate aggregates
+    if (r.source === "demoted" || r.liquidityUsd <= 0 || ghost) {
+      excludedFromTotalCount += 1;
+      continue;
+    }
     totalUsd += r.liquidityUsd;
-    if (r.polluted) pollutedPairCount += 1;
   }
-  return { totalUsd, pollutedPairCount, pairCount: pairs.length };
+  return {
+    totalUsd,
+    pollutedPairCount,
+    ghostPairCount,
+    pairCount: pairs.length,
+    excludedFromTotalCount,
+  };
 }
 
 /**
@@ -772,7 +869,13 @@ export function buildTokenInfoPayload(params: {
   const priceUsd = num(token?.derivedUSD);
   const liqToken = num(token?.totalLiquidity);
   const liqAgg = sumSanePairLiquidity(pairs);
+  // Prefer pair-sum of trust-worthy rails; fall back to token entity product
   const totalLiquidityUsd = liqAgg.totalUsd || liqToken * priceUsd;
+  const rankedPairs = rankPairsBySaneLiquidity(pairs);
+  const preferredPair =
+    rankedPairs.find((p) => p._saneLiquidityUsd > 0 && !p._ghostLiquidity) ??
+    rankedPairs.find((p) => p._saneLiquidityUsd > 0) ??
+    rankedPairs[0];
 
   const sourceNotes: string[] = [];
   if (params.subgraphTokenFailed) {
@@ -797,7 +900,8 @@ export function buildTokenInfoPayload(params: {
   if (hasToken || hasExplorer || hasV2) {
     // Prefer noting when top subgraph pool may differ from curated major pairs
     sourceNotes.push(
-      "Top subgraph pairs by reserve may differ from curated major-pair catalog guidance — use addresses",
+      "Pair list is quality-ranked (catalog rails, demote ghost/polluted reserves); " +
+        "subgraph can still be wrong under hard caps — use addresses, not an oracle",
     );
   }
 
@@ -810,7 +914,7 @@ export function buildTokenInfoPayload(params: {
     params.explorerUiBase?.replace(/\/$/, "") ??
     "https://scan.pulsechain.com";
 
-  const mappedPairs = rankPairsBySaneLiquidity(pairs).map((p) => {
+  const mappedPairs = rankedPairs.map((p) => {
     const t0 = tokenLabelFields(p.token0?.id ?? "");
     const t1 = tokenLabelFields(p.token1?.id ?? "");
     const t0Side = catalogPairSideLabels(p.token0?.id);
@@ -829,9 +933,11 @@ export function buildTokenInfoPayload(params: {
         ? { token1_display_symbol: t1Side.display_symbol }
         : {}),
       ...(t1Side.origin ? { token1_origin: t1Side.origin } : {}),
+      // Ranking liquidity (0 when ghost); not invented
       liquidity_usd: p._saneLiquidityUsd,
       volume_usd_cumulative: num(p.volumeUSD),
       liquidity_polluted: p._liquidityPolluted,
+      ...(p._ghostLiquidity ? { liquidity_ghost: true } : {}),
       ...(t0?.is_fork_dai || t1?.is_fork_dai
         ? {
             pair_warning:
@@ -840,6 +946,23 @@ export function buildTokenInfoPayload(params: {
         : {}),
     };
   });
+
+  const liqNoteParts: string[] = [];
+  if (liqAgg.pollutedPairCount > 0) {
+    liqNoteParts.push(
+      `${liqAgg.pollutedPairCount} pair(s) had absurd/suspect or ghost reserveUSD and were demoted`,
+    );
+  }
+  if (liqAgg.ghostPairCount > 0) {
+    liqNoteParts.push(
+      `${liqAgg.ghostPairCount} ghost pair(s) excluded from total_liquidity_usd (high reserve, negligible volume)`,
+    );
+  }
+  if (liqAgg.excludedFromTotalCount > 0 && liqNoteParts.length === 0) {
+    liqNoteParts.push(
+      `${liqAgg.excludedFromTotalCount} pair(s) excluded from total_liquidity_usd`,
+    );
+  }
 
   const data: Record<string, unknown> = {
     address,
@@ -883,14 +1006,13 @@ export function buildTokenInfoPayload(params: {
     pairs: mappedPairs,
     links: {
       explorer: `${explorerBase}/token/${params.address}`,
-      pulsex: pairs[0]?.id
-        ? `https://app.pulsex.com/#/info/v2/pairs/${pairs[0].id}`
+      // Prefer quality-ranked pair for PulseX link (not raw subgraph[0])
+      pulsex: preferredPair?.id
+        ? `https://app.pulsex.com/#/info/v2/pairs/${preferredPair.id}`
         : "https://app.pulsex.com",
     },
     liquidity_note:
-      liqAgg.pollutedPairCount > 0
-        ? `${liqAgg.pollutedPairCount} pair(s) had absurd/suspect reserveUSD and were demoted or re-estimated`
-        : undefined,
+      liqNoteParts.length > 0 ? liqNoteParts.join("; ") : undefined,
     source: "PulseX subgraph + BlockScout",
     subgraph: params.version,
     partial,

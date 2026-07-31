@@ -84,8 +84,8 @@ After editing config or running `npm run build`, **restart or reload MCP** so th
 
 Call, in order:
 
-1. **`pulsechain_health`** — `version` matches package (currently **1.0.0**); `agentWalletEnabled` matches the mode you chose  
-2. **`agent_wallet_status`** — flags only; **no** private key, master key, or ciphertext  
+1. **`pulsechain_health`** — `version` matches package (currently **1.0.1**); `agentWalletEnabled` matches the mode you chose  
+2. **`agent_wallet_status`** — flags only; **no** private key, master key, or ciphertext. When wallets are on: **funding authorizes** (operator-trust); legacy `maxPls*` on list/info are **display-only** — not hard send gates; use `kill_switch` in emergencies  
 3. Optional: `get_rpc_health`, `get_token_balance`, or `dexscreener_search`
 
 If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, master key present or wallets explicitly off, and check host stderr for `CONFIG_ERROR`.

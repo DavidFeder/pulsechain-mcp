@@ -220,7 +220,9 @@ export function registerTierATools(
       "PulseSwap **multi-DEX** advisory quote on PulseChain (chainId 369). Prefer this over " +
       "pulsex_quote when comparing routes across DEXes. Public quotes.pulseswap.io. " +
       "Returns amountIn/amountOut (amountIn echoes request when upstream zeros it), platform, " +
-      "gasEstimate when available. Advisory only — does NOT execute swaps or require wallets. " +
+      "gasEstimate when available. quoteReady = advisory amountOut only; priceUsdReady requires " +
+      "positive amountOutUSD; executionReady is always false (this MCP does not broadcast). " +
+      "Advisory only — does NOT execute swaps or require wallets. " +
       "Use 0x000…000 for native PLS. Fail-soft on validation/upstream. " +
       "Not a substitute for address-based identity (dexscreener_token_pairs / get_token_info).",
     category: "analytics",

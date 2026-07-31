@@ -16,6 +16,8 @@ import {
   num,
   PAIR_PRICE_FIELDS_NOTE,
   pctChange,
+  catalogRailScore,
+  isGhostLiquidityPair,
   rankPairsBySaneLiquidity,
   resolvePairLiquidityUsd,
   resolveTokenLiquidityUsdEstimate,
@@ -803,6 +805,77 @@ describe("buildTokenInfoPayload soft-fail identity (v0.1.37)", () => {
     expect(pairs[0]!.token0_display_symbol).toBe("eUSDC");
     expect(pairs[0]!.token1_display_symbol).toBe("DAI");
     expect(pairs[0]!.token1_origin).toBe("bridged");
+  });
+
+  it("H1: demotes ghost high-reserve/low-volume junk; major catalog rail leads; total excludes junk", () => {
+    const majorId = "0x19bb45a7270177e303dee6eaa6f5ad700812ba98";
+    const junkId = "0xbbd6ceeb92cd3fda5ab43174ea1562b46df99aa3";
+    const pairs = [
+      {
+        id: junkId,
+        reserveUSD: "443000000", // under hard cap, looks liquid
+        volumeUSD: "727", // negligible activity → ghost
+        token0: { id: HEX_ADDRESS.toLowerCase(), symbol: "HEX", derivedUSD: "0.003" },
+        token1: {
+          id: "0x3e90f83d1ccc73a0e2097033b0f03db17d08df1f",
+          symbol: "CHLORHEX",
+          derivedUSD: "0.000001",
+        },
+      },
+      {
+        id: majorId,
+        reserveUSD: "735000",
+        volumeUSD: "229000000",
+        token0: { id: HEX_ADDRESS.toLowerCase(), symbol: "HEX", derivedUSD: "0.003" },
+        token1: { id: WPLS_ADDRESS.toLowerCase(), symbol: "WPLS", derivedUSD: "0.00001" },
+      },
+    ];
+
+    expect(isGhostLiquidityPair(pairs[0]!)).toBe(true);
+    expect(isGhostLiquidityPair(pairs[1]!)).toBe(false);
+    expect(catalogRailScore(pairs[1]!)).toBeGreaterThan(catalogRailScore(pairs[0]!));
+
+    const ranked = rankPairsBySaneLiquidity(pairs);
+    expect(ranked[0]!.id).toBe(majorId);
+    expect(ranked[0]!._ghostLiquidity).toBe(false);
+    expect(ranked[0]!._saneLiquidityUsd).toBeGreaterThan(0);
+    const junk = ranked.find((p) => p.id === junkId)!;
+    expect(junk._ghostLiquidity).toBe(true);
+    expect(junk._saneLiquidityUsd).toBe(0);
+
+    const sum = sumSanePairLiquidity(pairs);
+    // Ghost junk excluded — total is major rail only, not 443M+735k
+    expect(sum.totalUsd).toBe(735_000);
+    expect(sum.ghostPairCount).toBe(1);
+    expect(sum.totalUsd).toBeLessThan(1_000_000);
+
+    const assembled = buildTokenInfoPayload({
+      address: HEX_ADDRESS,
+      version: "v2",
+      token: {
+        id: HEX_ADDRESS.toLowerCase(),
+        symbol: "HEX",
+        name: "HEX",
+        decimals: "8",
+        derivedUSD: "0.003",
+        totalLiquidity: "1000",
+        tradeVolumeUSD: "1",
+      },
+      pairs,
+      explorerMeta: null,
+      v2Meta: null,
+    });
+    expect(assembled.found).toBe(true);
+    if (!assembled.found) return;
+    const outPairs = assembled.data.pairs as Array<Record<string, unknown>>;
+    expect(outPairs[0]!.pair_address).toBe(majorId);
+    expect(assembled.data.total_liquidity_usd).toBe(735_000);
+    expect(String(assembled.data.links && (assembled.data.links as { pulsex?: string }).pulsex)).toContain(
+      majorId,
+    );
+    expect(String(assembled.data.links && (assembled.data.links as { pulsex?: string }).pulsex)).not.toContain(
+      junkId.slice(2, 10),
+    );
   });
 });
 

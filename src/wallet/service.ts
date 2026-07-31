@@ -70,6 +70,7 @@ import {
   AGENT_WALLET_ENABLE_WARNING,
   APPLIED_SPEND_PROPOSAL_IDS_CAP,
   DEFAULT_POLICY,
+  LEGACY_CAPS_DISPLAY_ONLY_NOTE,
   MULTIPROC_MODE_MEANINGS,
   MULTIPROC_POSTURE_SUMMARY,
   MULTIPROC_RECOMMENDED_MODEL,
@@ -174,6 +175,9 @@ function toPublic(
     dailySpend: record.dailySpend,
     tokenDailySpend: record.tokenDailySpend ?? {},
     allowlistExpired: isAllowlistExpired(record.policy),
+    // H2: every public wallet surface marks legacy maxPls* as display-only
+    legacyCapsDisplayOnly: true,
+    legacyCapsNote: LEGACY_CAPS_DISPLAY_ONLY_NOTE,
     balanceWei: balances?.balanceWei,
     balancePls: balances?.balancePls,
   };

@@ -1,6 +1,32 @@
-# Release notes — pulsechain-mcp 1.0.0
+# Release notes — pulsechain-mcp 1.0.1
 
-**First public stable major.** Stable MCP TypeScript SDK for the final 2026-07-28 protocol, dual-era retained, no product-facing `MAX_PLS_*` spend-cap knobs.
+**Trust-polish patch** on public **1.0.0**. H1 pair ranking / liquidity trust, H2 legacy cap display-only on all wallet surfaces, H3 PulseSwap readiness/USD clarity. Operator-trust unchanged (funding authorizes; no hard spend-cap reintroduction).
+
+## What shipped (1.0.1)
+
+- **H1:** `get_token_info` pair lists quality-ranked (catalog rails preferred; ghost/polluted reserves demoted); junk excluded from `total_liquidity_usd`; PulseX link uses preferred ranked pair. Residual: not an oracle.
+- **H2:** `list_agent_wallets` / `get_agent_wallet_info` (all `toPublic` paths) include `legacyCapsDisplayOnly: true` + note.
+- **H3:** PulseSwap `priceUsdReady`, `executionReady: false`, `amountInUpstreamZero`; amountIn echo preserved; `quoteReady` = advisory amountOut only.
+- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose, examples report **1.0.1**.
+
+## Upgrade from 1.0.0
+
+```bash
+git pull
+npm install
+npm run build
+# reload the MCP host so pulsechain_health.version shows 1.0.1
+```
+
+No config migration. Wallet OT model unchanged. Tag **v1.0.0** remains the public root; **v1.0.1** is this patch.
+
+## Residual honesty
+
+Same as 1.0.0: host-strength confirm, process-local multiproc, upstream prices, not multi-tenant SaaS. Pair ranking improves trust but cannot fix all subgraph noise.
+
+Full detail: [CHANGELOG.md](CHANGELOG.md) · [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)
+
+---
 
 ## What shipped (1.0.0)
 
@@ -11,38 +37,17 @@
 - **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose, examples report **1.0.0**.
 - **Public docs:** SECURITY / SECURITY_DEEP / BOOTSTRAP / AGENT_GUIDANCE / TOKEN_IDENTITY / AGGREGATORS / OPERATOR (no internal archive or V1 readiness scaffolding).
 
-## Upgrade / first install
-
-```bash
-git clone https://github.com/DavidFeder/pulsechain-mcp.git
-cd pulsechain-mcp
-npm install
-npm run build
-# wire a client example from examples/ — see docs/BOOTSTRAP.md
-# reload the MCP host so pulsechain_health.version shows 1.0.0
-# if you copied old examples with MAX_PLS_*=10/50, drop those lines
-```
-
-Smoke: `pulsechain_health` → `agent_wallet_status` → `get_rpc_health` (or any RO market tool).
-
-## Residual honesty
+## Residual honesty (1.0.0 baseline)
 
 SDK beta is no longer a blocker. Remaining limits are product/ops: host soak for confirm/MRTR UX, multiproc process-local locks, catalog depth for long-tail tokens, upstream price quality, and no multi-tenant SaaS recommendation.
 
-Full detail: [CHANGELOG.md](CHANGELOG.md) · [MIGRATION_NOTES.md](MIGRATION_NOTES.md) · [docs/SECURITY.md](docs/SECURITY.md)
-
----
-
-## Operator publish checklist (after private v1.0.0 root is ready)
-
-Repo stays private until you flip visibility yourself. Suggested GitHub About / topics:
+## Operator publish checklist (historical — public root already published)
 
 | Field | Value |
 |-------|--------|
 | **About** | PulseChain MCP server for AI agents: chain reads, markets, swap quotes, and encrypted operator-trust wallets |
 | **Topics** | `pulsechain`, `mcp`, `model-context-protocol`, `web3`, `defi`, `hex`, `pulsex`, `agent-wallets`, `typescript`, `stdio` |
 
-1. Confirm tags on the root commit: **`v1.0.0` only** (no extra release tags you do not want public).
+1. Confirm tags: **`v1.0.0`** baseline + **`v1.0.1`** patch (do not move v1.0.0).
 2. Confirm no secrets in the tree (no filled `.env*`, wallet dirs, master keys).
-3. Set **About** description and **topics** (Settings → General, or repo home gear).
-4. **Settings → General → Danger Zone → Change repository visibility → Make public** when ready.
+3. About / topics as above when public.

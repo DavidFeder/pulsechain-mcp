@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-07-31
+
+**Trust-polish patch** (H1–H3 from post-1.0.0 feature review). Operator-trust model unchanged: funding authorizes; no hard `MAX_PLS_*` gates reintroduced.
+
+### Before → after
+
+| Area | Before (1.0.0) | After (1.0.1) |
+|------|----------------|---------------|
+| **H1 pair ranking** | `get_token_info` could lead with high-reserveUSD / near-zero-volume junk; `total_liquidity_usd` and PulseX links followed raw subgraph order | Pairs quality-ranked (catalog rails preferred; ghost/polluted reserves demoted); ghost rails excluded from `total_liquidity_usd`; PulseX link uses preferred ranked pair. Residual: subgraph can still be wrong — ranking is trust improvement, not an oracle |
+| **H2 legacy caps** | `list_agent_wallets` / `get_agent_wallet_info` showed `maxPlsPerTx` / `maxPlsDaily` as plain numbers that looked enforceable | Every public wallet summary includes `legacyCapsDisplayOnly: true` + short note (consistent with status/propose). Caps remain display-only compatibility fields |
+| **H3 PulseSwap readiness** | `quoteReady: true` with `amountInUpstream: "0"` and `amountOutUSD: "0"` looked fully ready | `quoteReady` = advisory non-zero amountOut only; `priceUsdReady` requires positive `amountOutUSD`; `executionReady` always `false`; amountIn request-echo preserved |
+
+### Changed
+
+- Analytics helpers: ghost-liquidity detection, catalog rail score, quality ranking, trust-worthy liquidity sum
+- Wallet public `toPublic`: additive display-only markers on list/info (and all paths using `toPublic`)
+- PulseSwap normalize: `priceUsdReady`, `executionReady`, `amountInUpstreamZero` + clearer note/tool description
+- Version surfaces **1.0.1**
+
+### Unchanged
+
+- Dual-era MCP, multi-RPC, identity catalog, OT wallet model, no product-facing hard spend caps
+
 ## [1.0.0] - 2026-07-29
 
 **First public stable major.** MCP TypeScript SDK pinned to stable **2.0.0** for the released **2026-07-28** protocol; dual-era support retained. No wallet architecture redesign. Product-facing `MAX_PLS_*` spend-cap knobs removed from examples/templates/docs.

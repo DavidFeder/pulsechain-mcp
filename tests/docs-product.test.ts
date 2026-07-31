@@ -1,6 +1,6 @@
 /**
  * Structural docs tests: ask-agent human README, single bootstrap path,
- * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.0 pins.
+ * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.1 pins.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
@@ -71,7 +71,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.0");
+    expect(pkg.version).toBe("1.0.1");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
@@ -133,7 +133,7 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(boot).toMatch(/Restart|reload/i);
     expect(boot).toMatch(/Smoke checks|pulsechain_health/i);
     expect(boot).toMatch(/Where next|AGENT_GUIDANCE|TOKEN_IDENTITY|AGGREGATORS|SECURITY/i);
-    expect(boot).toMatch(/1\.0\.0/);
+    expect(boot).toMatch(/1\.0\.1/);
     // First-run path must not require the deep security file
     expect(boot).not.toMatch(/must read.*SECURITY_DEEP|required.*SECURITY_DEEP/i);
   });
@@ -149,7 +149,7 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(map).toMatch(/SECURITY\.md/);
     expect(map).toMatch(/SECURITY_DEEP\.md/);
     expect(examples).toMatch(/docs\/BOOTSTRAP\.md/);
-    expect(examples).toMatch(/1\.0\.0/);
+    expect(examples).toMatch(/1\.0\.1/);
     expect(examples).toMatch(/Codex|codex_mcp_config/i);
     expect(agent).toMatch(/BOOTSTRAP\.md/);
   });
@@ -263,26 +263,28 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(codex).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 
-  it("RELEASE_NOTES has v1.0.0 content and operator publish checklist only", () => {
+  it("RELEASE_NOTES has v1.0.1 trust polish plus 1.0.0 baseline content", () => {
     const notes = read("RELEASE_NOTES.md");
+    expect(notes).toMatch(/1\.0\.1/);
     expect(notes).toMatch(/1\.0\.0/);
     expect(notes).toMatch(/2\.0\.0/);
     expect(notes).toMatch(/dual-era|dual:2026-07-28/i);
-    expect(notes).toMatch(/MAX_PLS|spend-cap|no product/i);
+    expect(notes).toMatch(/MAX_PLS|spend-cap|no product|hard spend/i);
     expect(notes).toMatch(/operator-trust|host-strength|confirm/i);
     expect(notes).toMatch(/multiproc|process-local/i);
-    expect(notes).toMatch(/About|topics|Make public/i);
+    expect(notes).toMatch(/legacyCapsDisplayOnly|priceUsdReady|ghost|pair ranking/i);
+    expect(notes).toMatch(/About|topics/i);
     expect(notes).not.toMatch(/V1_READINESS|docs\/archive/i);
     expect(notes).not.toMatch(/repository\s+(stays\s+)?\*{0,2}private|keep\s+\*{0,2}private/i);
   });
 
-  it("CHANGELOG is public-facing 1.0.0 history with residual honesty", () => {
+  it("CHANGELOG is public-facing history with 1.0.1 trust polish and residual honesty", () => {
     const log = read("CHANGELOG.md");
     const lines = log.split(/\r?\n/).length;
-    expect(lines).toBeLessThan(140);
+    expect(lines).toBeLessThan(200);
+    expect(log).toMatch(/## \[1\.0\.1\]/);
     expect(log).toMatch(/## \[1\.0\.0\]/);
-    // Fold polish into 1.0.0 — do not advertise a separate current 1.0.1 line
-    expect(log).not.toMatch(/## \[1\.0\.1\]/);
+    expect(log).toMatch(/ghost|pair ranking|legacyCapsDisplayOnly|priceUsdReady|executionReady/i);
     expect(log).toMatch(/MAX_PLS|spend-cap|product-facing/i);
     expect(log).toMatch(/2\.0\.0/);
     expect(log).toMatch(/dual-era|dual:2026-07-28/i);
@@ -290,7 +292,7 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(log).toMatch(/process-local|Multiproc is process-local/i);
     expect(log).toMatch(/upstream-quality/i);
     expect(log).toMatch(/multi-tenant SaaS/i);
-    expect(log).toMatch(/## Earlier history|0\.1\.x|0\.2\.x/i);
+    expect(log).toMatch(/## Earlier history|0\.1\.x|0\.2\.x|0\.4\./i);
     expect(log).not.toMatch(/repository stays \*\*private\*\*|Flip GitHub visibility/i);
     expect(log).not.toMatch(/compare\/v0|ticket #|R12|R15/i);
     expect(log).not.toMatch(/C:\\Users\\/i);

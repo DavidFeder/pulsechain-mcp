@@ -214,6 +214,8 @@ export function registerFreeTierAnalyticsTools(
     description:
       "Token metadata by **address** (identity-sensitive). Combines PulseX subgraph + BlockScout. " +
       "Catalogued assets get display_symbol / token_origin (e.g. eUSDC, pHEX); never invented for unknowns. " +
+      "Pairs are quality-ranked (catalog rails preferred; ghost/polluted reserves demoted; " +
+      "junk rails excluded from total_liquidity_usd — not an oracle). " +
       "Soft-fails when PulseX token entity blips if catalog or explorer can still identify the address " +
       "(partial=true, source_notes). Prefer this or dexscreener_token_pairs over symbol search. " +
       "For USD price prefer get_token_price; for quotes use pulsex_quote (router) or pulseswap_quote (multi-DEX).",

@@ -169,12 +169,19 @@ describe("optional agent wallet path (shipped service)", () => {
     const listed = listAgentWallets(cfg);
     expect(listed).toHaveLength(1);
     expect(listed[0]!.address.toLowerCase()).toBe(created.address.toLowerCase());
+    // H2: list surfaces mark legacy maxPls* display-only (not hard gates)
+    expect(listed[0]!.legacyCapsDisplayOnly).toBe(true);
+    expect(listed[0]!.legacyCapsNote).toMatch(/display-only|operator-trust|funding/i);
     assertNoSecrets(listed, master);
 
     const info = await getAgentWalletInfo(cfg, created.id, {
       includeBalance: false,
     });
     expect(info.address.toLowerCase()).toBe(created.address.toLowerCase());
+    expect(info.legacyCapsDisplayOnly).toBe(true);
+    expect(info.legacyCapsNote).toMatch(/display-only|operator-trust|funding/i);
+    // Caps remain present as legacy fields but are not re-enabled as hard gates
+    expect(typeof info.policy.maxPlsPerTx).toBe("number");
     assertNoSecrets(info, master);
 
     // On-disk: encrypted record only; master key not stored
@@ -331,7 +338,7 @@ describe("wallet mode template shipped in repo", () => {
       expect(text, path).not.toMatch(/0\.1\.\d+/); // stale 0.1.x pins fail CI
     }
     const grok = readFileSync(clientConfigs[0], "utf8");
-    expect(grok).toMatch(/1\.0\.0/);
+    expect(grok).toMatch(/1\.0\.1/);
     expect(grok).toMatch(/start-wallet-mcp\.mjs|\.env\.wallet/);
   });
 

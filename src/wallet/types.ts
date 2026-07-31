@@ -130,9 +130,21 @@ export interface AgentWalletPublicInfo {
   tokenDailySpend: Record<string, DailySpendLedger>;
   /** True when allowlist time-box has expired (contracts denied). */
   allowlistExpired?: boolean;
+  /**
+   * Operator-trust: policy.maxPlsPerTx / maxPlsDaily and dailySpend ledgers are
+   * display-only compatibility fields — not hard send gates.
+   */
+  legacyCapsDisplayOnly: true;
+  /** Short note so agents do not treat maxPls* as enforceable backstops. */
+  legacyCapsNote: string;
   balanceWei?: string;
   balancePls?: string;
 }
+
+/** Shared OT note for list/info public wallet surfaces (H2). */
+export const LEGACY_CAPS_DISPLAY_ONLY_NOTE =
+  "Legacy maxPlsPerTx / maxPlsDaily / dailySpend are display-only under " +
+  "operator-trust. They do not hard-block sends. Funding the agent is authorization.";
 
 export interface TxProposalRequest {
   walletId: string;

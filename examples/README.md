@@ -1,7 +1,7 @@
 # Client MCP config examples
 
 Copy-paste templates for hosting **pulsechain-mcp** over **stdio**.  
-Server version **1.0.0** — **wallets on by default** (master key required).
+Server version **1.0.1** — **wallets on by default** (master key required).
 
 ## Agents: setup path
 
@@ -89,7 +89,7 @@ Research-only: set `AGENT_WALLET_ENABLED` to `"false"` and remove the master-key
 
 (Same as [BOOTSTRAP.md §6](../docs/BOOTSTRAP.md#6-smoke-checks).)
 
-1. `pulsechain_health` — expect `version: "1.0.0"` (and `agentWalletEnabled: true` when wallets on)  
+1. `pulsechain_health` — expect `version: "1.0.1"` (and `agentWalletEnabled: true` when wallets on)  
 2. `agent_wallet_status` — master key configured flag only (never a secret)  
 3. `get_rpc_health` (optional `probe: true`)  
 4. Optional: `get_token_balance` or `dexscreener_search`  

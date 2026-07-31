@@ -305,6 +305,9 @@ describe("PulseSwap builders (shipped)", () => {
     expect(data.amountInUpstream).toBe("1000");
     expect(data.amountOut).toBe("900");
     expect(data.quoteReady).toBe(true);
+    expect(data.priceUsdReady).toBe(true);
+    expect(data.executionReady).toBe(false);
+    expect(data.amountInUpstreamZero).toBe(false);
     expect(data.note).toMatch(/advisory|not a swap execution/i);
     expect(data.txAdvisory).toBeNull();
   });
@@ -318,6 +321,7 @@ describe("PulseSwap builders (shipped)", () => {
           success: true,
           amountIn: "0",
           amountOut: "123456",
+          amountOutUSD: "0",
           gasEstimate: 99_000,
         },
       },
@@ -335,8 +339,12 @@ describe("PulseSwap builders (shipped)", () => {
     expect(zeroed.amountInRequested).toBe(requested);
     expect(zeroed.amountInUpstream).toBe("0");
     expect(zeroed.amountOut).toBe("123456");
+    // H3: advisory amountOut ok, but not USD-priced and never execution-ready
     expect(zeroed.quoteReady).toBe(true);
-    expect(zeroed.note).toMatch(/amountInRequested|upstream|advisory/i);
+    expect(zeroed.priceUsdReady).toBe(false);
+    expect(zeroed.executionReady).toBe(false);
+    expect(zeroed.amountInUpstreamZero).toBe(true);
+    expect(zeroed.note).toMatch(/amountInRequested|upstream|advisory|executionReady|priceUsdReady/i);
 
     const empty = normalizePulseSwapQuote(
       {
@@ -360,6 +368,9 @@ describe("PulseSwap builders (shipped)", () => {
     expect(empty.amountIn).toBe("42");
     expect(empty.amountInUpstream).toBe(""); // raw empty string preserved
     expect(empty.quoteReady).toBe(true);
+    expect(empty.priceUsdReady).toBe(false);
+    expect(empty.executionReady).toBe(false);
+    expect(empty.amountInUpstreamZero).toBe(true);
 
     // Non-zero upstream still wins over request for amountIn field
     const upstreamWins = normalizePulseSwapQuote(
@@ -384,6 +395,8 @@ describe("PulseSwap builders (shipped)", () => {
     expect(upstreamWins.amountIn).toBe("777");
     expect(upstreamWins.amountInRequested).toBe("999");
     expect(upstreamWins.amountInUpstream).toBe("777");
+    expect(upstreamWins.amountInUpstreamZero).toBe(false);
+    expect(upstreamWins.executionReady).toBe(false);
   });
 
   it("normalizePulseSwapQuote does not invent quoteReady when amountOut is zero", () => {
@@ -569,6 +582,9 @@ describe("PulseSwap soft-fail HTTP (shipped)", () => {
       expect(result.data.amountInUpstream).toBe("0");
       expect(result.data.amountOut).toBe("888");
       expect(result.data.quoteReady).toBe(true);
+      expect(result.data.priceUsdReady).toBe(false);
+      expect(result.data.executionReady).toBe(false);
+      expect(result.data.amountInUpstreamZero).toBe(true);
       expect(result.advisory).toBe(true);
     }
   });
