@@ -1,53 +1,51 @@
-# Release notes — pulsechain-mcp 1.0.1
+# Release notes — pulsechain-mcp 1.0.2
 
-**Trust-polish patch** on public **1.0.0**. H1 pair ranking / liquidity trust, H2 legacy cap display-only on all wallet surfaces, H3 PulseSwap readiness/USD clarity. Operator-trust unchanged (funding authorizes; no hard spend-cap reintroduction).
+Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.
 
-## What shipped (1.0.1)
+## What shipped (1.0.2)
 
-- **H1:** `get_token_info` pair lists quality-ranked (catalog rails preferred; ghost/polluted reserves demoted); junk excluded from `total_liquidity_usd`; PulseX link uses preferred ranked pair. Residual: not an oracle.
-- **H2:** `list_agent_wallets` / `get_agent_wallet_info` (all `toPublic` paths) include `legacyCapsDisplayOnly: true` + note.
-- **H3:** PulseSwap `priceUsdReady`, `executionReady: false`, `amountInUpstreamZero`; amountIn echo preserved; `quoteReady` = advisory amountOut only.
-- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose, examples report **1.0.1**.
+- **Agent-safe install:** research-only first; wallets-on only when the user asks to sign.
+- **Key-safe default:** master key lives in gitignored `.env.wallet` only; host configs do not embed `AGENT_WALLET_MASTER_KEY`. Write-only generation never prints the key.
+- **install-for-host:** `node scripts/install-for-host.mjs --host grok|cursor|claude|codex --mode research|wallets`.
+- **Pre/post-reload smoke** split so agents stop inventing custom MCP stdio clients.
+- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.2**.
 
-## Upgrade from 1.0.0
+## Upgrade
 
 ```bash
 git pull
 npm install
 npm run build
-# reload the MCP host so pulsechain_health.version shows 1.0.1
+# Prefer: node scripts/install-for-host.mjs --host <host> --mode research
+# reload the MCP host so pulsechain_health.version shows 1.0.2
 ```
 
-No config migration. Wallet OT model unchanged. Tag **v1.0.0** remains the public root; **v1.0.1** is this patch.
+No OT wallet model change. Tags **v1.0.0** / **v1.0.1** remain historical; **v1.0.2** is this patch.
 
-## Residual honesty
+### If you had MASTER_KEY in host config
 
-Same as 1.0.0: host-strength confirm, process-local multiproc, upstream prices, not multi-tenant SaaS. Pair ranking improves trust but cannot fix all subgraph noise.
+Move to write-only `.env.wallet` + `scripts/start-wallet-mcp.mjs` (see [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)). Do not paste the old key into chat.
 
-Full detail: [CHANGELOG.md](CHANGELOG.md) · [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)
+## What shipped earlier (1.0.1 / 1.0.0)
 
----
+- **1.0.1:** pair ranking trust polish, legacy caps display-only markers, PulseSwap readiness flags.
+- **1.0.0:** public stable major; MCP SDK **2.0.0**; dual-era protocol; OT wallets.
 
-## What shipped (1.0.0)
+## Residual honesty (unchanged product limits)
 
-- **MCP SDK:** exact pins `@modelcontextprotocol/server@2.0.0` and `@modelcontextprotocol/node@2.0.0` (stable; no beta).
-- **Protocol:** dual-era **`dual:2026-07-28+2025-11-25`**. Stdio primary; Streamable HTTP local-test only.
-- **Wallets / trust model:** wallets on by default; research-only with `AGENT_WALLET_ENABLED=false`; funding authorizes; confirm is host-strength UX only.
-- **Examples / env templates:** no `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` product defaults. Operator-trust controls are small balances, master key, unique dir, kill_switch.
-- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose, examples report **1.0.0**.
-- **Public docs:** SECURITY / SECURITY_DEEP / BOOTSTRAP / AGENT_GUIDANCE / TOKEN_IDENTITY / AGGREGATORS / OPERATOR (no internal archive or V1 readiness scaffolding).
+| Residual | Meaning |
+|----------|---------|
+| Multiproc | Process-local barrier; not multi-writer-safe across hosts sharing a dir |
+| Confirm / MRTR | Host UX only — not a cryptographic security product |
+| Legacy `MAX_PLS_*` | Display/advisory if present — not hard spend gates |
+| Windows file modes | chmod 600/700 is best-effort; use NTFS ACLs for real restriction |
+| Host reload | Install session doctor ≠ tools injected into the same chat |
 
-## Residual honesty (1.0.0 baseline)
+## Operator-trust reminder
 
-SDK beta is no longer a blocker. Remaining limits are product/ops: host soak for confirm/MRTR UX, multiproc process-local locks, catalog depth for long-tail tokens, upstream price quality, and no multi-tenant SaaS recommendation.
+Funding the agent is authorization. Fund only what you accept the agent may spend. Prefer small balances + kill_switch.
 
-## Operator publish checklist (historical — public root already published)
+## Tag / about topics
 
-| Field | Value |
-|-------|--------|
-| **About** | PulseChain MCP server for AI agents: chain reads, markets, swap quotes, and encrypted operator-trust wallets |
-| **Topics** | `pulsechain`, `mcp`, `model-context-protocol`, `web3`, `defi`, `hex`, `pulsex`, `agent-wallets`, `typescript`, `stdio` |
-
-1. Confirm tags: **`v1.0.0`** baseline + **`v1.0.1`** patch (do not move v1.0.0).
-2. Confirm no secrets in the tree (no filled `.env*`, wallet dirs, master keys).
-3. About / topics as above when public.
+1. Confirm tags: **`v1.0.0`** + **`v1.0.1`** untouched; **`v1.0.2`** on this release commit.
+2. About / topics: pulsechain, mcp, web3, defi (operator choice).

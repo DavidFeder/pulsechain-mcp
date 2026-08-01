@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-07-31
+
+**Agent-safe install path** from live Grok bootstrap feedback. Operator-trust model unchanged: funding authorizes; no hard `MAX_PLS_*` gates reintroduced.
+
+### Highlights
+
+| Area | Change |
+|------|--------|
+| **Key-safe wallets-on** | Recommended path: gitignored `.env.wallet` + `scripts/start-wallet-mcp.mjs`; host samples no longer embed `AGENT_WALLET_MASTER_KEY` |
+| **Write-only key ceremony** | `scripts/generate-wallet-env.mjs` creates `.env.wallet`, refuses overwrite, never prints the key, best-effort mode 600/700 |
+| **Mode fork** | Agent install default = **research-only**; wallets-on only when user asks to sign |
+| **Pre/post-reload smoke** | Doctor/logs before reload; `pulsechain_health` → `agent_wallet_status` after; no custom stdio client |
+| **install-for-host** | `scripts/install-for-host.mjs --host … --mode research\|wallets` — absolute paths, no secret prints |
+
+### Added
+
+- `scripts/lib/wallet-env.mjs`, `scripts/lib/install-for-host-core.mjs`
+- `scripts/generate-wallet-env.mjs`, `scripts/install-for-host.mjs`
+- Install-helper unit tests (temp dirs; key not in stdout; refuse-on-exists; research config has no master key)
+
+### Changed
+
+- `docs/BOOTSTRAP.md` rewrite (mode fork, Do NOT box, permissions table, install script preferred)
+- Examples default to research-only; launcher documented for wallets-on
+- `docs/SECURITY.md`, `examples/README.md`, agent guidance, env template comments
+- Version surfaces **1.0.2**
+
+### Unchanged
+
+- Dual-era MCP, multi-RPC, identity catalog, OT wallet model, no product-facing hard spend caps
+
 ## [1.0.1] - 2026-07-31
 
 **Trust-polish patch** (H1–H3 from post-1.0.0 feature review). Operator-trust model unchanged: funding authorizes; no hard `MAX_PLS_*` gates reintroduced.

@@ -202,14 +202,14 @@ describe("get_rpc_health tool registration", () => {
   });
 });
 
-describe("version 1.0.1", () => {
+describe("version 1.0.2", () => {
   it("matches package and SERVER_VERSION", async () => {
     const { readFileSync } = await import("node:fs");
     const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
       version: string;
     };
-    expect(pkg.version).toBe("1.0.1");
-    expect(SERVER_VERSION).toBe("1.0.1");
+    expect(pkg.version).toBe("1.0.2");
+    expect(SERVER_VERSION).toBe("1.0.2");
     const cfg = loadConfig({ AGENT_WALLET_ENABLED: "false" });
     expect(cfg.rpcUrls.length).toBeGreaterThanOrEqual(2);
   });

@@ -4,22 +4,117 @@
 
 ---
 
+## Do NOT (agent anti-patterns)
+
+| Never | Why |
+|-------|-----|
+| `console.log` / print the master key | Lands in terminal, chat, and tool transcripts |
+| Paste the master key into chat | Same leak surface |
+| `read_file` / `cat` host config or `.env.wallet` to “verify” the key | Pulls secrets into agent context |
+| Write a custom MCP stdio client for smoke | Hosts already expose doctor + tools after reload |
+| Fund the agent wallet during bootstrap | Bootstrap is install + smoke only; funding is a later operator step |
+| Embed `AGENT_WALLET_MASTER_KEY` in host config samples | Prefer gitignored `.env.wallet` + launcher |
+
+**Verify secrets without reading them:** file existence, optional Unix mode bits, then post-reload `agent_wallet_status` / `masterKeyConfigured`-style flags only.
+
+---
+
 ## 1. Clone and build
 
 Node.js **20+** required.
 
+**Recommended clone locations** (operator choice):
+
+- `~/repos/pulsechain-mcp`
+- `~/mcp/pulsechain-mcp`
+- Or any dedicated folder you control
+
+**Avoid** cloning inside an unrelated app repo unless the user wants a project-scoped MCP only for that app.
+
 ```bash
 git clone https://github.com/DavidFeder/pulsechain-mcp.git
 cd pulsechain-mcp
-npm install
-npm run build
+npm install          # may already run build via prepare
+npm run build        # fine to re-run after pull
 ```
 
-Confirm `dist/index.js` exists. That file is the host entry for every sample.
+Confirm `dist/index.js` exists. That file is the research-only host entry.
+
+**Path fill:** in examples, `REPLACE_WITH_ABSOLUTE_PATH` means the **clone root only** (folder with `package.json` and `dist/`). Prefer forward slashes on Windows (`C:/Users/YOU/repos/pulsechain-mcp`).
 
 ---
 
-## 2. Choose the client example
+## 2. Pick mode first (agent default = research-only)
+
+| Intent | When | Entry | Secrets |
+|--------|------|-------|---------|
+| **Research-only (agent default)** | User said “set it up / install” with no signing ask | `dist/index.js`, `AGENT_WALLET_ENABLED=false` | nowhere |
+| **Wallets-on** | User explicitly wants signing / agent wallets | `scripts/start-wallet-mcp.mjs` | gitignored `.env.wallet` only |
+
+If the user only asked to install, choose **research-only first**. Promoting to wallets-on is an **explicit later step**.
+
+Product runtime still starts wallets-on when a master key is present and enabled — that is not the agent first-install default.
+
+---
+
+## 3. Secrets ceremony (wallets-on only)
+
+Skip this entire section for research-only.
+
+**Recommended (write-only):**
+
+```bash
+node scripts/generate-wallet-env.mjs
+# or via installer:
+node scripts/install-for-host.mjs --host grok --mode wallets
+```
+
+Behavior:
+
+1. Creates `.env.wallet` from `.env.wallet.example` if missing  
+2. **Refuses** if `.env.wallet` already exists (no overwrite)  
+3. Writes the master key **into the file only**  
+4. Prints success **without** printing the key  
+5. Sets file mode **600** / wallet dir **700** where the OS supports it  
+
+| Path | Mode (Unix) | Agent may |
+|------|-------------|-----------|
+| `.env.wallet` | 600 | existence check, **not** contents |
+| `data/wallets/` | 700 | list counts / status tools, **not** key material |
+| Host config (if it ever had an inline key — discouraged) | 600 | avoid reading after write |
+
+**Windows:** POSIX `chmod` is best-effort only; NTFS ACLs are operator-managed. Do not fail install solely because mode bits are incomplete.
+
+Lose the master key → encrypted wallets cannot be recovered.
+
+**Discouraged alternate:** putting `AGENT_WALLET_MASTER_KEY` in host env (including `grok mcp add -e AGENT_WALLET_MASTER_KEY=…`). That still lands in config files and often in transcripts. Prefer launcher + `.env.wallet`.
+
+---
+
+## 4. Wire host (prefer install script)
+
+```bash
+# Research-only (default)
+node scripts/install-for-host.mjs --host grok --mode research
+
+# Wallets-on (after user asks to sign)
+node scripts/install-for-host.mjs --host grok --mode wallets
+```
+
+Supported `--host`: `grok` | `cursor` | `claude` | `codex`.
+
+The script:
+
+- Resolves **absolute** paths from the clone root  
+- Research: host sample → `dist/index.js`, wallets off, **no** secrets  
+- Wallets: ensures `.env.wallet` via write-only path (or leaves existing file), host sample → `scripts/start-wallet-mcp.mjs`, **never** embeds master key  
+- Writes a sample under `data/install-host-configs/` (gitignored if under `data/`; safe to re-run)  
+- Prints **next steps only** (merge sample, reload, doctor, smoke tool names)  
+- Never prints secrets; never requires opening secret files  
+
+**Idempotent:** re-run is safe. Existing `.env.wallet` is not overwritten. Host sample files may be regenerated (no secrets in them).
+
+### Manual samples (if you skip the script)
 
 | Host | Sample | Config location |
 |------|--------|-----------------|
@@ -28,71 +123,56 @@ Confirm `dist/index.js` exists. That file is the host entry for every sample.
 | Grok Build | [`examples/grok_mcp_config.toml`](../examples/grok_mcp_config.toml) | `~/.grok/config.toml` or project `.grok/config.toml` |
 | OpenAI Codex | [`examples/codex_mcp_config.toml`](../examples/codex_mcp_config.toml) | `~/.codex/config.toml` or project `.codex/config.toml` |
 
-Copy the matching sample into the host config. Details: [examples/README.md](../examples/README.md).
-
----
-
-## 3. Write absolute paths
-
-Replace every `REPLACE_WITH_ABSOLUTE_PATH` with the **clone root only** (the folder that contains `package.json` and `dist/`).
-
-| OS | Style |
-|----|--------|
-| Windows | Prefer `C:/Users/YOU/Documents/PulseChainMCP` |
-| macOS / Linux | `/Users/YOU/...` or `/home/YOU/...` |
-
-Resulting args must look like: `<clone-root>/dist/index.js`  
-Wallet dir: `<clone-root>/data/wallets`
+Shipped examples are **research-only** (agent default). Wallets-on host config points at the launcher; details in [examples/README.md](../examples/README.md).
 
 **Do not set `HTTP_TRANSPORT_PORT`** — stdio hosts need stdout for the protocol.
 
----
-
-## 4. Wallets on (default) or research-only
-
-| Mode | What to set |
-|------|-------------|
-| **Wallets on (default)** | `AGENT_WALLET_ENABLED=true` + real `AGENT_WALLET_MASTER_KEY` |
-| **Research-only** | `AGENT_WALLET_ENABLED=false` and **omit** the master key |
-
-Generate a master key **on the operator machine only** (never commit, never paste into chat logs):
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Replace `REPLACE_WITH_64_CHAR_HEX_MASTER_KEY` with that value — or switch to research-only.
-
-Lose the master key → encrypted wallets cannot be recovered.
+Optional: `grok mcp add …` works for research-only env flags, but **avoid** `-e AGENT_WALLET_MASTER_KEY=…` (transcript/config leak). Prefer `install-for-host` + launcher.
 
 ---
 
-## 5. Restart / reload the host
+## 5. Pre-reload doctor (this install session)
 
-After editing config or running `npm run build`, **restart or reload MCP** so the host launches the fresh `dist/index.js`.
+This install session **cannot** call PulseChain MCP tools until the host reloads MCP. Doctor ≠ tools injected into the current chat.
+
+| Host | Pre-reload check |
+|------|------------------|
+| Grok | `grok mcp doctor pulsechain-mcp` — command found, handshake OK, tool count |
+| Cursor / Claude | Restart MCP / app; check host logs for clean start |
+| Codex | `codex mcp list` / restart extension; check host logs |
+
+Do **not** invent a custom stdio MCP client to “smoke” from this session.
+
+---
+
+## 6. User reloads host
+
+After editing config or running `npm run build`, **restart or reload MCP** so the host launches the fresh entry (`dist/index.js` or the wallet launcher).
 
 | Host | Typical action |
 |------|----------------|
 | Cursor | Reload MCP / restart window |
 | Claude Desktop | Restart app |
-| Grok | Restart or `grok mcp doctor pulsechain-mcp` |
-| Codex | Restart extension / app; `codex mcp list` |
+| Grok | Restart or re-check with doctor after reload |
+| Codex | Restart extension / app |
 
 ---
 
-## 6. Smoke checks
+## 7. Post-reload smoke (new session / turn)
 
-Call, in order:
+Call **after** reload, in order:
 
-1. **`pulsechain_health`** — `version` matches package (currently **1.0.1**); `agentWalletEnabled` matches the mode you chose  
-2. **`agent_wallet_status`** — flags only; **no** private key, master key, or ciphertext. When wallets are on: **funding authorizes** (operator-trust); legacy `maxPls*` on list/info are **display-only** — not hard send gates; use `kill_switch` in emergencies  
-3. Optional: `get_rpc_health`, `get_token_balance`, or `dexscreener_search`
+1. **`pulsechain_health`** — `version` matches `package.json` / `npm pkg get version` (do **not** hardcode an old pin as the only instruction); `agentWalletEnabled` matches the mode you chose  
+2. **`agent_wallet_status`** — flags only (`masterKeyConfigured`, enabled, dir); **no** private key, master key, or ciphertext  
+3. Optional: `get_rpc_health`, `get_token_balance`, or `dexscreener_search`  
 
-If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, master key present or wallets explicitly off, and check host stderr for `CONFIG_ERROR`.
+When wallets are on: **funding authorizes** (operator-trust); legacy `maxPls*` on list/info are **display-only** — not hard send gates; use `kill_switch` in emergencies. Do **not** fund during bootstrap smoke.
+
+If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, research-only or launcher+`.env.wallet`, and check host stderr for `CONFIG_ERROR`.
 
 ---
 
-## 7. Where next (after smoke passes)
+## 8. Where next (after smoke passes)
 
 | Need | Doc |
 |------|-----|
@@ -103,5 +183,7 @@ If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, mast
 | Security residual detail (optional) | [SECURITY_DEEP.md](SECURITY_DEEP.md) |
 | Multi-RPC, env table, Docker | [OPERATOR.md](OPERATOR.md) |
 | Client sample notes | [examples/README.md](../examples/README.md) |
+
+**Promote to wallets-on later:** re-run `install-for-host.mjs --mode wallets`, merge the new host sample, reload, smoke again — still no fund until the operator is ready.
 
 **Not onboarding:** [CHANGELOG.md](../CHANGELOG.md), [MIGRATION_NOTES.md](../MIGRATION_NOTES.md).

@@ -22,12 +22,12 @@ function readExample(name: string): string {
 }
 
 describe("clientCompat helpers (shipped)", () => {
-  it("formatFatalStartupHint mentions stdio hosts and wallets-on first-run", () => {
+  it("formatFatalStartupHint mentions stdio hosts and research-only first-run", () => {
     const hint = formatFatalStartupHint();
     expect(hint).toMatch(/Cursor|Grok|Claude/i);
     expect(hint).toMatch(/HTTP_TRANSPORT_PORT/);
     expect(hint).toMatch(/MASTER_KEY|master key|research-only|AGENT_WALLET_ENABLED=false/i);
-    expect(hint).toMatch(/dist\/index\.js|npm run build/i);
+    expect(hint).toMatch(/dist\/index\.js|npm run build|start-wallet-mcp|generate-wallet-env/i);
     expect(hint).toMatch(/unique AGENT_WALLET_DIR|agent_wallet_status|inspect/i);
   });
 
@@ -41,8 +41,8 @@ describe("clientCompat helpers (shipped)", () => {
     expect(http.clientNote).toMatch(/8787|HTTP|not for Cursor/i);
   });
 
-  it("safe env defaults keep wallets enabled (product default)", () => {
-    expect(STDIO_HOST_SAFE_ENV_DEFAULTS.AGENT_WALLET_ENABLED).toBe("true");
+  it("safe env defaults are research-only (agent install default)", () => {
+    expect(STDIO_HOST_SAFE_ENV_DEFAULTS.AGENT_WALLET_ENABLED).toBe("false");
   });
 });
 
@@ -53,22 +53,24 @@ describe("example client configs (structural, shipped files)", () => {
     "claude_desktop_config.json",
   ] as const;
 
-  it.each(files)("%s is wallets-on, stdio-safe, placeholder paths", (name) => {
+  it.each(files)("%s is research-only, stdio-safe, no master key assignment", (name) => {
     const src = readExample(name);
     const check = isStdioClientConfigSafe(src);
     expect(check.reasons, check.reasons.join("; ")).toEqual([]);
     expect(check.ok).toBe(true);
     expect(src).toMatch(/REPLACE_WITH_ABSOLUTE_PATH\/dist\/index\.js/);
-    expect(src).toMatch(/REPLACE_WITH_ABSOLUTE_PATH\/data\/wallets/);
+    // Active (non-comment) lines must not assign MASTER_KEY
+    const active = src
+      .split(/\r?\n/)
+      .map((line) => line.replace(/#.*$/, "").replace(/\/\/.*$/, ""))
+      .join("\n");
+    expect(active).not.toMatch(/AGENT_WALLET_MASTER_KEY\s*[=:]/);
     expect(src).not.toMatch(
       /REPLACE_WITH_ABSOLUTE_PATH\/[^/\s"'\\\]]+\/dist\/index\.js/,
     );
-    expect(src).not.toMatch(
-      /REPLACE_WITH_ABSOLUTE_PATH\/[^/\s"'\\\]]+\/data\/wallets/,
-    );
   });
 
-  it("cursor JSON is valid mcpServers shape with wallets-on placeholders", () => {
+  it("cursor JSON is valid mcpServers shape with research-only defaults", () => {
     const raw = readExample("cursor_mcp_config.json");
     const json = JSON.parse(raw) as {
       mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }>;
@@ -77,17 +79,15 @@ describe("example client configs (structural, shipped files)", () => {
     expect(srv).toBeDefined();
     expect(srv.command).toBe("node");
     expect(srv.args[0]).toBe("REPLACE_WITH_ABSOLUTE_PATH/dist/index.js");
-    expect(srv.env.AGENT_WALLET_DIR).toBe("REPLACE_WITH_ABSOLUTE_PATH/data/wallets");
-    expect(srv.env.AGENT_WALLET_ENABLED).toBe("true");
-    expect(srv.env.AGENT_WALLET_MASTER_KEY).toMatch(/^REPLACE_/);
+    expect(srv.env.AGENT_WALLET_ENABLED).toBe("false");
+    expect(srv.env.AGENT_WALLET_MASTER_KEY).toBeUndefined();
     expect(srv.env.HTTP_TRANSPORT_PORT).toBeUndefined();
   });
 
   it("isStdioClientConfigSafe rejects double-nested PulseChainMCP segment", () => {
     const bad =
       'args = ["REPLACE_WITH_ABSOLUTE_PATH/PulseChainMCP/dist/index.js"]\n' +
-      'AGENT_WALLET_ENABLED = "true"\n' +
-      'AGENT_WALLET_MASTER_KEY = "REPLACE_WITH_64_CHAR_HEX_MASTER_KEY"\n';
+      'AGENT_WALLET_ENABLED = "false"\n';
     const check = isStdioClientConfigSafe(bad);
     expect(check.ok).toBe(false);
     expect(check.reasons.join(" ")).toMatch(/no intermediate folder/i);
@@ -96,20 +96,31 @@ describe("example client configs (structural, shipped files)", () => {
   it("isStdioClientConfigSafe accepts research-only false without master key", () => {
     const ro =
       'args = ["REPLACE_WITH_ABSOLUTE_PATH/dist/index.js"]\n' +
-      'AGENT_WALLET_ENABLED = "false"\n' +
-      'AGENT_WALLET_DIR = "REPLACE_WITH_ABSOLUTE_PATH/data/wallets"\n';
+      'AGENT_WALLET_ENABLED = "false"\n';
     const check = isStdioClientConfigSafe(ro);
     expect(check.ok, check.reasons.join("; ")).toBe(true);
   });
 
-  it("grok TOML uses wallets-on stdio shape", () => {
+  it("isStdioClientConfigSafe accepts launcher wallets-on without master key", () => {
+    const launcher =
+      'args = ["REPLACE_WITH_ABSOLUTE_PATH/scripts/start-wallet-mcp.mjs"]\n' +
+      'AGENT_WALLET_ENABLED = "true"\n';
+    const check = isStdioClientConfigSafe(launcher);
+    expect(check.ok, check.reasons.join("; ")).toBe(true);
+  });
+
+  it("grok TOML uses research-only stdio shape", () => {
     const src = readExample("grok_mcp_config.toml");
     expect(src).toMatch(/\[mcp_servers\.pulsechain-mcp\]/);
     expect(src).toMatch(/command\s*=\s*"node"/);
     expect(src).toMatch(/args\s*=\s*\[/);
     expect(src).toMatch(/\[mcp_servers\.pulsechain-mcp\.env\]/);
-    expect(src).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"true"/);
-    expect(src).toMatch(/AGENT_WALLET_MASTER_KEY\s*=\s*"REPLACE_/);
+    expect(src).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"false"/);
+    const active = src
+      .split(/\r?\n/)
+      .map((line) => line.replace(/#.*$/, ""))
+      .join("\n");
+    expect(active).not.toMatch(/AGENT_WALLET_MASTER_KEY\s*=/);
     expect(src).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 
@@ -121,17 +132,22 @@ describe("example client configs (structural, shipped files)", () => {
     expect(readme).toMatch(/codex_mcp_config\.toml/);
     expect(readme).toMatch(/HTTP_TRANSPORT_PORT/);
     expect(readme).toMatch(/AGENT_WALLET_ENABLED/);
-    expect(readme).toMatch(/1\.0\.1/);
+    expect(readme).toMatch(/install-for-host|research-only/i);
+    expect(readme).toMatch(/package\.json|npm pkg get version/);
   });
 
-  it("codex TOML uses wallets-on stdio shape", () => {
+  it("codex TOML uses research-only stdio shape", () => {
     const src = readExample("codex_mcp_config.toml");
     expect(src).toMatch(/\[mcp_servers\.pulsechain-mcp\]/);
     expect(src).toMatch(/command\s*=\s*"node"/);
     expect(src).toMatch(/args\s*=\s*\[/);
     expect(src).toMatch(/\[mcp_servers\.pulsechain-mcp\.env\]/);
-    expect(src).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"true"/);
-    expect(src).toMatch(/AGENT_WALLET_MASTER_KEY\s*=\s*"REPLACE_/);
+    expect(src).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"false"/);
+    const active = src
+      .split(/\r?\n/)
+      .map((line) => line.replace(/#.*$/, ""))
+      .join("\n");
+    expect(active).not.toMatch(/AGENT_WALLET_MASTER_KEY\s*=/);
     expect(src).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 });
@@ -141,14 +157,13 @@ describe("README + agent docs client pointers (structural)", () => {
     const readme = readFileSync(join(root, "README.md"), "utf8");
     const boot = readFileSync(join(root, "docs", "BOOTSTRAP.md"), "utf8");
     const agent = readFileSync(join(root, "docs", "AGENT_GUIDANCE.md"), "utf8");
-    // Client samples are listed in BOOTSTRAP / examples/README; human README
-    // may omit the examples/ path and only point agents at BOOTSTRAP.
     expect(readme).toMatch(/docs\/BOOTSTRAP\.md/);
     expect(readme).toMatch(/If you are an AI agent/i);
-    expect(readme).toMatch(/on by default|Encrypted agent wallets/i);
+    expect(readme).toMatch(/research-only|Encrypted agent wallets|Research Only Mode/i);
     expect(boot).toMatch(/cursor_mcp_config|Cursor/i);
     expect(boot).toMatch(/grok_mcp_config|Grok/i);
     expect(boot).toMatch(/codex_mcp_config|Codex/i);
+    expect(boot).toMatch(/install-for-host|research-only/i);
     expect(agent).toMatch(/cursor_mcp_config|Cursor/i);
     expect(agent).toMatch(/\.cursor\/mcp\.json|Cursor MCP/i);
     expect(agent).toMatch(/\.grok\/config\.toml/);
@@ -160,7 +175,7 @@ describe("README + agent docs client pointers (structural)", () => {
   });
 
   it("SERVER_VERSION matches release line", () => {
-    expect(SERVER_VERSION).toBe("1.0.1");
+    expect(SERVER_VERSION).toBe("1.0.2");
   });
 });
 
@@ -171,7 +186,7 @@ describe("docs hygiene (shipped SECURITY essentials + deep residual)", () => {
     expect(security.split(/\r?\n/).length).toBeLessThan(100);
     expect(security).toMatch(/operator-trust|funding the agent is authorization/i);
     expect(security).toMatch(/host UX only|not a cryptographic security product/i);
-    expect(security).toMatch(/on by default|Wallets on \(default\)/i);
+    expect(security).toMatch(/research-only|Wallets on \(when user asks|agent install default/i);
     expect(security).toMatch(/SECURITY_DEEP\.md/);
     expect(security).not.toMatch(/Write tools gated by multiproc strict/i);
     expect(deep).toMatch(/Write tools gated by multiproc strict/i);

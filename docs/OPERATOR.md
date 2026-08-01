@@ -110,8 +110,8 @@ Containers default to **research-only** (`AGENT_WALLET_ENABLED=false`) so the im
 One container → one unique volume/dir. Never share with another writer. Never bake `AGENT_WALLET_MASTER_KEY` into the image.
 
 ```bash
-docker build -t pulsechain-mcp:1.0.1 .
-docker run --rm -it -e AGENT_WALLET_ENABLED=false pulsechain-mcp:1.0.1
+docker build -t pulsechain-mcp:1.0.2 .
+docker run --rm -it -e AGENT_WALLET_ENABLED=false pulsechain-mcp:1.0.2
 ```
 
 ---

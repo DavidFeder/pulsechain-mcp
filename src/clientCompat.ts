@@ -7,11 +7,11 @@
 export const STDIO_HOST_FORBIDDEN_ENV = ["HTTP_TRANSPORT_PORT"] as const;
 
 /**
- * Product-default env keys for example client configs (wallets on).
- * Master key is required at runtime — examples use a REPLACE_ placeholder.
+ * Product-safe env keys for example client configs.
+ * Agent install default is research-only; wallets-on uses launcher + .env.wallet.
  */
 export const STDIO_HOST_SAFE_ENV_DEFAULTS = {
-  AGENT_WALLET_ENABLED: "true",
+  AGENT_WALLET_ENABLED: "false",
   LOG_LEVEL: "info",
 } as const;
 
@@ -26,10 +26,12 @@ export function formatFatalStartupHint(options?: {
   const parts = [
     "Fix environment variables (see .env.example and examples/README.md).",
     "Common issues: missing npm run build (dist/index.js), non-absolute args path,",
-    "invalid PULSECHAIN_RPC_URLS, wallets on without/short MASTER_KEY (default is on),",
+    "invalid PULSECHAIN_RPC_URLS, wallets on without/short MASTER_KEY,",
     "MAX_PLS_PER_TX > MAX_PLS_DAILY, short AGENT_WALLET_MRTR_SECRET, bad LOG_LEVEL.",
     "Cursor / Grok Build / Claude Desktop use stdio — do not set HTTP_TRANSPORT_PORT.",
-    "First run: set AGENT_WALLET_MASTER_KEY (64-char hex preferred), or set AGENT_WALLET_ENABLED=false for research-only.",
+    "Agent install default: research-only (AGENT_WALLET_ENABLED=false). For signing:",
+    "scripts/start-wallet-mcp.mjs + gitignored .env.wallet (generate-wallet-env.mjs write-only).",
+    "Never put AGENT_WALLET_MASTER_KEY in host config or chat.",
     "With wallets on: unique AGENT_WALLET_DIR per process; optional MULTIPROC_STRICT=true; " +
       "then agent_wallet_status → create → fund → inspect/propose/review/execute.",
   ];
@@ -61,8 +63,11 @@ export function describeTransportMode(httpTransportPort: number | undefined): {
 }
 
 /**
- * True when example client config text is stdio-safe under the product default
- * (wallets on + master-key placeholder) or explicit research-only (wallets off).
+ * True when example client config text is stdio-safe under:
+ * - research-only (wallets off, no master key) — agent install default samples
+ * - wallets-on via launcher (start-wallet-mcp.mjs, no master key in host config)
+ * - discouraged wallets-on with REPLACE_ master-key placeholder still accepted if present
+ *
  * Used by structural tests against files under examples/.
  */
 export function isStdioClientConfigSafe(source: string): {
@@ -87,44 +92,58 @@ export function isStdioClientConfigSafe(source: string): {
   const walletOn =
     /AGENT_WALLET_ENABLED"\s*:\s*"true"/i.test(text) ||
     /AGENT_WALLET_ENABLED\s*=\s*"true"/i.test(text);
+  const usesLauncher =
+    /start-wallet-mcp\.mjs/.test(text) || /start-lab-mcp\.mjs/.test(text);
+
+  const hasMasterKeyAssign =
+    /AGENT_WALLET_MASTER_KEY"\s*:\s*"/i.test(text) ||
+    /AGENT_WALLET_MASTER_KEY\s*=\s*"/i.test(text);
+  const hasReplaceMasterKey =
+    /AGENT_WALLET_MASTER_KEY"\s*:\s*"REPLACE_/i.test(text) ||
+    /AGENT_WALLET_MASTER_KEY\s*=\s*"REPLACE_/i.test(text);
+  const hasRealHexMasterKey =
+    /AGENT_WALLET_MASTER_KEY"\s*:\s*"[0-9a-fA-F]{64}"/i.test(text) ||
+    /AGENT_WALLET_MASTER_KEY\s*=\s*"[0-9a-fA-F]{64}"/i.test(text);
+
+  if (hasRealHexMasterKey) {
+    reasons.push("examples must not embed a real 64-char hex master key");
+  }
 
   if (walletOn && walletOff) {
     reasons.push("AGENT_WALLET_ENABLED cannot be both true and false");
+  } else if (usesLauncher) {
+    // Recommended wallets-on: launcher loads .env.wallet — host must not embed real keys.
+    // REPLACE_ placeholder is also discouraged but still accepted for legacy samples.
+    if (hasMasterKeyAssign && !hasReplaceMasterKey && !hasRealHexMasterKey) {
+      // empty or non-REPLACE value
+      const emptyOrOther =
+        /AGENT_WALLET_MASTER_KEY"\s*:\s*""/i.test(text) ||
+        /AGENT_WALLET_MASTER_KEY\s*=\s*""/i.test(text);
+      if (!emptyOrOther && hasMasterKeyAssign && !hasReplaceMasterKey) {
+        reasons.push(
+          "launcher host configs should omit AGENT_WALLET_MASTER_KEY (use .env.wallet)",
+        );
+      }
+    }
   } else if (walletOn) {
-    // Product default samples: master key must be a REPLACE_ placeholder, never a real secret
-    const hasMasterKeyAssign =
-      /AGENT_WALLET_MASTER_KEY"\s*:\s*"/i.test(text) ||
-      /AGENT_WALLET_MASTER_KEY\s*=\s*"/i.test(text);
+    // Discouraged alternate: inline master key must be REPLACE_ placeholder only
     if (!hasMasterKeyAssign) {
       reasons.push(
-        'wallets-on examples must set AGENT_WALLET_MASTER_KEY to a REPLACE_ placeholder',
+        'wallets-on host configs without launcher must set AGENT_WALLET_MASTER_KEY to a REPLACE_ placeholder, or use scripts/start-wallet-mcp.mjs',
       );
-    } else if (
-      !/AGENT_WALLET_MASTER_KEY"\s*:\s*"REPLACE_/i.test(text) &&
-      !/AGENT_WALLET_MASTER_KEY\s*=\s*"REPLACE_/i.test(text)
-    ) {
+    } else if (!hasReplaceMasterKey) {
       reasons.push(
         "AGENT_WALLET_MASTER_KEY in examples must be a REPLACE_ placeholder (never a real key)",
       );
     }
-    // Reject committed-looking 64-char hex secrets in examples
-    if (
-      /AGENT_WALLET_MASTER_KEY"\s*:\s*"[0-9a-fA-F]{64}"/i.test(text) ||
-      /AGENT_WALLET_MASTER_KEY\s*=\s*"[0-9a-fA-F]{64}"/i.test(text)
-    ) {
-      reasons.push("examples must not embed a real 64-char hex master key");
-    }
   } else if (walletOff) {
     // Research-only samples: omit master key
-    if (
-      /AGENT_WALLET_MASTER_KEY"\s*:\s*"[^"]+"/i.test(text) ||
-      /AGENT_WALLET_MASTER_KEY\s*=\s*"[^"]+"/i.test(text)
-    ) {
+    if (hasMasterKeyAssign) {
       reasons.push("research-only examples should omit AGENT_WALLET_MASTER_KEY");
     }
-  } else {
+  } else if (!usesLauncher) {
     reasons.push(
-      'AGENT_WALLET_ENABLED must be "true" (product default) or "false" (research-only) in examples',
+      'AGENT_WALLET_ENABLED must be "false" (research-only default) or "true" (wallets), or use start-wallet-mcp.mjs',
     );
   }
 
@@ -133,7 +152,7 @@ export function isStdioClientConfigSafe(source: string): {
     reasons.push("must not hard-code personal absolute home path; use placeholders");
   }
 
-  // Placeholder is clone root only; paths must be REPLACE.../dist and REPLACE.../data
+  // Placeholder is clone root only; paths must be REPLACE.../dist or REPLACE.../scripts
   // (not REPLACE.../SomeFolder/dist — that double-nests when users paste the full clone path)
   if (
     /REPLACE_WITH_ABSOLUTE_PATH[/\\][^/\s"'\\\]]+[/\\]dist[/\\]index\.js/.test(
@@ -145,6 +164,15 @@ export function isStdioClientConfigSafe(source: string): {
     );
   }
   if (
+    /REPLACE_WITH_ABSOLUTE_PATH[/\\][^/\s"'\\\]]+[/\\]scripts[/\\]start-wallet-mcp\.mjs/.test(
+      text,
+    )
+  ) {
+    reasons.push(
+      "launcher args must be REPLACE_WITH_ABSOLUTE_PATH/scripts/start-wallet-mcp.mjs (no intermediate folder name)",
+    );
+  }
+  if (
     /REPLACE_WITH_ABSOLUTE_PATH[/\\][^/\s"'\\\]]+[/\\]data[/\\]wallets/.test(
       text,
     )
@@ -153,11 +181,16 @@ export function isStdioClientConfigSafe(source: string): {
       "AGENT_WALLET_DIR must be REPLACE_WITH_ABSOLUTE_PATH/data/wallets (no intermediate folder name)",
     );
   }
-  if (
-    text.includes("REPLACE_WITH_ABSOLUTE_PATH") &&
-    !/REPLACE_WITH_ABSOLUTE_PATH\/dist\/index\.js/.test(text)
-  ) {
-    reasons.push("must include REPLACE_WITH_ABSOLUTE_PATH/dist/index.js entry path");
+  if (text.includes("REPLACE_WITH_ABSOLUTE_PATH")) {
+    const hasDist = /REPLACE_WITH_ABSOLUTE_PATH\/dist\/index\.js/.test(text);
+    const hasLauncher =
+      /REPLACE_WITH_ABSOLUTE_PATH\/scripts\/start-wallet-mcp\.mjs/.test(text) ||
+      /REPLACE_WITH_ABSOLUTE_PATH\/scripts\/start-lab-mcp\.mjs/.test(text);
+    if (!hasDist && !hasLauncher) {
+      reasons.push(
+        "must include REPLACE_WITH_ABSOLUTE_PATH/dist/index.js or .../scripts/start-wallet-mcp.mjs",
+      );
+    }
   }
 
   return { ok: reasons.length === 0, reasons };

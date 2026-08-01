@@ -6,20 +6,22 @@ This page is the **short essentials** front door only. Residual detail (launcher
 
 ---
 
-## Modes
+## Modes (install vs product)
 
-| Mode | Env | Use |
-|------|-----|-----|
-| **Wallets on (default)** | `AGENT_WALLET_ENABLED=true` + `AGENT_WALLET_MASTER_KEY` | Encrypted EOAs; funding authorizes spend |
-| **Research-only** | `AGENT_WALLET_ENABLED=false`, omit master key | Analytics + quotes; no signing |
+| Mode | Env / entry | Use |
+|------|-------------|-----|
+| **Research-only (agent install default)** | `dist/index.js` + `AGENT_WALLET_ENABLED=false`, omit master key | Analytics + quotes; no signing |
+| **Wallets on (when user asks to sign)** | `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` | Encrypted EOAs; funding authorizes spend |
 
-Wallets are **on by default**. Master key is required when enabled. Generate offline (never commit or paste into chat):
+When wallets are **enabled** in the process, a master key is required to start. Agent first-install should still choose **research-only** unless the user asked for signing.
+
+**Write-only key path** (never print the key; never commit):
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node scripts/generate-wallet-env.mjs
 ```
 
-Lose the master key → encrypted wallets are **unrecoverable**.
+Prefer that over `console.log` of a raw key into host env. Lose the master key → encrypted wallets are **unrecoverable**.
 
 ## Operator-trust (when wallets on)
 
@@ -39,11 +41,20 @@ If something looks wrong: call **`kill_switch`** / `revoke` with `confirm=true` 
 
 ## Keys never in chat
 
-No private keys, master keys, mnemonics, or ciphertext in tool args, logs, or operator paste.
+No private keys, master keys, mnemonics, or ciphertext in tool args, logs, or operator paste. Do not `read_file` `.env.wallet` to “verify.”
 
 ## Prefer when signing
 
-Dedicated launcher: `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` (see [SECURITY_DEEP.md](SECURITY_DEEP.md)). Stdio clients: absolute path to `dist/index.js`; **do not** set `HTTP_TRANSPORT_PORT`.
+Dedicated launcher: `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` (see [SECURITY_DEEP.md](SECURITY_DEEP.md)). Host config must **not** embed `AGENT_WALLET_MASTER_KEY`. Stdio clients: absolute path to launcher or `dist/index.js`; **do not** set `HTTP_TRANSPORT_PORT`.
+
+## Permissions (don’t-read-secrets)
+
+| Path | Mode (Unix) | Agent may |
+|------|-------------|-----------|
+| `.env.wallet` | 600 | existence / mode check, not contents |
+| `data/wallets/` | 700 | status tools / counts, not key material |
+
+Windows: POSIX modes are best-effort; use NTFS ACLs or keep secrets off shared folders.
 
 ## Gas (one line)
 
@@ -51,10 +62,10 @@ PulseChain gas often costs **tens–hundreds of PLS** even for small value trans
 
 ## Operational checklist
 
-1. Bootstrap smoke passes ([BOOTSTRAP.md](BOOTSTRAP.md)).
-2. Master key set **or** research-only disable.
+1. Bootstrap smoke passes ([BOOTSTRAP.md](BOOTSTRAP.md)) — research-only first unless signing was requested.
+2. Master key only in `.env.wallet` **or** research-only disable.
 3. Unique wallet dir; multiproc strict recommended for dedicated wallet process.
-4. Fund only what you accept the agent may spend.
+4. Fund only what you accept the agent may spend (never during bootstrap).
 5. On incident: `kill_switch`.
 
 Heuristic analytics tools are directional, not formal audits.

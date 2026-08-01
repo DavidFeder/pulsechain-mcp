@@ -9,9 +9,7 @@
         "PULSEX_SUBGRAPH_V1": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex",
         "PULSEX_SUBGRAPH_V2": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2",
         "HTTP_TIMEOUT_MS": "30000",
-        "AGENT_WALLET_ENABLED": "true",
-        "AGENT_WALLET_MASTER_KEY": "REPLACE_WITH_64_CHAR_HEX_MASTER_KEY",
-        "AGENT_WALLET_DIR": "REPLACE_WITH_ABSOLUTE_PATH/data/wallets",
+        "AGENT_WALLET_ENABLED": "false",
         "LOG_LEVEL": "info"
       }
     }

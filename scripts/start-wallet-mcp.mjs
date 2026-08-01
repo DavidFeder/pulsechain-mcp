@@ -15,8 +15,10 @@
  * Read-only / research hosts should keep pointing at dist/index.js with
  * AGENT_WALLET_ENABLED=false (see examples/*).
  *
- * Prerequisites: npm run build (dist/index.js must exist); copy
- * .env.wallet.example → .env.wallet and set AGENT_WALLET_MASTER_KEY (never commit).
+ * Prerequisites: npm run build (dist/index.js must exist); create .env.wallet
+ * with write-only ceremony (never prints the key; never commit):
+ *   node scripts/generate-wallet-env.mjs
+ * Prefer host entry via scripts/install-for-host.mjs --mode wallets.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -36,7 +38,7 @@ if (!envPath) {
   console.error(
     JSON.stringify({
       error: "Wallet env missing",
-      hint: "Copy .env.wallet.example → .env.wallet and set AGENT_WALLET_MASTER_KEY",
+      hint: "Run: node scripts/generate-wallet-env.mjs (write-only; never prints the key)",
       tried: [walletEnvPath, labEnvPath],
     }),
   );

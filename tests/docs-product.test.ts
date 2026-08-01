@@ -1,6 +1,6 @@
 /**
  * Structural docs tests: ask-agent human README, single bootstrap path,
- * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.1 pins.
+ * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.2 pins.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
@@ -25,7 +25,7 @@ describe("human README front door (docs product)", () => {
     expect(readme).toMatch(/If you are an AI agent/i);
     // Client samples live under examples/; human README may omit the path and
     // point agents only at BOOTSTRAP (which lists the samples).
-    expect(readme).toMatch(/on by default|Encrypted agent wallets/i);
+    expect(readme).toMatch(/Encrypted agent wallets|Research Only Mode|research-only/i);
     // Deep setup / multi-doc catalog must not live in human README
     expect(readme).not.toMatch(/## First-run wallet setup/i);
     expect(readme).not.toMatch(/## Using with Cursor/i);
@@ -35,7 +35,6 @@ describe("human README front door (docs product)", () => {
     expect(readme).not.toMatch(/docs\/SECURITY\.md/);
     expect(readme).not.toMatch(/controlled wallet lab checklist/i);
     expect(readme).not.toMatch(/internal validation|lab funding story/i);
-    expect(readme).not.toMatch(/off by default/i);
     expect(readme).not.toMatch(/@openpulsechain\/mcp-server/i);
     expect(readme).not.toMatch(/openpulsechain/i);
   });
@@ -71,7 +70,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.1");
+    expect(pkg.version).toBe("1.0.2");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
@@ -126,14 +125,20 @@ describe("agent bootstrap + durable rules (docs product)", () => {
   it("BOOTSTRAP is the single ordered setup checklist", () => {
     const boot = read("docs/BOOTSTRAP.md");
     expect(boot).toMatch(/Start here|top to bottom/i);
-    expect(boot).toMatch(/Clone and build|npm run build/i);
-    expect(boot).toMatch(/Choose the client example|cursor_mcp_config|codex_mcp_config/i);
-    expect(boot).toMatch(/absolute path|REPLACE_WITH_ABSOLUTE_PATH/i);
-    expect(boot).toMatch(/Wallets on|AGENT_WALLET_MASTER_KEY|research-only/i);
-    expect(boot).toMatch(/Restart|reload/i);
-    expect(boot).toMatch(/Smoke checks|pulsechain_health/i);
+    expect(boot).toMatch(/Clone and build|npm run build|npm install/i);
+    expect(boot).toMatch(/cursor_mcp_config|codex_mcp_config|install-for-host/i);
+    expect(boot).toMatch(/absolute path|REPLACE_WITH_ABSOLUTE_PATH|clone root/i);
+    expect(boot).toMatch(/research-only|agent default/i);
+    expect(boot).toMatch(/generate-wallet-env|write-only|\.env\.wallet/i);
+    expect(boot).toMatch(/Do NOT|anti-pattern/i);
+    expect(boot).toMatch(/Pre-reload|Post-reload|reload/i);
+    expect(boot).toMatch(/pulsechain_health|agent_wallet_status/i);
     expect(boot).toMatch(/Where next|AGENT_GUIDANCE|TOKEN_IDENTITY|AGGREGATORS|SECURITY/i);
-    expect(boot).toMatch(/1\.0\.1/);
+    expect(boot).toMatch(/package\.json|npm pkg get version/);
+    // Must not instruct console.log of master key as the primary ceremony
+    expect(boot).not.toMatch(
+      /Generate a master key[\s\S]{0,80}console\.log\(require\(['"]crypto['"]\)/,
+    );
     // First-run path must not require the deep security file
     expect(boot).not.toMatch(/must read.*SECURITY_DEEP|required.*SECURITY_DEEP/i);
   });
@@ -149,8 +154,9 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(map).toMatch(/SECURITY\.md/);
     expect(map).toMatch(/SECURITY_DEEP\.md/);
     expect(examples).toMatch(/docs\/BOOTSTRAP\.md/);
-    expect(examples).toMatch(/1\.0\.1/);
+    expect(examples).toMatch(/package\.json|npm pkg get version|research-only/i);
     expect(examples).toMatch(/Codex|codex_mcp_config/i);
+    expect(examples).toMatch(/install-for-host/);
     expect(agent).toMatch(/BOOTSTRAP\.md/);
   });
 
@@ -160,13 +166,14 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     const lines = security.split(/\r?\n/);
     expect(lines.length).toBeLessThan(100);
     expect(security).toMatch(/Essentials|short essentials/i);
-    expect(security).toMatch(/on by default|Wallets on \(default\)/i);
+    expect(security).toMatch(/research-only|agent install default|Wallets on \(when user asks/i);
     expect(security).toMatch(/AGENT_WALLET_ENABLED=false|Research-only/i);
     expect(security).toMatch(/Funding the agent is authorization|operator-trust/i);
     expect(security).toMatch(/kill_switch/i);
     expect(security).toMatch(/AGENT_WALLET_DIR|Multiproc/i);
     expect(security).toMatch(/AES-256-GCM|encrypted/i);
-    expect(security).toMatch(/Keys never in chat|never commit or paste/i);
+    expect(security).toMatch(/Keys never in chat|never commit|never print/i);
+    expect(security).toMatch(/generate-wallet-env|start-wallet-mcp|\.env\.wallet/i);
     expect(security).toMatch(/BOOTSTRAP\.md/);
     expect(security).toMatch(/SECURITY_DEEP\.md/);
     // Front door must not carry long residual tables
@@ -253,37 +260,38 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(agg).toMatch(/Stale-quote|re-quote/i);
   });
 
-  it("OpenAI/Codex example remains wallets-on with placeholders", () => {
+  it("OpenAI/Codex example is research-only without master key", () => {
     expect(existsSync(join(root, "examples/codex_mcp_config.toml"))).toBe(true);
     const codex = read("examples/codex_mcp_config.toml");
     expect(codex).toMatch(/\[mcp_servers\.pulsechain-mcp\]/);
     expect(codex).toMatch(/REPLACE_WITH_ABSOLUTE_PATH\/dist\/index\.js/);
-    expect(codex).toMatch(/REPLACE_WITH_64_CHAR_HEX_MASTER_KEY/);
-    expect(codex).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"true"/);
+    expect(codex).toMatch(/AGENT_WALLET_ENABLED\s*=\s*"false"/);
+    expect(codex).not.toMatch(/AGENT_WALLET_MASTER_KEY\s*=/);
     expect(codex).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 
-  it("RELEASE_NOTES has v1.0.1 trust polish plus 1.0.0 baseline content", () => {
+  it("RELEASE_NOTES has v1.0.2 agent-safe install plus prior content", () => {
     const notes = read("RELEASE_NOTES.md");
+    expect(notes).toMatch(/1\.0\.2/);
     expect(notes).toMatch(/1\.0\.1/);
     expect(notes).toMatch(/1\.0\.0/);
     expect(notes).toMatch(/2\.0\.0/);
-    expect(notes).toMatch(/dual-era|dual:2026-07-28/i);
-    expect(notes).toMatch(/MAX_PLS|spend-cap|no product|hard spend/i);
-    expect(notes).toMatch(/operator-trust|host-strength|confirm/i);
-    expect(notes).toMatch(/multiproc|process-local/i);
-    expect(notes).toMatch(/legacyCapsDisplayOnly|priceUsdReady|ghost|pair ranking/i);
+    expect(notes).toMatch(/agent-safe|research-only|install-for-host|\.env\.wallet/i);
+    expect(notes).toMatch(/MAX_PLS|spend-cap|hard spend|operator-trust/i);
+    expect(notes).toMatch(/multiproc|process-local|Windows file modes|Host reload/i);
     expect(notes).toMatch(/About|topics/i);
     expect(notes).not.toMatch(/V1_READINESS|docs\/archive/i);
     expect(notes).not.toMatch(/repository\s+(stays\s+)?\*{0,2}private|keep\s+\*{0,2}private/i);
   });
 
-  it("CHANGELOG is public-facing history with 1.0.1 trust polish and residual honesty", () => {
+  it("CHANGELOG is public-facing history with 1.0.2 agent-safe install and residual honesty", () => {
     const log = read("CHANGELOG.md");
     const lines = log.split(/\r?\n/).length;
-    expect(lines).toBeLessThan(200);
+    expect(lines).toBeLessThan(250);
+    expect(log).toMatch(/## \[1\.0\.2\]/);
     expect(log).toMatch(/## \[1\.0\.1\]/);
     expect(log).toMatch(/## \[1\.0\.0\]/);
+    expect(log).toMatch(/agent-safe|install-for-host|write-only|research-only/i);
     expect(log).toMatch(/ghost|pair ranking|legacyCapsDisplayOnly|priceUsdReady|executionReady/i);
     expect(log).toMatch(/MAX_PLS|spend-cap|product-facing/i);
     expect(log).toMatch(/2\.0\.0/);
@@ -334,7 +342,7 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(operator).toMatch(/## Docker \/ one-command setup/);
     expect(operator).toMatch(/## Multi-RPC/);
     expect(operator).not.toMatch(/archive\/pulsechainstats-investigation/);
-    expect(security).toMatch(/on by default|Wallets on \(default\)/i);
+    expect(security).toMatch(/research-only|agent install default|Wallets on \(when user asks/i);
     expect(security).toMatch(/AGENT_WALLET_ENABLED=false|Research-only/i);
 
     for (const [name, text] of [

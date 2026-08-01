@@ -259,13 +259,15 @@ describe("wallet mode template shipped in repo", () => {
     );
     // Front door: short essentials
     expect(security.split(/\r?\n/).length).toBeLessThan(100);
-    expect(security).toMatch(/on by default|Wallets on \(default\)/i);
+    expect(security).toMatch(
+      /research-only|agent install default|Wallets on \(when user asks|when wallets are \*\*enabled\*\*/i,
+    );
     expect(security).toMatch(/operator-trust|funding the agent is authorization/i);
     expect(security).toMatch(/verify address|create wallet|propose|execute/i);
     expect(security).toMatch(/PulseChain gas|gas headroom/i);
     expect(security).toMatch(/display \/ advisory|not hard custody|kill_switch/i);
     expect(security).toMatch(/start-wallet-mcp\.mjs/);
-    expect(security).toMatch(/Research-only|research/i);
+    expect(security).toMatch(/Research-only|research|generate-wallet-env/i);
     expect(security).toMatch(/SECURITY_DEEP\.md/);
     expect(security).not.toMatch(/Controlled wallet lab checklist/i);
     // Residual detail in secondary doc
@@ -301,7 +303,7 @@ describe("wallet mode template shipped in repo", () => {
     expect(autoload).toMatch(/\.env\.wallet|\.env\.lab/);
   });
 
-  it("end-user docs present wallets-on default + research-only without lab-testing narrative", () => {
+  it("end-user docs present research-only agent default + wallets path without lab-testing narrative", () => {
     const root = process.cwd();
     const readme = readFileSync(join(root, "README.md"), "utf8");
     const examplesReadme = readFileSync(join(root, "examples", "README.md"), "utf8");
@@ -309,18 +311,18 @@ describe("wallet mode template shipped in repo", () => {
     const agentGuidance = readFileSync(join(root, "docs", "AGENT_GUIDANCE.md"), "utf8");
     const bootstrap = readFileSync(join(root, "docs", "BOOTSTRAP.md"), "utf8");
     for (const text of [readme, examplesReadme, envExample, agentGuidance, bootstrap]) {
-      expect(text).toMatch(/research|AGENT_WALLET_ENABLED=false|on by default|Encrypted agent wallets/i);
-      expect(text).toMatch(/wallet|\.env\.wallet|start-wallet-mcp|MASTER_KEY|encrypted|agent wallets/i);
+      expect(text).toMatch(/research|AGENT_WALLET_ENABLED=false|Encrypted agent wallets|Research Only Mode/i);
+      expect(text).toMatch(/wallet|\.env\.wallet|start-wallet-mcp|MASTER_KEY|encrypted|agent wallets|research-only/i);
       expect(text).not.toMatch(/controlled wallet lab checklist/i);
       expect(text).not.toMatch(/wallet lab path|lab funding story|internal validation/i);
     }
-    expect(readme).toMatch(/on by default|Encrypted agent wallets/i);
-    expect(bootstrap).toMatch(/master key|AGENT_WALLET_MASTER_KEY|Wallets on/i);
-    expect(agentGuidance).toMatch(/master key|AGENT_WALLET_MASTER_KEY|Wallets on default/i);
+    expect(readme).toMatch(/Encrypted agent wallets|Research Only Mode|research-only/i);
+    expect(bootstrap).toMatch(/master key|AGENT_WALLET_MASTER_KEY|Wallets-on|research-only/i);
+    expect(agentGuidance).toMatch(/master key|AGENT_WALLET_MASTER_KEY|research-only|Wallets on/i);
     expect(envExample).toMatch(/AGENT_WALLET_ENABLED=true/);
     expect(envExample).toMatch(/AGENT_WALLET_ENABLED=false/);
 
-    // Client host samples: wallets-on product default, no lab-testing framing
+    // Client host samples: research-only agent default, no master key assignment, no lab framing
     const clientConfigs = [
       join(root, "examples", "grok_mcp_config.toml"),
       join(root, "examples", "cursor_mcp_config.json"),
@@ -329,8 +331,13 @@ describe("wallet mode template shipped in repo", () => {
     ];
     for (const path of clientConfigs) {
       const text = readFileSync(path, "utf8");
-      expect(text, path).toMatch(/AGENT_WALLET_ENABLED["\s:=]+["']?true/i);
-      expect(text, path).toMatch(/REPLACE_WITH_64_CHAR_HEX_MASTER_KEY|REPLACE_/);
+      // Strip comments for assignment checks
+      const active = text
+        .split(/\r?\n/)
+        .map((line) => line.replace(/#.*$/, ""))
+        .join("\n");
+      expect(active, path).toMatch(/AGENT_WALLET_ENABLED["\s:=]+["']?false/i);
+      expect(active, path).not.toMatch(/AGENT_WALLET_MASTER_KEY\s*[=:]/);
       expect(text, path).toMatch(/dist\/index\.js/);
       expect(text, path).not.toMatch(/WALLET LAB|controlled wallet lab|wallet lab path/i);
       expect(text, path).not.toMatch(/start-lab-mcp\.mjs/);
@@ -338,8 +345,8 @@ describe("wallet mode template shipped in repo", () => {
       expect(text, path).not.toMatch(/0\.1\.\d+/); // stale 0.1.x pins fail CI
     }
     const grok = readFileSync(clientConfigs[0], "utf8");
-    expect(grok).toMatch(/1\.0\.1/);
-    expect(grok).toMatch(/start-wallet-mcp\.mjs|\.env\.wallet/);
+    expect(grok).toMatch(/package\.json|npm pkg get version|research-only/i);
+    expect(grok).toMatch(/start-wallet-mcp\.mjs|\.env\.wallet|install-for-host/);
   });
 
   it("applyLabAutoloadIfEnabled is no-op without marker (RO safe)", async () => {

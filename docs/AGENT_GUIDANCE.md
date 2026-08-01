@@ -2,9 +2,9 @@
 
 **Operating manual** (workflows, rules, trust). **First-time setup is not here.**
 
-→ **Setup checklist:** [BOOTSTRAP.md](BOOTSTRAP.md) (clone/build → client → paths → wallets → reload → smoke).
+→ **Setup checklist:** [BOOTSTRAP.md](BOOTSTRAP.md) (clone → mode fork **research-first** → write-only secrets if wallets → install-for-host → pre-reload doctor → user reload → post-reload smoke).
 
-Humans only paste an example config and ask you to finish; you follow BOOTSTRAP, then use this doc for day-to-day work.
+Humans only paste an example config and ask you to finish; you follow BOOTSTRAP (agent default = research-only), then use this doc for day-to-day work.
 
 Also available as MCP resource: **`pulsechain://guidance/ro-research`**.
 
@@ -22,15 +22,16 @@ npm install
 npm run build   # produces dist/index.js — required before any client connect
 ```
 
-- Entry for hosts: **`dist/index.js`** (absolute path).
-- Prefer dedicated wallet launcher when signing under multiproc strict: `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` (see [SECURITY.md](SECURITY.md); residual detail in [SECURITY_DEEP.md](SECURITY_DEEP.md)).
+- Research-only entry: **`dist/index.js`** (absolute path) with `AGENT_WALLET_ENABLED=false`.
+- Prefer installer: `node scripts/install-for-host.mjs --host <grok|cursor|claude|codex> --mode research|wallets`.
+- Prefer dedicated wallet launcher when signing: `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` via write-only `scripts/generate-wallet-env.mjs` (see [SECURITY.md](SECURITY.md); residual detail in [SECURITY_DEEP.md](SECURITY_DEEP.md)).
 - Docker is optional packaging only — [OPERATOR.md](OPERATOR.md). Not required for IDE/CLI stdio.
 
 ---
 
 ## Client wiring
 
-All supported hosts use **stdio** + `node` + absolute `dist/index.js`. **Do not set `HTTP_TRANSPORT_PORT`** (that switches the process to HTTP-only and breaks stdio clients).
+All supported hosts use **stdio** + `node` + absolute entry path. **Do not set `HTTP_TRANSPORT_PORT`** (that switches the process to HTTP-only and breaks stdio clients).
 
 | Host | Sample | Where to put it |
 |------|--------|-----------------|
@@ -39,48 +40,55 @@ All supported hosts use **stdio** + `node` + absolute `dist/index.js`. **Do not 
 | **Grok Build** | [`examples/grok_mcp_config.toml`](../examples/grok_mcp_config.toml) | `~/.grok/config.toml` or project `.grok/config.toml` |
 | **OpenAI Codex** | [`examples/codex_mcp_config.toml`](../examples/codex_mcp_config.toml) | `~/.codex/config.toml` or project `.codex/config.toml` (trusted) |
 
-### Placeholders (every sample)
+Shipped samples are **research-only**. Prefer `scripts/install-for-host.mjs` to fill absolute paths.
+
+### Placeholders
 
 | Placeholder | Meaning |
 |-------------|---------|
 | `REPLACE_WITH_ABSOLUTE_PATH` | Clone root only (contains `package.json` + `dist/`) |
-| `REPLACE_WITH_64_CHAR_HEX_MASTER_KEY` | Offline master key — never commit or paste into chat |
 
-**Windows paths:** prefer forward slashes (`C:/Users/.../PulseChainMCP`).
+**Windows paths:** prefer forward slashes (`C:/Users/.../pulsechain-mcp`).
+
+**Never** put a real master key in host config or chat. Write-only: `node scripts/generate-wallet-env.mjs`.
 
 ### Codex-specific notes
 
 - Config table is **`[mcp_servers.<name>]`** (not `mcp.servers`).
 - Shared by Codex CLI, IDE extension, and ChatGPT desktop Codex host.
-- Optional CLI: `codex mcp add pulsechain-mcp --env KEY=VALUE -- node <ABS>/dist/index.js` — prefer the full TOML sample when many env vars are needed.
+- Optional CLI: `codex mcp add pulsechain-mcp --env KEY=VALUE -- node <ABS>/dist/index.js` — prefer the full TOML sample when many env vars are needed. **Do not** pass `AGENT_WALLET_MASTER_KEY` on the CLI.
 - `startup_timeout_sec` / `tool_timeout_sec` are often needed (cold start + slow RPC/aggregator tools). Sample sets 45 / 120.
 - Codex can also speak Streamable HTTP to remote MCP servers; **this product’s primary path remains local stdio** — do not enable `HTTP_TRANSPORT_PORT` on the Node process for local IDE/CLI hosts.
 - After rebuild: restart Codex/extension; `codex mcp list` / in-TUI `/mcp`.
 
 ### Smoke check (any host)
 
-1. `pulsechain_health` — expect current version and `agentWalletEnabled` matching mode  
+**Pre-reload:** host doctor/logs only (e.g. `grok mcp doctor pulsechain-mcp`) — not tools in the install chat.  
+**Post-reload:**
+
+1. `pulsechain_health` — expect current package version and `agentWalletEnabled` matching mode  
 2. `agent_wallet_status` — config flags only (never a secret)  
 3. Optional: `get_rpc_health`, `get_token_balance`, `dexscreener_search`  
 
-Full placeholder notes: [examples/README.md](../examples/README.md).
+Full notes: [examples/README.md](../examples/README.md), [BOOTSTRAP.md](BOOTSTRAP.md).
 
 ---
 
-## Wallets on default + master key
+## Research-only install default + wallets-on when signing
 
-Product default (**v0.3.0+**): **`AGENT_WALLET_ENABLED=true`**. Master key is **required** to start when wallets are on.
+**Agent install default:** research-only (`AGENT_WALLET_ENABLED=false`, no master key in host config).
 
-**Generate master key (operator machine only — never log or commit):**
+When wallets are **enabled** in the process, a master key is **required** to start. Prefer launcher + `.env.wallet`:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node scripts/generate-wallet-env.mjs
+# host args → scripts/start-wallet-mcp.mjs  (no MASTER_KEY in host env)
 ```
 
-| Mode | Env | Behavior |
-|------|-----|----------|
-| **Wallets on (default)** | `AGENT_WALLET_ENABLED=true` + `AGENT_WALLET_MASTER_KEY` | Create/fund wallet → signing tools |
-| **Research-only** | `AGENT_WALLET_ENABLED=false`, omit master key | Analytics + quotes; writes refuse |
+| Mode | Entry / Env | Behavior |
+|------|-------------|----------|
+| **Research-only (install default)** | `dist/index.js` + `AGENT_WALLET_ENABLED=false` | Analytics + quotes; writes refuse |
+| **Wallets on (user asked to sign)** | `start-wallet-mcp.mjs` + `.env.wallet` | Create/fund wallet → signing tools |
 
 - Private keys stay AES-256-GCM encrypted; tools never return them.
 - **Funding the agent is authorization** (operator-trust). No product spend-cap defaults; `MAX_PLS_*` / allowlists are **display / advisory** only if set, not hard custody locks.

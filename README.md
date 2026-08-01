@@ -6,7 +6,7 @@ You can give your AI agent its own PLS and other tokens in a local wallet it con
 
 Sending PLS and swaps on PulseX/Piteas have been successful.
 
-**Version `1.0.1`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
+**Version `1.0.2`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
 
 ## Features
 
@@ -27,7 +27,7 @@ Sending PLS and swaps on PulseX/Piteas have been successful.
 
 1. Install **Node.js 20+** if needed or have your agent do it.
 2. Clone this repo and open it in your AI app (Cursor, Claude, Grok, Codex, …) or have your agent do it.
-3. **Ask your AI agent to finish setup** — paths, master key or research-only mode, reload, and smoke checks.
+3. **Ask your AI agent to finish setup** — it should start **research-only** (no signing secrets), reload, and smoke-check. Ask again later if you want agent wallets for signing.
 
 You do not need to learn MCP, RPC, or wallet cryptography. The agent does it for you.
 
@@ -40,7 +40,9 @@ git clone https://github.com/DavidFeder/pulsechain-mcp.git && cd pulsechain-mcp 
 ## If you are an AI agent
 
 **Start here → [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)**  
-(ordered checklist: build → client example → paths → wallets → reload → smoke → next docs)
+(ordered checklist: clone → **mode fork research-first** → secrets write-only if wallets → install-for-host → pre-reload doctor → user reload → post-reload smoke)
+
+Default install intent is **research-only**. Promote to wallets-on only when the user asks to sign. Never print or paste master keys.
 
 ## License
 

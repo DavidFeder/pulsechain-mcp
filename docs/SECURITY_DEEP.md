@@ -28,10 +28,13 @@ Run wallets on a machine you control, with a strong master key and unique `AGENT
 ### First-run master key
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Preferred write-only (never prints the key):
+#   node scripts/generate-wallet-env.mjs
+# Discouraged (prints key to stdout — avoid in agent terminals):
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Put the result in `AGENT_WALLET_MASTER_KEY` (client env or local `.env`). Never commit it. Lose it → encrypted wallets are unrecoverable.
+Prefer write-only `.env.wallet` (never host config). Never commit it. Lose it → encrypted wallets are unrecoverable.
 
 ---
 
@@ -39,7 +42,7 @@ Put the result in `AGENT_WALLET_MASTER_KEY` (client env or local `.env`). Never 
 
 **Operator-trust:** funding the agent is authorization. The steps below are operational (unique dir, multiproc, encrypted keys, gas-aware funding), **not** a claim that PLS caps or allowlists hard-stop spending.
 
-Template for a dedicated process: [`.env.wallet.example`](../.env.wallet.example) (copy to local `.env.wallet`, gitignored; never commit the master key). Default client samples under `examples/` are wallets-on with a `REPLACE_` master-key placeholder.
+Template for a dedicated process: [`.env.wallet.example`](../.env.wallet.example) (write-only via `scripts/generate-wallet-env.mjs`; never commit the master key). Default client samples under `examples/` are **research-only**; wallets-on uses `start-wallet-mcp.mjs` + `.env.wallet` (no master key in host config).
 
 ### Supported wallet launcher
 

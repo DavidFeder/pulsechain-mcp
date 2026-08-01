@@ -1,24 +1,29 @@
 # OpenAI Codex (CLI / IDE / ChatGPT desktop Codex host) — MCP stdio sample for pulsechain-mcp
 #
+# RESEARCH-ONLY (agent install default). No secrets in this file.
+#
 # Install locations (pick one):
 #   User (all projects):     ~/.codex/config.toml   (Windows: %USERPROFILE%\.codex\config.toml)
 #   Project (trusted only):  .codex/config.toml
 #
+# Prefer the installer:
+#   node scripts/install-for-host.mjs --host codex --mode research
+#   node scripts/install-for-host.mjs --host codex --mode wallets
+#
 # UI alternative:
 #   ChatGPT desktop / Codex IDE: Settings → MCP servers → Add server (STDIO)
 #   CLI: codex mcp add pulsechain-mcp --env KEY=VALUE -- node REPLACE_WITH_ABSOLUTE_PATH/dist/index.js
-#        (prefer editing this file when many env vars are needed)
+#        (prefer editing this file when many env vars are needed; never pass MASTER_KEY on CLI)
 #
 # Prerequisites:
 #   1. Node.js 20+ on PATH (or set command to absolute path of node)
 #   2. npm install && npm run build  →  dist/index.js must exist
 #   3. Replace REPLACE_WITH_ABSOLUTE_PATH with your absolute clone ROOT only
 #      (directory that contains dist/ and package.json — not a parent folder).
-#   4. Replace REPLACE_WITH_64_CHAR_HEX_MASTER_KEY with a real master key:
-#        node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-#      Or set AGENT_WALLET_ENABLED = "false" and omit AGENT_WALLET_MASTER_KEY for research-only.
 #
-# Product default (v0.3.0+): wallets ON. Master key is required to start.
+# Agent default: research-only. Wallets-on: scripts/start-wallet-mcp.mjs + .env.wallet
+# (node scripts/generate-wallet-env.mjs). NEVER embed AGENT_WALLET_MASTER_KEY here.
+#
 # Do NOT set HTTP_TRANSPORT_PORT (stdio clients need stdout for JSON-RPC).
 #
 # Codex-specific notes:
@@ -26,14 +31,9 @@
 #   - Shared config across Codex CLI, IDE extension, and ChatGPT desktop Codex host.
 #   - startup_timeout_sec default is short (~10s); raise after cold build if needed.
 #   - tool_timeout_sec: raise for slow RPC / aggregator tools.
-#   - Codex also supports Streamable HTTP MCP; this product sample is stdio-only
-#     (do not set HTTP_TRANSPORT_PORT on the Node process for IDE/CLI stdio hosts).
 #
-# After rebuild: restart Codex / extension, or check: codex mcp list
-# Smoke: pulsechain_health (version 1.0.1) → agent_wallet_status → get_rpc_health
-#
-# Operator-trust: fund only what you accept the agent may spend. No MAX_PLS_*
-# product knobs in samples — caps are not a hard security backstop.
+# Pre-reload: codex mcp list / restart extension. Post-reload: pulsechain_health →
+# agent_wallet_status → get_rpc_health. Version: match package.json (do not hardcode).
 # See docs/BOOTSTRAP.md, docs/AGENT_GUIDANCE.md, docs/SECURITY.md.
 
 [mcp_servers.pulsechain-mcp]
@@ -50,7 +50,5 @@ PULSECHAIN_EXPLORER_API = "https://api.scan.pulsechain.com/api"
 PULSEX_SUBGRAPH_V1 = "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex"
 PULSEX_SUBGRAPH_V2 = "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2"
 HTTP_TIMEOUT_MS = "30000"
-AGENT_WALLET_ENABLED = "true"
-AGENT_WALLET_MASTER_KEY = "REPLACE_WITH_64_CHAR_HEX_MASTER_KEY"
-AGENT_WALLET_DIR = "REPLACE_WITH_ABSOLUTE_PATH/data/wallets"
+AGENT_WALLET_ENABLED = "false"
 LOG_LEVEL = "info"
