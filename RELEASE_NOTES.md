@@ -1,14 +1,15 @@
-# Release notes — pulsechain-mcp 1.0.2
+# Release notes — pulsechain-mcp 1.0.3
 
 Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.
 
-## What shipped (1.0.2)
+## What shipped (1.0.3)
 
-- **Agent-safe install:** research-only first; wallets-on only when the user asks to sign.
-- **Key-safe default:** master key lives in gitignored `.env.wallet` only; host configs do not embed `AGENT_WALLET_MASTER_KEY`. Write-only generation never prints the key.
-- **install-for-host:** `node scripts/install-for-host.mjs --host grok|cursor|claude|codex --mode research|wallets`.
-- **Pre/post-reload smoke** split so agents stop inventing custom MCP stdio clients.
-- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.2**.
+- **Key-install hygiene (review R1–R2):** config missing/short-key errors and env templates no longer recommend `console.log(randomBytes…)` print-then-paste generation.
+- **Safe recovery text:** off-path agents are steered to `node scripts/generate-wallet-env.mjs` or `node scripts/install-for-host.mjs --mode wallets` (launcher + gitignored `.env.wallet`; never embed `AGENT_WALLET_MASTER_KEY` in host config).
+- **Product vs agent clarity:** product may default wallets-on; **agent first-install** remains research-only via [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) unless the user asked to sign.
+- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.3**.
+
+Happy-path security model is **unchanged** from 1.0.2 (write-only keys, launcher, research-first install). This release only closes off-path messaging foot-guns.
 
 ## Upgrade
 
@@ -17,17 +18,18 @@ git pull
 npm install
 npm run build
 # Prefer: node scripts/install-for-host.mjs --host <host> --mode research
-# reload the MCP host so pulsechain_health.version shows 1.0.2
+# reload the MCP host so pulsechain_health.version shows 1.0.3
 ```
 
-No OT wallet model change. Tags **v1.0.0** / **v1.0.1** remain historical; **v1.0.2** is this patch.
+No OT wallet model change. Tags **v1.0.0** / **v1.0.1** / **v1.0.2** remain historical; **v1.0.3** is this patch.
 
 ### If you had MASTER_KEY in host config
 
-Move to write-only `.env.wallet` + `scripts/start-wallet-mcp.mjs` (see [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)). Do not paste the old key into chat.
+Move to write-only `.env.wallet` + `scripts/start-wallet-mcp.mjs`, then **remove** the inline key from host config (see [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md)). Do not paste the old key into chat.
 
-## What shipped earlier (1.0.1 / 1.0.0)
+## What shipped earlier
 
+- **1.0.2:** agent-safe install path (research-first, write-only keys, install-for-host).
 - **1.0.1:** pair ranking trust polish, legacy caps display-only markers, PulseSwap readiness flags.
 - **1.0.0:** public stable major; MCP SDK **2.0.0**; dual-era protocol; OT wallets.
 
@@ -47,5 +49,5 @@ Funding the agent is authorization. Fund only what you accept the agent may spen
 
 ## Tag / about topics
 
-1. Confirm tags: **`v1.0.0`** + **`v1.0.1`** untouched; **`v1.0.2`** on this release commit.
+1. Confirm tags: **`v1.0.0`** + **`v1.0.1`** + **`v1.0.2`** untouched; **`v1.0.3`** on this release commit.
 2. About / topics: pulsechain, mcp, web3, defi (operator choice).

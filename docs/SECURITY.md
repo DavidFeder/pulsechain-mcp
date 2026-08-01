@@ -13,15 +13,18 @@ This page is the **short essentials** front door only. Residual detail (launcher
 | **Research-only (agent install default)** | `dist/index.js` + `AGENT_WALLET_ENABLED=false`, omit master key | Analytics + quotes; no signing |
 | **Wallets on (when user asks to sign)** | `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` | Encrypted EOAs; funding authorizes spend |
 
-When wallets are **enabled** in the process, a master key is required to start. Agent first-install should still choose **research-only** unless the user asked for signing.
+**Product vs agent default:** the runtime may treat wallets as on when `AGENT_WALLET_ENABLED` is unset (operators who want signing immediately). **Agent first-install** still follows [BOOTSTRAP.md](BOOTSTRAP.md): research-only unless the user explicitly asked to sign.
+
+When wallets are **enabled** in the process, a master key is required to start. Prefer write-only generation — never print or paste the key into chat or host config.
 
 **Write-only key path** (never print the key; never commit):
 
 ```bash
 node scripts/generate-wallet-env.mjs
+# or: node scripts/install-for-host.mjs --host <host> --mode wallets
 ```
 
-Prefer that over `console.log` of a raw key into host env. Lose the master key → encrypted wallets are **unrecoverable**.
+Do not use `console.log` / print-then-paste key generation with agents. Lose the master key → encrypted wallets are **unrecoverable**.
 
 ## Operator-trust (when wallets on)
 

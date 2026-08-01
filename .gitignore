@@ -4,7 +4,12 @@ dist/
 .env.local
 .env.docker
 .env.lab
+.env.lab.bak
+.env.lab.old
 .env.wallet
+.env.wallet.bak
+.env.wallet.old
+.env.wallet~
 coverage/
 *.log
 wallets/

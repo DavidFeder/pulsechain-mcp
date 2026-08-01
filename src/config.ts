@@ -91,8 +91,11 @@ export function assertMasterKeyConfigured(masterKey: string): void {
   const key = masterKey.trim();
   if (key.length === 0) {
     throw new ConfigError(
-      "AGENT_WALLET_MASTER_KEY is empty after trim. Provide a 64-char hex key " +
-        "(preferred) or a strong passphrase (≥16 characters), or set AGENT_WALLET_ENABLED=false.",
+      "AGENT_WALLET_MASTER_KEY is empty after trim. Prefer write-only: " +
+        "node scripts/generate-wallet-env.mjs (never prints the key) or " +
+        "node scripts/install-for-host.mjs --host <grok|cursor|claude|codex> --mode wallets " +
+        "(launcher + gitignored .env.wallet; do not embed AGENT_WALLET_MASTER_KEY in host config). " +
+        "Or set AGENT_WALLET_ENABLED=false for research-only.",
     );
   }
   const hexBody = key.startsWith("0x") || key.startsWith("0X") ? key.slice(2) : key;
@@ -101,9 +104,10 @@ export function assertMasterKeyConfigured(masterKey: string): void {
   if (key.length < 16) {
     throw new ConfigError(
       `AGENT_WALLET_MASTER_KEY passphrase is too short (${key.length} chars). ` +
-        `Use at least 16 characters, or a 64-char hex AES key ` +
-        `(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"). ` +
-        `Or set AGENT_WALLET_ENABLED=false.`,
+        `Use a 64-char hex AES key (preferred) or at least 16 characters. ` +
+        `Write-only (never prints the key): node scripts/generate-wallet-env.mjs ` +
+        `or node scripts/install-for-host.mjs --mode wallets (launcher + .env.wallet; ` +
+        `do not embed the key in host config). Or set AGENT_WALLET_ENABLED=false.`,
     );
   }
 }
@@ -280,10 +284,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (agentWalletEnabled && !agentWalletMasterKey) {
     throw new ConfigError(
       "Agent wallets are on by default and require AGENT_WALLET_MASTER_KEY. " +
-        "Generate one: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" " +
-        "(64-char hex preferred, or a passphrase ≥16 chars). " +
+        "Write-only (never prints the key): node scripts/generate-wallet-env.mjs " +
+        "or node scripts/install-for-host.mjs --host <grok|cursor|claude|codex> --mode wallets " +
+        "(host entry = scripts/start-wallet-mcp.mjs + gitignored .env.wallet; " +
+        "do not embed AGENT_WALLET_MASTER_KEY in host config or chat). " +
         "For research-only (no signing): set AGENT_WALLET_ENABLED=false. " +
-        "Use a unique AGENT_WALLET_DIR per MCP process. See README and .env.example.",
+        "One MCP process → one unique AGENT_WALLET_DIR. See docs/BOOTSTRAP.md.",
     );
   }
   if (agentWalletEnabled && agentWalletMasterKey) {

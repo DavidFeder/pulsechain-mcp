@@ -1,6 +1,6 @@
 # Migration notes — MCP 2026-07-28 dual-era stack
 
-> **Current package version on `main`:** see `package.json` (**1.0.2**). Dual-era MCP remains the protocol default. The TypeScript MCP SDK is pinned to stable **`2.0.0`** (released for the final **2026-07-28** spec). No product-facing `MAX_PLS_*` spend-cap knobs in examples/templates. Agent install default is research-only; wallets-on uses launcher + `.env.wallet` (no master key in host config).
+> **Current package version on `main`:** see `package.json` (**1.0.3**). Dual-era MCP remains the protocol default. The TypeScript MCP SDK is pinned to stable **`2.0.0`** (released for the final **2026-07-28** spec). No product-facing `MAX_PLS_*` spend-cap knobs in examples/templates. Agent install default is research-only; wallets-on uses launcher + `.env.wallet` (no master key in host config). Config/env recovery text points at write-only key generation (no console.log key recipe).
 
 This document describes what changed between **v0.1.0** (pre-2026-07-28, MCP TypeScript SDK v1) and the dual-era MCP stack on TypeScript SDK **v2** (introduced as `0.2.0-rc.1` on beta pins; **stable as of 1.0.0**).
 

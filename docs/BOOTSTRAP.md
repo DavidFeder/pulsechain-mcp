@@ -53,7 +53,7 @@ Confirm `dist/index.js` exists. That file is the research-only host entry.
 
 If the user only asked to install, choose **research-only first**. Promoting to wallets-on is an **explicit later step**.
 
-Product runtime still starts wallets-on when a master key is present and enabled — that is not the agent first-install default.
+**Product vs agent:** the product runtime may default wallets-on when `AGENT_WALLET_ENABLED` is unset (operators who want signing immediately). That is **not** the agent first-install default — agents follow this checklist (research-only unless the user asked to sign).
 
 ---
 
@@ -88,6 +88,8 @@ Behavior:
 Lose the master key → encrypted wallets cannot be recovered.
 
 **Discouraged alternate:** putting `AGENT_WALLET_MASTER_KEY` in host env (including `grok mcp add -e AGENT_WALLET_MASTER_KEY=…`). That still lands in config files and often in transcripts. Prefer launcher + `.env.wallet`.
+
+**Migration (pre–launcher / pre-1.0.2 host configs):** if the host still embeds `AGENT_WALLET_MASTER_KEY`, move to write-only `.env.wallet` + `scripts/start-wallet-mcp.mjs`, then **remove** the inline key from host config (do not leave both).
 
 ---
 

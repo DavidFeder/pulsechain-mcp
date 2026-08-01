@@ -25,6 +25,35 @@ describe("loadConfig", () => {
     expect(() => loadConfig({})).toThrow(/MASTER_KEY|by default|research-only|false/i);
   });
 
+  it("missing-key ConfigError steers to write-only path; never console.log randomBytes recipe", () => {
+    let msg = "";
+    try {
+      loadConfig({ AGENT_WALLET_ENABLED: "true" });
+    } catch (e) {
+      msg = e instanceof Error ? e.message : String(e);
+    }
+    expect(msg.length).toBeGreaterThan(20);
+    expect(msg).toMatch(/generate-wallet-env|install-for-host/i);
+    expect(msg).toMatch(/write-only|never prints|\.env\.wallet|launcher/i);
+    // Must not re-teach print-then-paste key generation (review R1)
+    expect(msg).not.toMatch(/console\.log/);
+    expect(msg).not.toMatch(/randomBytes/);
+    expect(msg).not.toMatch(/require\(['"]crypto['"]\)/);
+  });
+
+  it("short passphrase ConfigError steers to write-only path; never console.log recipe", () => {
+    let msg = "";
+    try {
+      assertMasterKeyConfigured("short");
+    } catch (e) {
+      msg = e instanceof Error ? e.message : String(e);
+    }
+    expect(msg).toMatch(/too short|passphrase/i);
+    expect(msg).toMatch(/generate-wallet-env|install-for-host/i);
+    expect(msg).not.toMatch(/console\.log/);
+    expect(msg).not.toMatch(/randomBytes/);
+  });
+
   it("enables wallets when unset and master key is present", () => {
     const cfg = loadConfig({
       AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,

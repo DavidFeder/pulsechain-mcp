@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-08-01
+
+**Key-install hygiene** from the v1.0.2 security review (R1–R2). Happy-path security model unchanged (write-only `.env.wallet` + launcher; research-only agent first-install). This patch only closes **off-path** messaging foot-guns.
+
+### Highlights
+
+| Area | Change |
+|------|--------|
+| **Config recovery text** | Missing/short/empty master-key `ConfigError` paths point at `generate-wallet-env.mjs` / `install-for-host --mode wallets`; **no** `console.log(randomBytes…)` recipe |
+| **Env templates** | `.env.example` / `.env.lab.example` prefer write-only generation; print/paste discouraged for agents |
+| **Product vs agent** | SECURITY + BOOTSTRAP one-line: product may default wallets-on; agent first-install remains research-only via BOOTSTRAP |
+| **Migration** | BOOTSTRAP note: remove old inline host `AGENT_WALLET_MASTER_KEY` after moving to launcher + `.env.wallet` |
+| **Version surfaces** | **1.0.3** |
+
+### Unchanged
+
+- Operator-trust wallet model, dual-era MCP, multi-RPC, analytics, no hard spend-cap redesign
+- Recommended agent install path (research-first; write-only keys; launcher)
+
 ## [1.0.2] - 2026-07-31
 
 **Agent-safe install path** from live Grok bootstrap feedback. Operator-trust model unchanged: funding authorizes; no hard `MAX_PLS_*` gates reintroduced.

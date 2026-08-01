@@ -175,7 +175,7 @@ describe("README + agent docs client pointers (structural)", () => {
   });
 
   it("SERVER_VERSION matches release line", () => {
-    expect(SERVER_VERSION).toBe("1.0.2");
+    expect(SERVER_VERSION).toBe("1.0.3");
   });
 });
 
