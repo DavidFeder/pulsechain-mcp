@@ -39,9 +39,12 @@ export function registerPiteasAccumulationPlanTool(
       "Requires verified token addresses, checks quote coherence, and never prepares or submits transactions.",
     category: "analytics",
     inputSchema: {
-      eUsdcAddress: addressSchema,
-      phiatAddress: addressSchema,
+      tokenIn: addressSchema.optional(),
+      tokenOut: addressSchema.optional(),
+      eUsdcAddress: addressSchema.optional(),
+      phiatAddress: addressSchema.optional(),
       totalBudgetHuman: decimalHumanSchema,
+      quoteSizesHuman: z.array(decimalHumanSchema).max(MAX_LADDER_POINTS).optional(),
       quoteSizeLadderHuman: z.array(decimalHumanSchema).max(MAX_LADDER_POINTS).optional(),
       chunkSizeHuman: decimalHumanSchema.optional(),
       generatedLadderSteps: z.number().int().min(2).max(MAX_LADDER_POINTS).optional(),
@@ -52,7 +55,9 @@ export function registerPiteasAccumulationPlanTool(
       eUsdcDecimals: z.number().int().min(0).max(36).default(DEFAULT_EUSDC_DECIMALS),
       phiatDecimals: z.number().int().min(0).max(36).default(DEFAULT_PHIAT_DECIMALS),
       allowedSlippagePercent: z.number().min(0).max(100).default(0.5),
+      maxPriceImpactPercent: z.number().min(0).max(100).optional(),
       priceImpactThresholdsPercent: z.array(z.number().min(0).max(100)).max(5).optional(),
+      includeGasEstimate: z.boolean().default(true),
       maximumAcceptableAveragePrice: decimalHumanSchema.optional(),
       maxGasCostPercentOfChunk: z.number().min(0).max(100).default(1),
       maxSnapshotBlockSpread: z.number().int().min(0).max(100).default(DEFAULT_MAX_BLOCK_SPREAD),
@@ -143,18 +148,29 @@ export function registerPiteasAccumulationPlanTool(
         await buildPiteasAccumulationPlan(
           cfg,
           {
-            eUsdcAddress: args.eUsdcAddress as string,
-            phiatAddress: args.phiatAddress as string,
+            tokenIn: args.tokenIn as string | undefined,
+            tokenOut: args.tokenOut as string | undefined,
+            eUsdcAddress: args.eUsdcAddress as string | undefined,
+            phiatAddress: args.phiatAddress as string | undefined,
             totalBudgetHuman: args.totalBudgetHuman as string,
-            quoteSizeLadderHuman: args.quoteSizeLadderHuman as string[] | undefined,
+            quoteSizesHuman: args.quoteSizesHuman as string[] | undefined,
+            quoteSizeLadderHuman:
+              (args.quoteSizeLadderHuman ?? args.quoteSizesHuman) as
+                | string[]
+                | undefined,
             chunkSizeHuman: args.chunkSizeHuman as string | undefined,
             generatedLadderSteps: args.generatedLadderSteps as number | undefined,
             candidateChunkCounts: args.candidateChunkCounts as number[] | undefined,
             eUsdcDecimals: args.eUsdcDecimals as number | undefined,
             phiatDecimals: args.phiatDecimals as number | undefined,
             allowedSlippagePercent: args.allowedSlippagePercent as number | undefined,
+            maxPriceImpactPercent: args.maxPriceImpactPercent as number | undefined,
             priceImpactThresholdsPercent:
-              args.priceImpactThresholdsPercent as number[] | undefined,
+              (args.priceImpactThresholdsPercent as number[] | undefined) ??
+              (typeof args.maxPriceImpactPercent === "number"
+                ? [args.maxPriceImpactPercent]
+                : undefined),
+            includeGasEstimate: args.includeGasEstimate as boolean | undefined,
             maximumAcceptableAveragePrice:
               args.maximumAcceptableAveragePrice as string | undefined,
             maxGasCostPercentOfChunk:

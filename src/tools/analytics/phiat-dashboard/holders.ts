@@ -140,18 +140,24 @@ export function buildSupplyFields(
   let circulatingSupplyEstimate: ContractSupplyFields["circulatingSupplyEstimate"] = null;
   let circulatingSupplyMethod: string | null = null;
   if (base.contractTotalSupplyRaw && excludedSupplyEstimate?.raw) {
-    const circulatingRaw = parseRawBigInt(base.contractTotalSupplyRaw) -
-      parseRawBigInt(excludedSupplyEstimate.raw);
-    if (circulatingRaw >= 0n) {
-      circulatingSupplyEstimate = {
-        raw: circulatingRaw.toString(),
-        formatted: formatRawUnits(circulatingRaw.toString(), decimals),
-      };
+    const contractRaw = parseStrictRawBigInt(base.contractTotalSupplyRaw);
+    const excludedRaw = parseStrictRawBigInt(excludedSupplyEstimate.raw);
+    if (contractRaw === null || excludedRaw === null) {
       circulatingSupplyMethod =
-        "contractTotalSupplyRaw - excludedSupplyEstimate.raw from user-supplied treasury/staking labels";
+        "unavailable: contractTotalSupplyRaw or excludedSupplyEstimate.raw is unparseable";
     } else {
-      circulatingSupplyMethod =
-        "unavailable: excludedSupplyEstimate exceeds contractTotalSupplyRaw";
+      const circulatingRaw = contractRaw - excludedRaw;
+      if (circulatingRaw >= 0n) {
+        circulatingSupplyEstimate = {
+          raw: circulatingRaw.toString(),
+          formatted: formatRawUnits(circulatingRaw.toString(), decimals),
+        };
+        circulatingSupplyMethod =
+          "contractTotalSupplyRaw - excludedSupplyEstimate.raw from user-supplied treasury/staking labels";
+      } else {
+        circulatingSupplyMethod =
+          "unavailable: excludedSupplyEstimate exceeds contractTotalSupplyRaw";
+      }
     }
   } else {
     circulatingSupplyMethod =

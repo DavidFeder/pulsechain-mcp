@@ -173,7 +173,7 @@ describe("smoke: tool registration (no live network)", () => {
     registerAllTools(server as never, smokeConfig);
 
     const meta = getRegisteredTools();
-    // 96 tools: 95 prior + piteas_accumulation_plan
+    // 96 tools: 94 prior + phiat_dashboard + piteas_accumulation_plan
     expect(meta.length).toBe(96);
     expect(names.length).toBe(96);
     expect(names.length).toBe(meta.length);

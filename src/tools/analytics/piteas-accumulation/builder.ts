@@ -119,8 +119,16 @@ export async function buildPiteasAccumulationPlan(
   input: PiteasAccumulationPlanInput,
   deps: PiteasAccumulationPlanDeps = defaultDeps,
 ): Promise<Record<string, unknown>> {
-  const eUsdcAddress = assertAddress(input.eUsdcAddress).toLowerCase();
-  const phiatAddress = assertAddress(input.phiatAddress).toLowerCase();
+  const tokenInAddress = input.eUsdcAddress ?? input.tokenIn;
+  const tokenOutAddress = input.phiatAddress ?? input.tokenOut;
+  if (!tokenInAddress) {
+    throw new Error("tokenIn/eUsdcAddress is required");
+  }
+  if (!tokenOutAddress) {
+    throw new Error("tokenOut/phiatAddress is required");
+  }
+  const eUsdcAddress = assertAddress(tokenInAddress).toLowerCase();
+  const phiatAddress = assertAddress(tokenOutAddress).toLowerCase();
   if (eUsdcAddress === phiatAddress) {
     throw new Error("eUsdcAddress and phiatAddress must differ");
   }
@@ -139,7 +147,12 @@ export async function buildPiteasAccumulationPlan(
     throw new Error("totalBudgetHuman must be positive");
   }
   const allowedSlippagePercent = input.allowedSlippagePercent ?? 0.5;
-  const thresholds = normalizeThresholds(input.priceImpactThresholdsPercent);
+  const thresholds = normalizeThresholds(
+    input.priceImpactThresholdsPercent ??
+      (input.maxPriceImpactPercent !== undefined
+        ? [input.maxPriceImpactPercent]
+        : undefined),
+  );
   const primaryThresholdBps = percentToBps(thresholds[0] ?? 2);
   const maxGasCostBps = percentToBps(input.maxGasCostPercentOfChunk ?? 1);
   const maximumAveragePriceRaw = input.maximumAcceptableAveragePrice
@@ -202,9 +215,11 @@ export async function buildPiteasAccumulationPlan(
     deps,
     selectedConcurrency: quoteConcurrency,
   });
+  const quoteSizeLadderHuman =
+    input.quoteSizeLadderHuman ?? input.quoteSizesHuman;
 
   const ladder = buildQuoteLadder({
-    explicitLadderHuman: input.quoteSizeLadderHuman,
+    explicitLadderHuman: quoteSizeLadderHuman,
     chunkSizeHuman: input.chunkSizeHuman,
     generatedSteps: input.generatedLadderSteps,
     totalBudgetRaw,
@@ -466,6 +481,8 @@ export async function buildPiteasAccumulationPlan(
 
   return {
     request: {
+      tokenIn: eUsdcAddress,
+      tokenOut: phiatAddress,
       eUsdcAddress,
       phiatAddress,
       totalBudgetRaw: totalBudgetRaw.toString(),
@@ -473,6 +490,9 @@ export async function buildPiteasAccumulationPlan(
       eUsdcDecimals,
       phiatDecimals,
       quoteSizeLadderHuman: ladder.sizesRaw.map((size) =>
+        formatRawAmount(size, eUsdcDecimals),
+      ),
+      quoteSizesHuman: ladder.sizesRaw.map((size) =>
         formatRawAmount(size, eUsdcDecimals),
       ),
       ladderSource: ladder.source,
@@ -486,7 +506,9 @@ export async function buildPiteasAccumulationPlan(
         formatRawAmount(amount, eUsdcDecimals),
       ),
       allowedSlippagePercent,
+      maxPriceImpactPercent: input.maxPriceImpactPercent ?? null,
       priceImpactThresholdsPercent: thresholds,
+      includeGasEstimate: input.includeGasEstimate ?? true,
       maximumAcceptableAveragePrice: input.maximumAcceptableAveragePrice ?? null,
       snapshotLimits: {
         maxSnapshotBlockSpread: input.maxSnapshotBlockSpread ?? DEFAULT_MAX_BLOCK_SPREAD,

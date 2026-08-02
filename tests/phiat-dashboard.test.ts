@@ -1047,6 +1047,39 @@ describe("phiat_dashboard", () => {
     expect((market.priceChange24h as Record<string, Record<string, unknown>>).primaryPair.value).toBeNull();
   });
 
+  it("does not format malformed raw supply as zero", async () => {
+    const deps = mockedDeps({
+      fetchToken: vi.fn(async () => ({
+        token: {
+          id: TOKEN,
+          symbol: "PHIAT",
+          name: "PHIAT",
+          decimals: "18",
+          totalSupply: "not-a-number",
+          tradeVolume: "0",
+          tradeVolumeUSD: "100000",
+          untrackedVolumeUSD: "0",
+          totalTransactions: "100",
+          totalLiquidity: "100000",
+          derivedPLS: "2",
+          derivedUSD: "0.01",
+        },
+      })),
+    });
+
+    const dashboard = await buildPhiatDashboard(baseConfig, { tokenAddress: TOKEN }, deps);
+    const token = section<Record<string, unknown>>(dashboard, "token");
+    const market = section<Record<string, unknown>>(dashboard, "market");
+    const holderAnalysis = section<Record<string, unknown>>(dashboard, "holderAnalysis");
+    const denominator = holderAnalysis.denominatorSupply as Record<string, unknown>;
+
+    expect(token.contractTotalSupplyRaw).toBe("not-a-number");
+    expect(token.contractTotalSupplyFormatted).toBeNull();
+    expect((market.marketCap as Record<string, Record<string, unknown>>).computedFromContractSupplyAndAggregatePrice.value).toBeNull();
+    expect(holderAnalysis.holderMetricsValid).toBe(false);
+    expect(denominator.formatted).toBeNull();
+  });
+
   it("returns partial dashboard data when upstream sources fail", async () => {
     const deps = mockedDeps({
       fetchToken: vi.fn(async () => {
@@ -1150,11 +1183,15 @@ describe("phiat_dashboard", () => {
   it("does not include prepare, wallet, transaction, or disk-write dashboard paths", () => {
     const dir = join(process.cwd(), "src/tools/analytics/phiat-dashboard");
     const source = [
+      readFileSync(join(process.cwd(), "src/tools/analytics/index.ts"), "utf8"),
       readFileSync(join(process.cwd(), "src/tools/analytics/phiatDashboard.ts"), "utf8"),
       ...readdirSync(dir)
         .filter((name) => name.endsWith(".ts"))
         .map((name) => readFileSync(join(dir, name), "utf8")),
     ].join("\n");
+    const piteasData = readFileSync(join(process.cwd(), "src/data/piteas.ts"), "utf8");
+    expect(source).toMatch(/getPiteasQuote/);
+    expect(piteasData).toMatch(/export async function getPiteasQuote/);
     expect(source).not.toMatch(/preparePiteas|piteas_prepare_swap/);
     expect(source).not.toMatch(/from\s+["'].*wallet|agent_wallet|propose_agent_tx|execute_agent_tx/);
     expect(source).not.toMatch(/sign[A-Za-z0-9_]*\(|submit[A-Za-z0-9_]*\(|broadcast[A-Za-z0-9_]*\(|execute[A-Za-z0-9_]*Tx\(/);

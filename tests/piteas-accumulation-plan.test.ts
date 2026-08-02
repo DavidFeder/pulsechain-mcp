@@ -216,6 +216,42 @@ describe("piteas_accumulation_plan", () => {
     }));
   });
 
+  it("accepts public tokenIn tokenOut and quoteSizesHuman aliases", async () => {
+    const deps = depsFor({
+      "5000000": quote("5000000", "500"),
+      "10000000": quote("10000000", "950"),
+    });
+
+    const plan = await buildPiteasAccumulationPlan(baseConfig, {
+      tokenIn: EUSDC,
+      tokenOut: PHIAT,
+      totalBudgetHuman: "10",
+      quoteSizesHuman: ["5"],
+      eUsdcDecimals: 6,
+      phiatDecimals: 18,
+      maxPriceImpactPercent: 3,
+      includeGasEstimate: true,
+      confirmationMode: "individual_pairs",
+      focusedRefresh: false,
+    }, deps);
+
+    const request = section(plan, "request");
+    expect(request.tokenIn).toBe(EUSDC);
+    expect(request.tokenOut).toBe(PHIAT);
+    expect(request.eUsdcAddress).toBe(EUSDC);
+    expect(request.phiatAddress).toBe(PHIAT);
+    expect(request.quoteSizesHuman).toEqual(["5", "10"]);
+    expect(request.quoteSizeLadderHuman).toEqual(["5", "10"]);
+    expect(request.maxPriceImpactPercent).toBe(3);
+    expect(request.priceImpactThresholdsPercent).toEqual([3]);
+    expect(request.includeGasEstimate).toBe(true);
+    expect(deps.getPiteasQuote).toHaveBeenCalledWith(baseConfig, expect.objectContaining({
+      tokenIn: EUSDC,
+      tokenOut: PHIAT,
+      amount: "5000000",
+    }));
+  });
+
   it("rejects ambiguous USDC symbols before quote calls", async () => {
     const deps = depsFor({});
     await expect(
@@ -838,6 +874,15 @@ describe("piteas_accumulation_plan", () => {
     registerPiteasAccumulationPlanTool(server as never, baseConfig, deps);
     const registration = registrations.get("piteas_accumulation_plan")!;
     expect(registration.meta.inputSchema.safeParse({
+      tokenIn: EUSDC,
+      tokenOut: PHIAT,
+      totalBudgetHuman: "10",
+      quoteSizesHuman: ["10"],
+      candidateChunkCounts: [4, 2, 4],
+      maxPriceImpactPercent: 3,
+      includeGasEstimate: true,
+    }).success).toBe(true);
+    expect(registration.meta.inputSchema.safeParse({
       eUsdcAddress: EUSDC,
       phiatAddress: PHIAT,
       totalBudgetHuman: "10",
@@ -866,11 +911,15 @@ describe("piteas_accumulation_plan", () => {
     }).success).toBe(false);
 
     const response = await registration.cb({
-      eUsdcAddress: EUSDC,
-      phiatAddress: PHIAT,
+      tokenIn: EUSDC,
+      tokenOut: PHIAT,
       totalBudgetHuman: "10",
-      quoteSizeLadderHuman: ["10"],
+      quoteSizesHuman: ["10"],
       candidateChunkCounts: [4, 2, 4],
+      maxPriceImpactPercent: 3,
+      includeGasEstimate: false,
+      confirmationMode: "individual_pairs",
+      focusedRefresh: false,
     });
     const body = JSON.parse(response.content[0]!.text) as {
       ok: boolean;
@@ -878,8 +927,14 @@ describe("piteas_accumulation_plan", () => {
     };
     expect(response.isError).toBeFalsy();
     expect(body.ok).toBe(true);
+    expect(body.data.request.tokenIn).toBe(EUSDC);
+    expect(body.data.request.tokenOut).toBe(PHIAT);
+    expect(body.data.request.quoteSizesHuman).toEqual(["10"]);
+    expect(body.data.request.maxPriceImpactPercent).toBe(3);
+    expect(body.data.request.priceImpactThresholdsPercent).toEqual([3]);
+    expect(body.data.request.includeGasEstimate).toBe(false);
     expect(body.data.request.candidateChunkCounts).toEqual([2, 4]);
-    expect(body.data.request.confirmationMode).toBe("adaptive");
+    expect(body.data.request.confirmationMode).toBe("individual_pairs");
   });
 
   it("does not return available when the focused refresh is incomplete", async () => {
@@ -1837,11 +1892,15 @@ describe("piteas_accumulation_plan", () => {
   it("does not include prepare, wallet, or disk-write implementation paths", () => {
     const dir = join(process.cwd(), "src/tools/analytics/piteas-accumulation");
     const source = [
+      readFileSync(join(process.cwd(), "src/tools/analytics/index.ts"), "utf8"),
       readFileSync(join(process.cwd(), "src/tools/analytics/piteasAccumulationPlan.ts"), "utf8"),
       ...readdirSync(dir)
         .filter((name) => name.endsWith(".ts"))
         .map((name) => readFileSync(join(dir, name), "utf8")),
     ].join("\n");
+    const piteasData = readFileSync(join(process.cwd(), "src/data/piteas.ts"), "utf8");
+    expect(source).toMatch(/getPiteasQuote/);
+    expect(piteasData).toMatch(/export async function getPiteasQuote/);
     expect(source).not.toMatch(/preparePiteas|piteas_prepare_swap/);
     expect(source).not.toMatch(/from\s+["'].*wallet|agent_wallet|propose_agent_tx|execute_agent_tx/);
     expect(source).not.toMatch(/writeFile|appendFile|createWriteStream|mkdir|rm\(/);

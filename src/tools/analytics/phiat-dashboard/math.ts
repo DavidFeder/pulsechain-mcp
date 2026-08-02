@@ -21,7 +21,8 @@ export function withTimeout<T>(
 export function formatRawUnits(raw: string | null, decimals: number | null): string | null {
   if (raw === null || decimals === null) return null;
   try {
-    return formatUnits(parseRawBigInt(raw), decimals);
+    const parsed = parseStrictRawBigInt(raw);
+    return parsed === null ? null : formatUnits(parsed, decimals);
   } catch {
     return null;
   }

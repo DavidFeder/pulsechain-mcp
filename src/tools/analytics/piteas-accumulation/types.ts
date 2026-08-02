@@ -53,17 +53,22 @@ export type RecommendationBasis =
   | "none";
 
 export interface PiteasAccumulationPlanInput {
-  eUsdcAddress: string;
-  phiatAddress: string;
+  eUsdcAddress?: string;
+  phiatAddress?: string;
+  tokenIn?: string;
+  tokenOut?: string;
   totalBudgetHuman: string;
   quoteSizeLadderHuman?: string[];
+  quoteSizesHuman?: string[];
   chunkSizeHuman?: string;
   generatedLadderSteps?: number;
   candidateChunkCounts?: number[];
   eUsdcDecimals?: number;
   phiatDecimals?: number;
   allowedSlippagePercent?: number;
+  maxPriceImpactPercent?: number;
   priceImpactThresholdsPercent?: number[];
+  includeGasEstimate?: boolean;
   maximumAcceptableAveragePrice?: string;
   maxGasCostPercentOfChunk?: number;
   maxSnapshotBlockSpread?: number;
