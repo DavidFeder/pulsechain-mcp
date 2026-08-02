@@ -612,6 +612,6 @@ describe("Switch tool registration", () => {
       /piteas|SWITCH_API_KEY|request-api-key/i,
     );
     // 92 prior + switch_quote + switch_prepare_swap
-    expect(meta.length).toBe(94);
+    expect(meta.length).toBe(96);
   });
 });

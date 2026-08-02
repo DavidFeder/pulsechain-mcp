@@ -413,7 +413,7 @@ describe("getPiteasQuote HTTP fail-soft (shipped)", () => {
 });
 
 describe("Piteas tool registration", () => {
-  it("registers piteas_quote and piteas_prepare_swap as RO analytics", () => {
+  it("registers Piteas quote, prepare, and accumulation planner as RO analytics", () => {
     resetToolRegistry();
     const names: string[] = [];
     const server = {
@@ -439,8 +439,13 @@ describe("Piteas tool registration", () => {
     registerAllTools(server as never, cfg as AppConfig);
     expect(names).toContain("piteas_quote");
     expect(names).toContain("piteas_prepare_swap");
+    expect(names).toContain("piteas_accumulation_plan");
     const meta = getRegisteredTools();
-    for (const n of ["piteas_quote", "piteas_prepare_swap"]) {
+    for (const n of [
+      "piteas_quote",
+      "piteas_prepare_swap",
+      "piteas_accumulation_plan",
+    ]) {
       const t = meta.find((m) => m.name === n);
       expect(t?.category).toBe("analytics");
       expect(t?.write).toBe(false);
@@ -449,6 +454,6 @@ describe("Piteas tool registration", () => {
     expect(meta.find((m) => m.name === "piteas_quote")?.description).toMatch(
       /best-price|oracle|Preferred aggregator/i,
     );
-    expect(meta.length).toBe(94);
+    expect(meta.length).toBe(96);
   });
 });

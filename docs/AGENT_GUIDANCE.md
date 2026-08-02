@@ -119,6 +119,7 @@ pulsechain_health
   → identity by address: get_token_info / get_token_balance / get_portfolio
   → discovery only: dexscreener_search (honor catalog_coverage follow-ups)
   → identity market: dexscreener_token_pairs | dexscreener_pair | dexscreener_tokens
+  → PHIAT dashboard: phiat_dashboard with verified tokenAddress
   → price: get_token_price by address (or DexScreener by address)
   → optional flow: get_recent_swaps (labels on catalogued sides)
 ```
@@ -128,9 +129,15 @@ pulsechain_health
 | Goal | Tools |
 |------|--------|
 | Identity | `get_token_info`, balances/portfolio, DexScreener by **address** |
+| PHIAT research | `phiat_dashboard` with a verified contract address; treasury/staking labels are caller-supplied |
+| PHIAT accumulation research | `piteas_accumulation_plan` with verified eUSDC/PHIAT addresses; quote curve only |
 | Discovery | `dexscreener_search` only — not settlement identity |
 | Ranking | `get_top_tokens` / `get_top_pairs` (origin labels when catalogued) |
 | HEX stake state | `hex_global_state` / `hex_stakes_for_address` on **pHEX** (eHEX soft-fails) |
+
+`phiat_dashboard` is research-only. It reports aggregate and primary-pair market values separately, with source/timestamp labels. Liquidity reliability thresholds are critical below $10,000, high below $50,000, medium below $250,000, and low at or above $250,000.
+
+`piteas_accumulation_plan` is also research-only. It calls Piteas quote data only, keeps independent same-state quote comparisons separate from cumulative sequential estimates, and does not prepare calldata or use agent-wallet tools.
 
 ---
 

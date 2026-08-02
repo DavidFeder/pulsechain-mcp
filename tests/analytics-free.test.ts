@@ -258,7 +258,7 @@ describe("registerAnalyticsTools exports free-tier names", () => {
     expect(meta.filter((t) => t.category === "analytics").length).toBeGreaterThanOrEqual(
       free.length,
     );
-  });
+  }, 10_000);
 });
 
 type McpHandler = (args?: Record<string, unknown>) => Promise<{

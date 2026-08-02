@@ -160,7 +160,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     });
   });
 
-  it("lists all 94 tools and 5 resources on modern path with serverInfo stamp", async () => {
+  it("lists all 96 tools and 5 resources on modern path with serverInfo stamp", async () => {
     const handler = createMcpHandler(() => createServer(smokeConfig), {
       legacy: "stateless",
     });
@@ -171,7 +171,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
       tools: Array<{ name: string }>;
       _meta?: Record<string, unknown>;
     };
-    expect(toolsResult.tools.length).toBe(94);
+    expect(toolsResult.tools.length).toBe(96);
     expect(toolsResult._meta?.[SERVER_INFO_META_KEY]).toEqual({
       name: SERVER_NAME,
       version: SERVER_VERSION,
@@ -179,6 +179,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
 
     const names = new Set(toolsResult.tools.map((t) => t.name));
     expect(names.has("pulsechain_health")).toBe(true);
+    expect(names.has("phiat_dashboard")).toBe(true);
     expect(names.has("get_token_price")).toBe(true);
     expect(names.has("agent_wallet_status")).toBe(true);
 

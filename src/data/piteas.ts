@@ -73,6 +73,13 @@ export interface PiteasMethodParameters {
 export interface PiteasRouteSummary {
   pathCount?: number;
   swapCount?: number;
+  protocols?: string[];
+  pools?: string[];
+  tokenPath?: string[];
+  router?: string;
+  allocations?: Array<Record<string, unknown>>;
+  /** Canonical, non-calldata route signature for comparing quote continuity. */
+  signature?: string;
   /** Truncated route detail for review (not full pathfinder dump). */
   note?: string;
 }
@@ -98,6 +105,24 @@ export interface PiteasQuoteData {
   valuePls?: string;
   gasUseEstimate?: number | null;
   gasUseEstimateUSD?: number | null;
+  /** Piteas-reported price impact percentage when upstream provides it. */
+  priceImpactPercent?: number | null;
+  /** Upstream quote block number when provided. */
+  blockNumber?: string | null;
+  /** Upstream quote timestamp when provided. */
+  quoteTimestamp?: string | null;
+  /** Upstream quote/request identifier when provided. */
+  quoteIdentifier?: string | null;
+  /** Upstream quote expiry/valid-until timestamp when provided. */
+  expiresAt?: string | null;
+  /** Cache-related response headers preserved from the quote request when available. */
+  cacheHeaders?: Record<string, string> | null;
+  /** Stable fingerprint of the normalized upstream JSON response body. */
+  responseFingerprint?: string | null;
+  /** Quote endpoint without query params. */
+  endpoint?: string;
+  /** Upstream/client retry count when reported. */
+  retryCount?: number;
   methodParameters: PiteasMethodParameters;
   /** Always the documented PiteasRouter. */
   router: typeof PITEAS_ROUTER;
@@ -212,6 +237,192 @@ function numOrNull(v: unknown): number | null {
     return Number(v);
   }
   return null;
+}
+
+function firstTimestampString(...values: unknown[]): string | null {
+  for (const value of values) {
+    const text = str(value).trim();
+    if (text !== "") return text;
+  }
+  return null;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  const record = asRecord(value);
+  if (record) {
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function stableFingerprint(value: unknown): string {
+  const text = stableJson(value);
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= BigInt(text.charCodeAt(i));
+    hash = (hash * prime) & mask;
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, "0")}`;
+}
+
+function cacheHeadersFromResponse(res: Response): Record<string, string> {
+  const headers = res.headers;
+  if (!headers || typeof headers.get !== "function") return {};
+  const names = [
+    "age",
+    "cache-control",
+    "cf-cache-status",
+    "etag",
+    "expires",
+    "last-modified",
+    "x-cache",
+    "x-cache-status",
+    "x-served-by",
+  ];
+  const out: Record<string, string> = {};
+  for (const name of names) {
+    const value = headers.get(name);
+    if (value !== null && value !== "") out[name] = value;
+  }
+  return out;
+}
+
+function collectRouteStrings(
+  value: unknown,
+  path: string[],
+  out: {
+    protocols: string[];
+    pools: string[];
+    tokenPath: string[];
+    allocations: Array<Record<string, unknown>>;
+  },
+): void {
+  if (Array.isArray(value)) {
+    for (const [idx, child] of value.entries()) {
+      collectRouteStrings(child, [...path, String(idx)], out);
+    }
+    return;
+  }
+  const record = asRecord(value);
+  if (!record) return;
+
+  const allocation: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(record)) {
+    const lowered = key.toLowerCase();
+    if (
+      lowered.includes("protocol") ||
+      lowered === "dex" ||
+      lowered === "exchange" ||
+      lowered === "name"
+    ) {
+      const text = str(child);
+      if (text) {
+        out.protocols.push(text);
+        allocation.protocol = text;
+      }
+    }
+    if (
+      lowered.includes("pool") ||
+      lowered.includes("pair") ||
+      lowered.includes("market")
+    ) {
+      const text = str(child);
+      if (/^0x[a-fA-F0-9]{40}$/.test(text)) {
+        out.pools.push(text.toLowerCase());
+        allocation.pool = text.toLowerCase();
+      }
+    }
+    if (
+      lowered.includes("token") ||
+      lowered === "from" ||
+      lowered === "to" ||
+      lowered === "address"
+    ) {
+      const text = str(child);
+      if (/^0x[a-fA-F0-9]{40}$/.test(text)) {
+        out.tokenPath.push(text.toLowerCase());
+      }
+    }
+    if (
+      lowered.includes("percent") ||
+      lowered.includes("share") ||
+      lowered.includes("weight") ||
+      lowered.includes("allocation") ||
+      lowered === "part" ||
+      lowered === "bps"
+    ) {
+      const text = str(child);
+      if (text) allocation[key] = text;
+    }
+  }
+  if (Object.keys(allocation).length > 0) out.allocations.push(allocation);
+
+  for (const [key, child] of Object.entries(record)) {
+    collectRouteStrings(child, [...path, key], out);
+  }
+}
+
+function buildRouteSummary(
+  routeRec: Record<string, unknown>,
+  meta: {
+    pathCount?: number;
+    swapCount?: number;
+    tokenInParam: string;
+    tokenOutParam: string;
+  },
+): PiteasRouteSummary {
+  const collected = {
+    protocols: [] as string[],
+    pools: [] as string[],
+    tokenPath: [] as string[],
+    allocations: [] as Array<Record<string, unknown>>,
+  };
+  collectRouteStrings(routeRec, [], collected);
+
+  const tokenPath = uniqueStrings([
+    meta.tokenInParam.toLowerCase(),
+    ...collected.tokenPath,
+    meta.tokenOutParam.toLowerCase(),
+  ]);
+  const protocols = uniqueStrings(collected.protocols);
+  const pools = uniqueStrings(collected.pools);
+  const allocations = collected.allocations.slice(0, 20);
+  const signatureParts = {
+    protocols,
+    pools,
+    tokenPath,
+    router: PITEAS_ROUTER.toLowerCase(),
+    allocations,
+    fallbackStructure:
+      protocols.length === 0 && pools.length === 0
+        ? {
+            pathCount: meta.pathCount ?? null,
+            swapCount: meta.swapCount ?? null,
+          }
+        : undefined,
+  };
+
+  return {
+    pathCount: meta.pathCount,
+    swapCount: meta.swapCount,
+    protocols,
+    pools,
+    tokenPath,
+    router: PITEAS_ROUTER,
+    allocations,
+    signature: stableJson(signatureParts),
+    note: "Route summary only — full pathfinder paths omitted; trust exact calldata",
+  };
 }
 
 /** Convert hex or decimal integer string to decimal wei string. */
@@ -441,6 +652,10 @@ export function normalizePiteasQuote(
     account?: string;
     sellingNativePls: boolean;
   },
+  transportMeta: {
+    cacheHeaders?: Record<string, string> | null;
+    responseFingerprint?: string | null;
+  } = {},
 ): { ok: true; data: PiteasQuoteData } | { ok: false; reason: string } {
   const root = asRecord(body);
   if (!root) {
@@ -490,11 +705,12 @@ export function normalizePiteasQuote(
   if (routeRec) {
     const paths = routeRec.paths;
     const swaps = routeRec.swaps;
-    route = {
+    route = buildRouteSummary(routeRec, {
       pathCount: Array.isArray(paths) ? paths.length : undefined,
       swapCount: Array.isArray(swaps) ? swaps.length : undefined,
-      note: "Route summary only — full pathfinder paths omitted; trust exact calldata",
-    };
+      tokenInParam: meta.tokenInParam,
+      tokenOutParam: meta.tokenOutParam,
+    });
   }
 
   const amountOutNonZero =
@@ -520,6 +736,43 @@ export function normalizePiteasQuote(
     valuePls: meta.sellingNativePls ? weiToHumanPls(valueWei) : "0",
     gasUseEstimate: numOrNull(root.gasUseEstimate),
     gasUseEstimateUSD: numOrNull(root.gasUseEstimateUSD),
+    priceImpactPercent: numOrNull(
+      root.priceImpactPercent ??
+        root.priceImpactPercentage ??
+        root.priceImpact ??
+        root.price_impact,
+    ),
+    blockNumber: str(root.blockNumber ?? root.block_number ?? root.block, "") || null,
+    quoteTimestamp: firstTimestampString(
+      root.quoteTimestamp,
+      root.quote_timestamp,
+      root.timestamp,
+      root.updatedAt,
+      root.updated_at,
+    ),
+    quoteIdentifier:
+      str(
+        root.quoteIdentifier ??
+          root.quoteId ??
+          root.quote_id ??
+          root.id ??
+          root.requestId ??
+          root.request_id ??
+          root.uuid,
+        "",
+      ) || null,
+    expiresAt: firstTimestampString(
+      root.expiresAt,
+      root.expires_at,
+      root.expiry,
+      root.expiration,
+      root.validUntil,
+      root.valid_until,
+      root.deadline,
+    ),
+    cacheHeaders: transportMeta.cacheHeaders ?? null,
+    responseFingerprint: transportMeta.responseFingerprint ?? stableFingerprint(body),
+    retryCount: numOrNull(root.retryCount ?? root.retry_count) ?? 0,
     methodParameters: {
       calldata,
       value: valueRaw.startsWith("0x") ? valueRaw : `0x${BigInt(valueWei).toString(16)}`,
@@ -662,7 +915,14 @@ export async function piteasGetJson(
   config: Pick<AppConfig, "httpTimeoutMs">,
   options: PiteasFetchOptions = {},
 ): Promise<
-  | { ok: true; status: number; body: unknown; url: string }
+  | {
+      ok: true;
+      status: number;
+      body: unknown;
+      url: string;
+      cacheHeaders: Record<string, string>;
+      responseFingerprint: string;
+    }
   | { ok: false; reason: string; status?: number; url: string }
 > {
   const timeoutMs = options.timeoutMs ?? config.httpTimeoutMs ?? 30_000;
@@ -708,7 +968,14 @@ export async function piteasGetJson(
       return { ok: false, reason: msg, status: res.status, url };
     }
 
-    return { ok: true, status: res.status, body: parsed, url };
+    return {
+      ok: true,
+      status: res.status,
+      body: parsed,
+      url,
+      cacheHeaders: cacheHeadersFromResponse(res),
+      responseFingerprint: stableFingerprint(parsed),
+    };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       return {
@@ -766,11 +1033,16 @@ export async function getPiteasQuote(
     allowedSlippage: built.allowedSlippage,
     account: built.account,
     sellingNativePls: built.sellingNativePls,
+  }, {
+    cacheHeaders: res.cacheHeaders,
+    responseFingerprint: res.responseFingerprint,
   });
 
   if (!normalized.ok) {
     return softFail(normalized.reason);
   }
+  normalized.data.endpoint = `${options.apiBase ?? PITEAS_API_BASE}/quote`;
+  normalized.data.retryCount ??= 0;
 
   return {
     ok: true,
