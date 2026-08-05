@@ -28,8 +28,10 @@ export function buildWarnings(input: {
   maximumPairWindowMs: number;
   maximumBatchWindowMs: number;
   recommendationStatus: RecommendationStatus;
+  includeGasEstimate?: boolean;
 }): string[] {
   const warnings = new Set<string>([SAME_STATE_WARNING]);
+  const includeGasEstimate = input.includeGasEstimate !== false;
   if (input.broad.failures.length > 0) {
     warnings.add("One or more Piteas quote sizes failed; plan categories use partial results.");
   }
@@ -75,10 +77,13 @@ export function buildWarnings(input: {
   })) {
     warnings.add(warning);
   }
-  if (input.broad.points.some((point) => point.gasWarning !== null)) {
+  if (includeGasEstimate && input.broad.points.some((point) => point.gasWarning !== null)) {
     warnings.add("One or more small chunks have excessive gas estimate relative to chunk size.");
   }
-  if (input.broad.points.some((point) => point.gasUseEstimateUSD === null && point.quoteReady)) {
+  if (
+    includeGasEstimate &&
+    input.broad.points.some((point) => point.gasUseEstimateUSD === null && point.quoteReady)
+  ) {
     warnings.add("Piteas gasUseEstimateUSD was unavailable for one or more quote points.");
   }
   if (

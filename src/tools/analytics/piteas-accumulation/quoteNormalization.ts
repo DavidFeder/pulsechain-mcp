@@ -36,6 +36,7 @@ export async function collectQuoteSet(input: {
   phiatDecimals: number;
   thresholds: number[];
   maxGasCostBps: bigint;
+  includeGasEstimate?: boolean;
   strictDurationMs?: number;
   allowRetries?: boolean;
 }): Promise<QuoteCollection> {
@@ -134,6 +135,7 @@ export async function collectQuoteSet(input: {
         eUsdcDecimals: input.eUsdcDecimals,
         phiatDecimals: input.phiatDecimals,
         maxGasCostBps: input.maxGasCostBps,
+        includeGasEstimate: input.includeGasEstimate,
         schedulerRetryCount: scheduled.schedulerRetryCount,
         attempts: scheduled.attempts,
       }),
@@ -255,6 +257,7 @@ export function successfulQuotePoint(input: {
   eUsdcDecimals: number;
   phiatDecimals: number;
   maxGasCostBps: bigint;
+  includeGasEstimate?: boolean;
   schedulerRetryCount: number;
   attempts: QuoteAttemptMetadata[];
 }): QuotePoint {
@@ -262,7 +265,10 @@ export function successfulQuotePoint(input: {
   const amountInRaw = parseUnsignedRaw(data.amountIn) ?? input.expectedInputRaw;
   const amountOutRaw = parseUnsignedRaw(data.amountOut);
   const amountOutMinRaw = parseUnsignedRaw(data.amountOutMin ?? null);
-  const gasCost = gasCostPercent(data.gasUseEstimateUSD ?? null, amountInRaw, input.eUsdcDecimals);
+  const includeGas = input.includeGasEstimate !== false;
+  const gasCost = includeGas
+    ? gasCostPercent(data.gasUseEstimateUSD ?? null, amountInRaw, input.eUsdcDecimals)
+    : null;
   const routeComposition = routeSummary(data);
   const structuralRouteSignature =
     typeof routeComposition?.structuralRouteSignature === "string"
@@ -316,11 +322,11 @@ export function successfulQuotePoint(input: {
     clusterId: null,
     routeChangedFromPreviousQuote: null,
     routeChangedFromPreviousInCluster: null,
-    gasUseEstimate: data.gasUseEstimate ?? null,
-    gasUseEstimateUSD: data.gasUseEstimateUSD ?? null,
+    gasUseEstimate: includeGas ? data.gasUseEstimate ?? null : null,
+    gasUseEstimateUSD: includeGas ? data.gasUseEstimateUSD ?? null : null,
     gasCostPercentOfChunk: gasCost?.percent ?? null,
     gasWarning:
-      gasCost !== null && gasCost.bps > input.maxGasCostBps
+      includeGas && gasCost !== null && gasCost.bps > input.maxGasCostBps
         ? `Gas estimate is ${gasCost.percent}% of this chunk, above the configured threshold.`
         : null,
     blockNumber: data.blockNumber ?? null,

@@ -45,6 +45,8 @@ export async function buildBatchConfirmation(input: {
   maximumReferenceDriftBps: bigint;
   quoteConcurrency: number;
   allowLowConfidenceFreshness: boolean;
+
+  includeGasEstimate?: boolean;
 }): Promise<BatchConfirmation> {
   const rejectedReferenceAmounts: RejectedReferenceAmount[] = [];
   if (input.referenceAmountsRaw.length === 0 || input.candidateSizesRaw.length === 0) {
@@ -219,6 +221,7 @@ async function requestQuotePoint(input: {
   sizeRaw: bigint;
   index: number;
   allowRetries: boolean;
+  includeGasEstimate?: boolean;
 }): Promise<QuotePoint> {
   const inputHuman = formatRawAmount(input.sizeRaw, input.eUsdcDecimals);
   const scheduled = await input.scheduler.quote({
@@ -255,6 +258,7 @@ async function requestQuotePoint(input: {
     eUsdcDecimals: input.eUsdcDecimals,
     phiatDecimals: input.phiatDecimals,
     maxGasCostBps: input.maxGasCostBps,
+    includeGasEstimate: input.includeGasEstimate,
     schedulerRetryCount: scheduled.schedulerRetryCount,
     attempts: scheduled.attempts,
   });

@@ -41,7 +41,8 @@ export async function buildPairedReferenceAnalysis(input: {
   maxGasCostBps: bigint;
   snapshotLimits: SnapshotLimits;
   primaryThresholdBps: bigint;
-}): Promise<PairedReferenceAnalysis> {
+
+  includeGasEstimate?: boolean;}): Promise<PairedReferenceAnalysis> {
   if (
     !input.request.pairedReferenceAmountHuman ||
     !input.request.pairedCandidateSizesHuman?.length
@@ -95,6 +96,7 @@ export async function buildPairedReferenceAnalysis(input: {
       phiatDecimals: input.phiatDecimals,
       thresholds: input.thresholds,
       maxGasCostBps: input.maxGasCostBps,
+      includeGasEstimate: input.includeGasEstimate,
       strictDurationMs: input.snapshotLimits.maximumPairWindowMs,
     });
     const candidateBefore = await collectQuoteSet({
@@ -111,6 +113,7 @@ export async function buildPairedReferenceAnalysis(input: {
       phiatDecimals: input.phiatDecimals,
       thresholds: input.thresholds,
       maxGasCostBps: input.maxGasCostBps,
+      includeGasEstimate: input.includeGasEstimate,
       strictDurationMs: input.snapshotLimits.maximumPairWindowMs,
     });
     const refAfter = await collectQuoteSet({
@@ -127,6 +130,7 @@ export async function buildPairedReferenceAnalysis(input: {
       phiatDecimals: input.phiatDecimals,
       thresholds: input.thresholds,
       maxGasCostBps: input.maxGasCostBps,
+      includeGasEstimate: input.includeGasEstimate,
       strictDurationMs: input.snapshotLimits.maximumPairWindowMs,
     });
     const candidateAfter = await collectQuoteSet({
@@ -143,6 +147,7 @@ export async function buildPairedReferenceAnalysis(input: {
       phiatDecimals: input.phiatDecimals,
       thresholds: input.thresholds,
       maxGasCostBps: input.maxGasCostBps,
+      includeGasEstimate: input.includeGasEstimate,
       strictDurationMs: input.snapshotLimits.maximumPairWindowMs,
     });
     const pairCompletedAt = nowIso(input.deps);

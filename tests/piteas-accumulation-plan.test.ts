@@ -8,6 +8,7 @@ import {
   registerPiteasAccumulationPlanTool,
   type PiteasAccumulationPlanDeps,
 } from "../src/tools/analytics/piteasAccumulationPlan.js";
+import { latestAdaptiveBatch } from "../src/tools/analytics/piteas-accumulation/adaptiveSearch.js";
 
 const baseConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -1905,4 +1906,100 @@ describe("piteas_accumulation_plan", () => {
     expect(source).not.toMatch(/from\s+["'].*wallet|agent_wallet|propose_agent_tx|execute_agent_tx/);
     expect(source).not.toMatch(/writeFile|appendFile|createWriteStream|mkdir|rm\(/);
   });
+
+  it("keeps last usable adaptive recommendation when a later round is unusable", async () => {
+    // Round 1 has full fixtures and brackets. Round 2 generated mid-bracket sizes are missing,
+    // so the second adaptive batch is unusable. Recommendation must stay on round-1 bounds.
+    const deps = depsFor({
+      "50000000": quote("50000000", "5000"),
+      "150000000": quote("150000000", "14200"),
+      "600000000": quote("600000000", "40000"),
+      "5000000": Array.from({ length: 20 }, () => quote("5000000", "500")),
+      "75000000": quote("75000000", "7300"),
+      "90000000": quote("90000000", "8500"),
+      "105000000": quote("105000000", "9700"),
+    });
+
+    const plan = await buildPiteasAccumulationPlan(baseConfig, {
+      eUsdcAddress: EUSDC,
+      phiatAddress: PHIAT,
+      totalBudgetHuman: "600",
+      quoteSizeLadderHuman: ["50", "150", "600"],
+      confirmationMode: "adaptive",
+      referenceAmountCandidatesHuman: ["5"],
+      confirmationCandidateSizesHuman: ["75", "90", "105"],
+      // No maximumBracketWidthHuman: adaptive continues past round 1 by default.
+      maximumAdaptiveRounds: 2,
+      priceImpactThresholdsPercent: [3],
+      focusedRefresh: false,
+    }, deps);
+
+    const adaptive = section<{
+      terminationReason: string;
+      thresholdBoundaryBracketed: boolean;
+      recommendedMaximumTranche: Record<string, unknown> | null;
+      finalLargestBelowThreshold: Record<string, unknown> | null;
+      rounds: Array<{
+        round: number;
+        batchConfirmation: { temporallyUsable: boolean };
+      }>;
+    }>(plan, "adaptiveThresholdSearch");
+    const plans = section<Record<string, unknown>>(plan, "plans");
+
+    expect(adaptive.rounds.length).toBeGreaterThanOrEqual(2);
+    expect(adaptive.rounds[0]?.batchConfirmation.temporallyUsable).toBe(true);
+    expect(adaptive.rounds.at(-1)?.batchConfirmation.temporallyUsable).toBe(false);
+    expect(adaptive.terminationReason).toBe("batch_unusable");
+    expect(adaptive.thresholdBoundaryBracketed).toBe(true);
+    expect(adaptive.recommendedMaximumTranche).toMatchObject({ inputHuman: "75" });
+    expect(adaptive.finalLargestBelowThreshold).toMatchObject({ inputHuman: "75" });
+    expect(latestAdaptiveBatch(adaptive as never)?.temporallyUsable).toBe(true);
+    expect(plans.recommendationStatus).toBe("available");
+    expect(plans.recommendationBasis).toBe("adaptive_batch_sandwich");
+  });
+
+  it("nulls gas fields when includeGasEstimate is false", async () => {
+    const deps = depsFor({
+      "5000000": quote("5000000", "500", { gasUsd: 0.05, gasUse: 300000 }),
+      "10000000": quote("10000000", "950", { gasUsd: 0.08, gasUse: 320000 }),
+    });
+
+    const plan = await buildPiteasAccumulationPlan(baseConfig, {
+      eUsdcAddress: EUSDC,
+      phiatAddress: PHIAT,
+      totalBudgetHuman: "10",
+      quoteSizeLadderHuman: ["5", "10"],
+      includeGasEstimate: false,
+      confirmationMode: "individual_pairs",
+      focusedRefresh: false,
+    }, deps);
+
+    const request = section(plan, "request");
+    const points = plan.executableQuoteDepth as Array<Record<string, unknown>>;
+    expect(request.includeGasEstimate).toBe(false);
+    expect(points.length).toBeGreaterThan(0);
+    for (const point of points) {
+      expect(point.gasUseEstimate).toBeNull();
+      expect(point.gasUseEstimateUSD).toBeNull();
+      expect(point.gasCostPercentOfChunk).toBeNull();
+      expect(point.gasWarning).toBeNull();
+    }
+    const quality = section<{ warnings: string[] }>(plan, "dataQuality");
+    expect(
+      quality.warnings.some((warning) => warning.toLowerCase().includes("gas")),
+    ).toBe(false);
+  });
+
+  it("latestAdaptiveBatch prefers the last temporally usable round", () => {
+    const usable = { temporallyUsable: true, candidateResults: [] };
+    const unusable = { temporallyUsable: false, candidateResults: [] };
+    const adaptive = {
+      rounds: [
+        { round: 1, batchConfirmation: usable },
+        { round: 2, batchConfirmation: unusable },
+      ],
+    };
+    expect(latestAdaptiveBatch(adaptive as never)).toBe(usable);
+  });
+
 });

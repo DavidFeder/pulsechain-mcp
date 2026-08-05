@@ -35,6 +35,7 @@ export async function buildFocusedRefresh(input: {
   phiatDecimals: number;
   thresholds: number[];
   maxGasCostBps: bigint;
+  includeGasEstimate?: boolean;
   snapshotLimits: SnapshotLimits;
   broadPoints: QuotePoint[];
 }): Promise<Record<string, unknown>> {
@@ -58,6 +59,7 @@ export async function buildFocusedRefresh(input: {
     phiatDecimals: input.phiatDecimals,
     thresholds: input.thresholds,
     maxGasCostBps: input.maxGasCostBps,
+    includeGasEstimate: input.includeGasEstimate,
     strictDurationMs: input.snapshotLimits.focusedRefreshMaxDurationMs,
     allowRetries: false,
   });

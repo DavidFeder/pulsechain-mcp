@@ -256,13 +256,14 @@ export function buildThresholdEvidence(input: {
   thresholdBoundaryBracketed: boolean;
   recommendationStatus: ThresholdRecommendationStatus;
 } {
+  // Align with planner/batch sandwich: exact threshold counts as crossed (not below).
   const below = input.candidateEvaluations
     .filter((row) => row.deteriorationPercent !== null)
-    .filter((row) => row.deteriorationPercent! <= input.thresholdPercent)
+    .filter((row) => row.deteriorationPercent! < input.thresholdPercent)
     .sort(compareAttemptHuman);
   const above = input.candidateEvaluations
     .filter((row) => row.deteriorationPercent !== null)
-    .filter((row) => row.deteriorationPercent! > input.thresholdPercent)
+    .filter((row) => row.deteriorationPercent! >= input.thresholdPercent)
     .sort(compareAttemptHuman);
   const largestConfirmedBelowThresholdHuman = below.at(-1)?.attempt.inputHuman ?? null;
   const firstConfirmedAboveThresholdHuman = above.find((row) =>
@@ -681,12 +682,12 @@ export function cacheHeadersSuggestCache(headers: Record<string, string> | null)
 }
 
 export function hasFreshnessMetadata(quote: FastQuoteSummary): boolean {
+  // Endpoint is a constant quote URL and does not prove independent refresh.
   return Boolean(
     quote.quoteIdentifier ||
     quote.quoteTimestamp ||
     quote.expiresAt ||
-    quote.blockNumber ||
-    quote.endpoint,
+    quote.blockNumber,
   );
 }
 

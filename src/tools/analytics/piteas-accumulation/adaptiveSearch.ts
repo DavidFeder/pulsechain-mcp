@@ -39,6 +39,8 @@ export async function buildAdaptiveThresholdSearch(input: {
   maximumBracketWidthRaw: bigint | null;
   allowLowConfidenceFreshness: boolean;
   totalBudgetRaw: bigint;
+
+  includeGasEstimate?: boolean;
 }): Promise<AdaptiveThresholdSearch> {
   const initial = initialAdaptiveBracket(input.discoveryEnvelope);
   if (!initial) {
@@ -98,6 +100,7 @@ export async function buildAdaptiveThresholdSearch(input: {
       maximumReferenceDriftBps: input.maximumReferenceDriftBps,
       quoteConcurrency: input.quoteConcurrency,
       allowLowConfidenceFreshness: input.allowLowConfidenceFreshness,
+      includeGasEstimate: input.includeGasEstimate,
     });
     const threshold = batchThresholdPlans(batch);
     const bracketWidthRaw =
@@ -121,8 +124,10 @@ export async function buildAdaptiveThresholdSearch(input: {
     });
 
     if (!batch.temporallyUsable) {
-      finalLargestBelowThreshold = threshold.largestObservedBelowThreshold;
-      finalFirstAboveThreshold = threshold.firstObservedAboveThreshold;
+      // Keep last usable-round bounds and recommendation. Overwriting finals with an
+      // unusable batch (often partial/null) while leaving thresholdBoundaryBracketed
+      // and recommendedMaximumTranche from a prior success produces a stale
+      // "available" recommendation tied to failed-round evidence.
       terminationReason = "batch_unusable";
       break;
     }
@@ -235,6 +240,11 @@ export function rawFromPlan(plan: Record<string, unknown> | null): bigint | null
 export function latestAdaptiveBatch(
   adaptive: AdaptiveThresholdSearch,
 ): BatchConfirmation | null {
+  for (let index = adaptive.rounds.length - 1; index >= 0; index -= 1) {
+    const batch = adaptive.rounds[index]?.batchConfirmation;
+    if (batch?.temporallyUsable) return batch;
+  }
+  // Fall back to the most recent round for diagnostics when none were usable.
   return adaptive.rounds.at(-1)?.batchConfirmation ?? null;
 }
 

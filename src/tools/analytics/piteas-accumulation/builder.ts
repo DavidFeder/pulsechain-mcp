@@ -155,6 +155,7 @@ export async function buildPiteasAccumulationPlan(
   );
   const primaryThresholdBps = percentToBps(thresholds[0] ?? 2);
   const maxGasCostBps = percentToBps(input.maxGasCostPercentOfChunk ?? 1);
+  const includeGasEstimate = input.includeGasEstimate ?? true;
   const maximumAveragePriceRaw = input.maximumAcceptableAveragePrice
     ? parseHumanAmount(
         input.maximumAcceptableAveragePrice,
@@ -240,6 +241,7 @@ export async function buildPiteasAccumulationPlan(
     phiatDecimals,
     thresholds,
     maxGasCostBps,
+    includeGasEstimate,
     allowRetries: true,
   });
   decorateCurve(broad.points, {
@@ -294,6 +296,7 @@ export async function buildPiteasAccumulationPlan(
           maxGasCostBps,
           snapshotLimits,
           broadPoints: broad.points,
+          includeGasEstimate,
         });
   const focusedRefreshStatus = focusedRefreshStatusFromPayload(focusedRefresh);
 
@@ -313,7 +316,8 @@ export async function buildPiteasAccumulationPlan(
     maxGasCostBps,
     snapshotLimits,
     primaryThresholdBps,
-  });
+          includeGasEstimate,
+        });
   const directBatchCandidateSizesRaw =
     confirmationCandidateSizesRaw.length > 0
       ? confirmationCandidateSizesRaw
@@ -343,6 +347,7 @@ export async function buildPiteasAccumulationPlan(
           maximumBracketWidthRaw,
           allowLowConfidenceFreshness,
           totalBudgetRaw,
+          includeGasEstimate,
         })
       : adaptiveThresholdSearchNotRun();
   const batchConfirmation =
@@ -366,6 +371,7 @@ export async function buildPiteasAccumulationPlan(
           maximumReferenceDriftBps,
           quoteConcurrency,
           allowLowConfidenceFreshness,
+          includeGasEstimate,
         })
       : latestAdaptiveBatch(adaptiveThresholdSearch) ??
         emptyBatchConfirmation({
@@ -477,7 +483,8 @@ export async function buildPiteasAccumulationPlan(
     maximumPairWindowMs: snapshotLimits.maximumPairWindowMs,
     maximumBatchWindowMs: snapshotLimits.maximumBatchWindowMs,
     recommendationStatus: recommendationState.status,
-  });
+          includeGasEstimate,
+        });
 
   return {
     request: {

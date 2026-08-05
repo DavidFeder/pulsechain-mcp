@@ -11,6 +11,10 @@ import {
   registerPhiatDashboardTool,
   type PhiatDashboardDeps,
 } from "../src/tools/analytics/phiatDashboard.js";
+import {
+  buildThresholdEvidence,
+  hasFreshnessMetadata,
+} from "../src/tools/analytics/phiat-dashboard/piteasDepthEvaluation.js";
 
 const baseConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -1198,3 +1202,57 @@ describe("phiat_dashboard", () => {
     expect(source).not.toMatch(/writeFile|appendFile|createWriteStream|mkdir|rm\(/);
   });
 });
+
+describe("phiat dashboard threshold and freshness helpers", () => {
+  it("treats deterioration exactly at the threshold as above (planner-aligned)", () => {
+    const attempt = (inputHuman: string) =>
+      ({
+        inputHuman,
+        ok: true,
+        purpose: "candidate_lower",
+        amount: inputHuman,
+        requestStartedAt: "2026-08-02T00:00:00.000Z",
+        responseReceivedAt: "2026-08-02T00:00:00.100Z",
+        quote: null,
+        failureReason: null,
+      }) as never;
+
+    const evidence = buildThresholdEvidence({
+      candidateEvaluations: [
+        { attempt: attempt("100"), deteriorationPercent: 2.9 },
+        { attempt: attempt("125"), deteriorationPercent: 3.0 },
+        { attempt: attempt("150"), deteriorationPercent: 4.0 },
+      ],
+      thresholdPercent: 3,
+      batchUsable: true,
+      usefulQuoteCount: 3,
+    });
+
+    expect(evidence.largestConfirmedBelowThresholdHuman).toBe("100");
+    expect(evidence.firstConfirmedAboveThresholdHuman).toBe("125");
+    expect(evidence.thresholdBoundaryBracketed).toBe(true);
+    expect(evidence.recommendationStatus).toBe("available");
+  });
+
+  it("does not treat a constant quote endpoint as freshness metadata", () => {
+    expect(
+      hasFreshnessMetadata({
+        endpoint: "https://sdk.piteas.io/quote",
+        quoteIdentifier: null,
+        quoteTimestamp: null,
+        expiresAt: null,
+        blockNumber: null,
+      } as never),
+    ).toBe(false);
+    expect(
+      hasFreshnessMetadata({
+        endpoint: "https://sdk.piteas.io/quote",
+        quoteIdentifier: "q-1",
+        quoteTimestamp: null,
+        expiresAt: null,
+        blockNumber: null,
+      } as never),
+    ).toBe(true);
+  });
+});
+
