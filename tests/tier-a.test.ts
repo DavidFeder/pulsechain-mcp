@@ -791,7 +791,7 @@ describe("Tier A tool registration", () => {
       expect(t?.category).toBe("analytics");
       expect(t?.write).toBe(false);
     }
-    // Prior 92 + 2 Switch
-    expect(meta.length).toBe(94);
+    // Prior inventory + standalone Piteas accumulation planner
+    expect(meta.length).toBe(96);
   });
 });
