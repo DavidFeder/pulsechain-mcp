@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-08-05
+
+**Read-only PHIAT + Piteas analytics** (community PR #1 + maintainer review fixes). Research tools only: no wallet, sign, prepare, or broadcast paths. Operator-trust and install model unchanged from 1.0.3.
+
+### Highlights
+
+| Area | Change |
+|------|--------|
+| **`phiat_dashboard`** | Address-first PHIAT dashboard (holders, market, transfers, safety) with bounded fast Piteas depth (4-quote sandwich) and optional adaptive mode |
+| **`piteas_accumulation_plan`** | Standalone adaptive Piteas quote-depth research planner; analytical vs operational thresholds; decimal-safe ladder math |
+| **Security boundary** | Tools register `write: false`; analytics call `getPiteasQuote` only; no `piteas_prepare_swap` / agent-wallet / key access |
+| **Review fixes** | Keep last usable adaptive recommendation when a later round is unusable; exact threshold inclusivity aligned; constant quote `endpoint` is not freshness; `includeGasEstimate: false` strips gas fields/warnings |
+| **Version surfaces** | **1.0.4** |
+
+### Added
+
+- `src/tools/analytics/phiat-dashboard/*`, `phiatDashboard.ts`
+- `src/tools/analytics/piteas-accumulation/*`, `piteasAccumulationPlan.ts`
+- Large unit suites: `tests/phiat-dashboard.test.ts`, `tests/piteas-accumulation-plan.test.ts`
+- Agent guidance rows for PHIAT / accumulation research
+
+### Unchanged
+
+- Operator-trust wallet model, dual-era MCP, multi-RPC, agent-safe install (research-first; write-only keys; launcher)
+- No hard spend-cap redesign
+
 ## [1.0.3] - 2026-08-01
 
 **Key-install hygiene** from the v1.0.2 security review (R1–R2). Happy-path security model unchanged (write-only `.env.wallet` + launcher; research-only agent first-install). This patch only closes **off-path** messaging foot-guns.

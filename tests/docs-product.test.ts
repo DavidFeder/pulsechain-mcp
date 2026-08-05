@@ -1,6 +1,6 @@
 /**
  * Structural docs tests: ask-agent human README, single bootstrap path,
- * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.3 pins.
+ * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.4 pins.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
@@ -70,7 +70,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.3");
+    expect(pkg.version).toBe("1.0.4");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
@@ -285,13 +285,15 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(codex).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 
-  it("RELEASE_NOTES has v1.0.3 key-install hygiene plus prior content", () => {
+  it("RELEASE_NOTES has v1.0.4 PHIAT/Piteas analytics plus prior content", () => {
     const notes = read("RELEASE_NOTES.md");
+    expect(notes).toMatch(/1\.0\.4/);
     expect(notes).toMatch(/1\.0\.3/);
     expect(notes).toMatch(/1\.0\.2/);
     expect(notes).toMatch(/1\.0\.1/);
     expect(notes).toMatch(/1\.0\.0/);
     expect(notes).toMatch(/2\.0\.0/);
+    expect(notes).toMatch(/phiat_dashboard|piteas_accumulation_plan|getPiteasQuote/i);
     expect(notes).toMatch(/key-install hygiene|generate-wallet-env|write-only|install-for-host|\.env\.wallet/i);
     expect(notes).toMatch(/MAX_PLS|spend-cap|hard spend|operator-trust/i);
     expect(notes).toMatch(/multiproc|process-local|Windows file modes|Host reload/i);
@@ -300,14 +302,16 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(notes).not.toMatch(/repository\s+(stays\s+)?\*{0,2}private|keep\s+\*{0,2}private/i);
   });
 
-  it("CHANGELOG is public-facing history with 1.0.3 key hygiene and residual honesty", () => {
+  it("CHANGELOG is public-facing history with 1.0.4 analytics and residual honesty", () => {
     const log = read("CHANGELOG.md");
     const lines = log.split(/\r?\n/).length;
-    expect(lines).toBeLessThan(280);
+    expect(lines).toBeLessThan(320);
+    expect(log).toMatch(/## \[1\.0\.4\]/);
     expect(log).toMatch(/## \[1\.0\.3\]/);
     expect(log).toMatch(/## \[1\.0\.2\]/);
     expect(log).toMatch(/## \[1\.0\.1\]/);
     expect(log).toMatch(/## \[1\.0\.0\]/);
+    expect(log).toMatch(/phiat_dashboard|piteas_accumulation_plan/i);
     expect(log).toMatch(/key-install hygiene|generate-wallet-env|console\.log|write-only|research-only/i);
     expect(log).toMatch(/ghost|pair ranking|legacyCapsDisplayOnly|priceUsdReady|executionReady/i);
     expect(log).toMatch(/MAX_PLS|spend-cap|product-facing/i);
