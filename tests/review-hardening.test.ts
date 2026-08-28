@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PulsechainConfig } from "../src/config.js";
 import { chainForConfig } from "../src/data/rpc.js";
 import { SWAPS_BY_PAIRS_QUERY } from "../src/data/subgraph.js";
 import { PolicyError } from "../src/utils/errors.js";
@@ -52,10 +51,8 @@ function pendingProposal(id: string): TxProposal {
 
 describe("review hardening", () => {
   it("chainForConfig matches RPC endpoint family", () => {
-    const mainnet = PulsechainConfig.parse({ network: "mainnet" });
-    const testnet = PulsechainConfig.parse({ network: "testnet" });
-    expect(chainForConfig(mainnet).id).toBe(369);
-    expect(chainForConfig(testnet).id).toBe(943);
+    expect(chainForConfig({ network: "mainnet" }).id).toBe(369);
+    expect(chainForConfig({ network: "testnet" }).id).toBe(943);
   });
 
   it("loadProposal rejects filename vs embedded id mismatch", async () => {
@@ -66,7 +63,7 @@ describe("review hardening", () => {
       JSON.stringify({ ...pendingProposal(PROP_B), id: PROP_B }),
       "utf8",
     );
-    await expect(loadProposal(dir, PROP_A)).rejects.toThrow(/mismatch/i);
+    expect(() => loadProposal(dir, PROP_A)).toThrow(/mismatch/i);
   });
 
   it("saveProposal writes 0700 dirs and 0600 files", async () => {
