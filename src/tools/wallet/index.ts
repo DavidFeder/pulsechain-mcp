@@ -32,18 +32,20 @@ import {
   revokeAgentWallet,
   setAgentPolicy,
   settleInterruptedBroadcast,
-  transferPls,
 } from "../../wallet/index.js";
 import { evaluatePolicy } from "../../wallet/policy.js";
 import { loadProposal, loadWalletRecord } from "../../wallet/store.js";
 import { PolicyError } from "../../utils/errors.js";
 import { ok } from "../../utils/result.js";
 import {
+  assertAddress,
   assertPositiveAmount,
   neverReturnPrivateKey,
 } from "../../utils/safety.js";
 import {
   policySnapshotId,
+  proposalExecutionIntentArgs,
+  readVerifiedConfirmState,
   requireConfirmOrInput,
 } from "../../utils/confirm.js";
 import { registerTool } from "../define.js";
@@ -204,10 +206,14 @@ export function registerWalletTools(
     name: "agent_wallet_check_policy",
     description:
       "Dry-run wallet write check for a native PLS amount (no send, no signing). " +
-      "Operator-trust: hard caps/allowlists are not gates; kill/disabled still block. " +
-      "Returns allow/deny, reasons, and reviewSummary. Prefer propose_agent_tx for real destinations.",
+      "Operator-trust: hard caps/allowlists are not gates; kill/disabled still block " +
+      "when walletId is supplied. Returns allow/deny, reasons, and reviewSummary. " +
+      "Prefer propose_agent_tx for real destinations.",
     category: "wallet",
     inputSchema: {
+      walletId: walletIdSchema
+        .optional()
+        .describe("When set, uses that wallet's kill/enabled state (not a synthetic always-on policy)"),
       amountPls: plsAmountPositiveSchema.describe("Amount of PLS to send"),
       dailySpentPls: z
         .number()
@@ -237,15 +243,36 @@ export function registerWalletTools(
       if (typeof amountPls === "number") {
         assertPositiveAmount(amountPls, "amountPls");
       }
-      const maxPer = (args.maxPlsPerTx as number | undefined) ?? cfg.maxPlsPerTx;
-      const maxDaily =
+      const walletId = args.walletId as string | undefined;
+      let enabled = true;
+      let killed = false;
+      let maxPer = (args.maxPlsPerTx as number | undefined) ?? cfg.maxPlsPerTx;
+      let maxDaily =
         (args.maxPlsDaily as number | undefined) ?? cfg.maxPlsDaily;
+      let dailySpend = {
+        date: new Date().toISOString().slice(0, 10),
+        spentPls: dailySpentPls,
+      };
+      if (walletId) {
+        const record = loadWalletRecord(cfg.agentWalletDir, walletId);
+        enabled = record.policy.enabled;
+        killed = record.policy.killed;
+        maxPer = (args.maxPlsPerTx as number | undefined) ?? record.policy.maxPlsPerTx;
+        maxDaily =
+          (args.maxPlsDaily as number | undefined) ?? record.policy.maxPlsDaily;
+        if (dailySpentPls === 0 && record.dailySpend) {
+          dailySpend = {
+            date: record.dailySpend.date,
+            spentPls: record.dailySpend.spentPls,
+          };
+        }
+      }
       const toPlaceholder =
         "0x0000000000000000000000000000000000000001" as const;
       const check = evaluatePolicy({
         policy: {
-          enabled: true,
-          killed: false,
+          enabled,
+          killed,
           maxPlsPerTx: maxPer,
           maxPlsDaily: maxDaily,
           contractAllowlist: [],
@@ -257,10 +284,7 @@ export function registerWalletTools(
           requireDecodableCalldata: false,
           allowNativeTransfers: true,
         },
-        dailySpend: {
-          date: new Date().toISOString().slice(0, 10),
-          spentPls: dailySpentPls,
-        },
+        dailySpend,
         tokenDailySpend: {},
         to: toPlaceholder,
         valuePls: amountPls,
@@ -281,13 +305,17 @@ export function registerWalletTools(
           reasons: check.reasons,
           decisionTrace: reviewSummary.decisionTrace,
           amountPls,
+          walletId: walletId ?? null,
+          killed,
+          enabled,
           remainingDaily: check.remainingDaily,
           maxPlsPerTx: maxPer,
           maxPlsDaily: maxDaily,
           tokenNotional: check.tokenNotional,
           reviewSummary,
           note:
-            "Dry-run uses a placeholder destination. For real to/calldata/token-notional, " +
+            "Dry-run uses a placeholder destination. Pass walletId to include " +
+            "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
             "use propose_agent_tx and read reviewSummary before execute.",
         }),
       );
@@ -587,21 +615,15 @@ export function registerWalletTools(
     },
     handler: async (args, cfg, ctx) => {
       const proposalId = args.proposalId as string;
-      let confirmMessage =
-        `Sign and broadcast proposal ${proposalId}? Kill/enabled gates and simulation are ` +
-        "re-checked before send. Private key is used only in memory and never returned.";
-      try {
-        const peek = loadProposal(cfg.agentWalletDir, proposalId);
-        const summary = buildProposalReviewSummary(peek, "execute");
-        confirmMessage = formatConfirmPrompt(summary);
-      } catch {
-        // Proposal load optional for confirm prompt; service still validates.
-      }
+      const peek = loadProposal(cfg.agentWalletDir, proposalId);
+      const summary = buildProposalReviewSummary(peek, "execute");
+      const confirmMessage = formatConfirmPrompt(summary);
       const gate = await requireConfirmOrInput({
         tool: "execute_agent_tx",
         message: confirmMessage,
-        args,
+        args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
+        walletId: peek.walletId,
         policySnapshotId: "none",
       });
       if (gate !== true) return gate;
@@ -628,22 +650,16 @@ export function registerWalletTools(
     },
     handler: async (args, cfg, ctx) => {
       const proposalId = args.proposalId as string;
-      let confirmMessage =
-        `Sign and broadcast proposal ${proposalId}? Kill/enabled gates and simulation are ` +
-        "re-checked before send. Private key is used only in memory and never returned.";
-      try {
-        const peek = loadProposal(cfg.agentWalletDir, proposalId);
-        confirmMessage = formatConfirmPrompt(
-          buildProposalReviewSummary(peek, "execute"),
-        );
-      } catch {
-        // optional
-      }
+      const peek = loadProposal(cfg.agentWalletDir, proposalId);
+      const confirmMessage = formatConfirmPrompt(
+        buildProposalReviewSummary(peek, "execute"),
+      );
       const gate = await requireConfirmOrInput({
         tool: "sign_and_send",
         message: confirmMessage,
-        args,
+        args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
+        walletId: peek.walletId,
         policySnapshotId: "none",
       });
       if (gate !== true) return gate;
@@ -674,22 +690,16 @@ export function registerWalletTools(
     },
     handler: async (args, cfg, ctx) => {
       const proposalId = args.proposalId as string;
-      let confirmMessage =
-        `Settle interrupted broadcast for ${proposalId}? This merges local spend ` +
-        "and marks executed only if txHash is already recorded — never re-sends.";
-      try {
-        const peek = loadProposal(cfg.agentWalletDir, proposalId);
-        confirmMessage =
-          `Settle interrupted proposal ${proposalId}? status=${peek.status} ` +
-          `txHash=${peek.txHash ?? "(none)"}. No re-broadcast; local spend merge only.`;
-      } catch {
-        // optional
-      }
+      const peek = loadProposal(cfg.agentWalletDir, proposalId);
+      const confirmMessage =
+        `Settle interrupted proposal ${proposalId}? status=${peek.status} ` +
+        `txHash=${peek.txHash ?? "(none)"}. No re-broadcast; local spend merge only.`;
       const gate = await requireConfirmOrInput({
         tool: "settle_interrupted_broadcast",
         message: confirmMessage,
-        args,
+        args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
+        walletId: peek.walletId,
         policySnapshotId: "none",
       });
       if (gate !== true) return gate;
@@ -705,8 +715,9 @@ export function registerWalletTools(
   registerTool(server, config, {
     name: "transfer_pls",
     description: withWalletSecurity(
-      "Native PLS transfer with pre-broadcast simulation. Requires confirm=true or MRTR confirm. " +
-        "Prefer propose → review reviewSummary → execute for richer audit. " +
+      "Native PLS transfer: simulate first, then confirm with fee/review, then broadcast. " +
+        "Requires confirm=true or MRTR confirm after the simulated proposal is shown. " +
+        "Prefer propose → review reviewSummary → execute for a two-step audit. " +
         "Operator-trust: EOAs and contracts are not blocked by allowlists/caps; " +
         "kill/disabled still stop signing. Confirm is host UX only.",
     ),
@@ -723,27 +734,67 @@ export function registerWalletTools(
     handler: async (args, cfg, ctx) => {
       const walletId = args.walletId as string;
       const amountPls = args.amountPls as number | string;
-      const to = args.to as string;
+      const to = assertAddress(args.to as string);
+
+      // Reuse a proposal sealed into MRTR requestState so resume does not
+      // create a second pending transfer.
+      const prior = await readVerifiedConfirmState(ctx);
+      let proposal;
+      if (
+        prior?.proposalId &&
+        prior.tool === "transfer_pls" &&
+        prior.walletId === walletId
+      ) {
+        proposal = loadProposal(cfg.agentWalletDir, prior.proposalId);
+        if (proposal.to.toLowerCase() !== to.toLowerCase()) {
+          throw new PolicyError(
+            "Sealed transfer_pls proposal destination does not match args; re-issue the tool call.",
+          );
+        }
+      } else {
+        proposal = await proposeAgentTx(cfg, {
+          walletId,
+          to,
+          valuePls: amountPls,
+          data: "0x",
+        });
+      }
+
+      const summary = buildProposalReviewSummary(proposal, "execute");
       const gate = await requireConfirmOrInput({
         tool: "transfer_pls",
-        message:
-          `Transfer ${amountPls} PLS from ${walletId} to ${to}? ` +
-          "Review amount and recipient carefully. Operator-trust mode: funding authorizes. " +
-          "Confirm is host UX only. Prefer propose_agent_tx first to inspect reviewSummary.",
-        args,
+        message: formatConfirmPrompt(summary),
+        args: {
+          ...args,
+          ...proposalExecutionIntentArgs(proposal),
+          amountPls,
+        },
         ctx,
         walletId,
         policySnapshotId: snapshotForWallet(cfg, walletId),
+        sealedProposalId: proposal.id,
       });
       if (gate !== true) return gate;
 
-      const result = await transferPls(cfg, {
-        walletId,
-        to,
-        amountPls,
-        confirm: true,
-      });
-      return ok(neverReturnPrivateKey(result));
+      const fresh = loadProposal(cfg.agentWalletDir, proposal.id);
+      if (
+        fresh.to.toLowerCase() !== to.toLowerCase() ||
+        fresh.valueWei !== proposal.valueWei
+      ) {
+        throw new PolicyError(
+          "Proposal changed after confirmation; re-issue transfer_pls.",
+        );
+      }
+
+      const result = await executeAgentTx(cfg, proposal.id, true);
+      return ok(
+        neverReturnPrivateKey({
+          ...result,
+          valueWei: proposal.valueWei,
+          policyCheck: proposal.policyCheck,
+          reviewSummary: summary,
+        }),
+      );
     },
   });
 

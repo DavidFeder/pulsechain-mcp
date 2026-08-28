@@ -134,6 +134,7 @@ async function getPiteasQuoteWithTimeout(
 
 function isRetryablePiteasFailure(result: PiteasQuoteResult): boolean {
   if (result.ok) return false;
+  if (result.status === 429) return false;
   if (result.status !== undefined && result.status >= 500 && result.status < 600) {
     return true;
   }
@@ -141,9 +142,9 @@ function isRetryablePiteasFailure(result: PiteasQuoteResult): boolean {
 }
 
 function retryBackoffMs(attempt: number): number {
-  const base = 5 * 2 ** attempt;
-  const jitter = ((attempt + 1) * 7) % 5;
-  return Math.min(100, base + jitter);
+  const base = 250 * 2 ** attempt;
+  const jitter = ((attempt + 1) * 37) % 120;
+  return Math.min(5_000, base + jitter);
 }
 
 async function sleepMs(deps: PiteasAccumulationPlanDeps, ms: number): Promise<void> {

@@ -58,9 +58,24 @@ describe("chain pure helpers", () => {
     expect(path[1]!.toLowerCase()).toBe(WPLS_ADDRESS.toLowerCase());
   });
 
-  it("builds direct path when WPLS is endpoint", () => {
-    const path = buildSwapPath("WPLS", "HEX");
-    expect(path).toHaveLength(2);
+  it("rejects explicit path that does not match tokenIn/tokenOut", () => {
+    expect(() =>
+      buildSwapPath(HEX_ADDRESS, PLSX_ADDRESS, [
+        WPLS_ADDRESS,
+        HEX_ADDRESS,
+        PLSX_ADDRESS,
+      ]),
+    ).toThrow(/explicit path|tokenIn/i);
+  });
+
+  it("accepts explicit path that starts with tokenIn and ends with tokenOut", () => {
+    const path = buildSwapPath(HEX_ADDRESS, PLSX_ADDRESS, [
+      HEX_ADDRESS,
+      WPLS_ADDRESS,
+      PLSX_ADDRESS,
+    ]);
+    expect(path).toHaveLength(3);
+    expect(path[0]!.toLowerCase()).toBe(HEX_ADDRESS.toLowerCase());
   });
 
   it("parses amountIn and applies slippage", () => {

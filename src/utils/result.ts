@@ -30,13 +30,16 @@ export function toTextContent(result: ToolResult): string {
 /** Build standard MCP tool response from a ToolResult. */
 export function toMcpToolResponse(result: ToolResult): {
   content: Array<{ type: "text"; text: string }>;
+  structuredContent: ToolResult;
   isError?: boolean;
 } {
   const response: {
     content: Array<{ type: "text"; text: string }>;
+    structuredContent: ToolResult;
     isError?: boolean;
   } = {
     content: [{ type: "text" as const, text: toTextContent(result) }],
+    structuredContent: result,
   };
   if (!result.ok) {
     response.isError = true;

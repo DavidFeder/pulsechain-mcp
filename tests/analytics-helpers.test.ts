@@ -27,6 +27,7 @@ import {
   selectTopPairsByLiquidity,
   sumSanePairLiquidity,
   swapInvolvesToken,
+  uniquePairsById,
   tierForUsd,
 } from "../src/tools/analytics/helpers.js";
 import {
@@ -269,6 +270,37 @@ describe("reserveUSD sanity / liquidity ranking", () => {
     expect(ranked[0]!.id).toBe("real-dai-wpls");
     expect(ranked[0]!._saneLiquidityUsd).toBe(2_500_000);
     expect(ranked.find((p) => p.id === "polluted")!._saneLiquidityUsd).toBe(0);
+  });
+
+  it("uniquePairsById prevents double-counting a DAI/USDC pool in bridge totals", () => {
+    const daiUsdc = {
+      id: "0xsharedpool",
+      reserveUSD: "1000000",
+      volumeUSD: "50000",
+      token0: { symbol: "DAI" },
+      token1: { symbol: "USDC" },
+    };
+    const daiWpls = {
+      id: "0xdaiwpls",
+      reserveUSD: "200000",
+      volumeUSD: "10000",
+      token0: { symbol: "DAI" },
+      token1: { symbol: "WPLS" },
+    };
+    const usdcWpls = {
+      id: "0xusdcwpls",
+      reserveUSD: "300000",
+      volumeUSD: "20000",
+      token0: { symbol: "USDC" },
+      token1: { symbol: "WPLS" },
+    };
+    const unique = uniquePairsById([
+      [daiUsdc, daiWpls],
+      [daiUsdc, usdcWpls],
+    ]);
+    expect(unique).toHaveLength(3);
+    const summed = sumSanePairLiquidity(unique);
+    expect(summed.totalUsd).toBe(1_000_000 + 200_000 + 300_000);
   });
 
   it("mapPairsWithSaneLiquidity attaches catalog origin/display_symbol only for known addresses", () => {
@@ -583,6 +615,50 @@ describe("token-filtered swap path (shipped helpers)", () => {
     expect(merged.pairsFailed).toEqual([pairD]);
     expect(merged.swaps.map((s) => s.id)).toEqual(["s2", "s1"]);
     expect(merged.droppedUnrelated).toBe(1);
+  });
+
+  it("mergeTokenFilteredSwaps applies skip after merge", () => {
+    const results = [
+      {
+        pairId: pairA,
+        swaps: [
+          {
+            id: "s-new",
+            timestamp: "300",
+            amountUSD: "10",
+            pair: {
+              id: pairA,
+              token0: { id: plsx, symbol: "PLSX" },
+              token1: { id: wpls, symbol: "WPLS" },
+            },
+          },
+          {
+            id: "s-old",
+            timestamp: "100",
+            amountUSD: "10",
+            pair: {
+              id: pairA,
+              token0: { id: plsx, symbol: "PLSX" },
+              token1: { id: wpls, symbol: "WPLS" },
+            },
+          },
+        ],
+      },
+    ];
+    const page0 = mergeTokenFilteredSwaps({
+      results,
+      tokenFilter: plsx,
+      first: 1,
+      skip: 0,
+    });
+    const page1 = mergeTokenFilteredSwaps({
+      results,
+      tokenFilter: plsx,
+      first: 1,
+      skip: 1,
+    });
+    expect(page0.swaps.map((s) => s.id)).toEqual(["s-new"]);
+    expect(page1.swaps.map((s) => s.id)).toEqual(["s-old"]);
   });
 
   it("mergeTokenFilteredSwaps surfaces all-failed partial soft path inputs", () => {

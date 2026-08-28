@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Correctness and hardening from a 1.0.4 read-only review. Operator-trust wallet model, dual-era MCP, and research-first agent install are unchanged.
+
+### Fixed
+
+- Wallet signing uses the configured network chain (PulseChain testnet 943 vs mainnet 369)
+- Execute/settle confirmation binds proposal contents (to, value, data), not only proposal id
+- Proposal/wallet JSON `id` must match the filename
+- `confirm=false` / MRTR reject declines instead of re-issuing a challenge
+- `transfer_pls` simulates (propose) before confirm so the prompt includes review/fees
+- Token-filtered swap `skip` and wallet-swap merged pagination
+- Explicit PulseX paths must start/end with `tokenIn`/`tokenOut`
+- Bridge TVL no longer double-counts shared stablecoin pools
+- Token safety no longer double-counts ABI findings as honeypot flags
+- ERC-20 transfer simulation treats ABI `false` as failure
+- `get_holder_rank` honors `page` via the module API (v2 is page 1 / cursor)
+- `get_wallet_balances` keeps explicit `extraTokens` ahead of core/discovery truncation
+- Empty/invalid explorer timestamps no longer mark wallets as age-zero
+- Expired proposals that already have a `txHash` remain settleable
+- Autoload does not override host-set environment variables
+- Uppercase `0X` master keys are treated as raw hex, not passphrases
+- Wallet directory/files best-effort mode `0700`/`0600`
+
+### Changed
+
+- Tool results include `structuredContent` alongside JSON text (existing text parse still works)
+- `volume_24h` / `price_change_24h` labeled as UTC calendar-day windows
+- Confirm prompts disclose truncated token-movement lists
+- Process-wide Piteas 10/min limiter; 429 is not rapidly retried
+- `agent_wallet_check_policy` accepts optional `walletId` for kill/enabled state
+
 ## [1.0.4] - 2026-08-05
 
 **Read-only PHIAT + Piteas analytics** (community PR #1 + maintainer review fixes). Research tools only: no wallet, sign, prepare, or broadcast paths. Operator-trust and install model unchanged from 1.0.3.

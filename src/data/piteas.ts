@@ -213,6 +213,8 @@ export interface PiteasFetchOptions {
   fetchImpl?: DexFetch;
   /** Override API base (tests). */
   apiBase?: string;
+  /** Skip process-wide 10/min limiter (unit tests with mock fetch). */
+  skipSpacing?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -910,6 +912,36 @@ function softFail(
   return { ok: false, source: "piteas", advisory: true, reason, ...extra };
 }
 
+/** Upstream beta ~10 req/min; exceeding can block for ~1h. */
+export const PITEAS_MAX_REQUESTS_PER_MINUTE = 10;
+const PITEAS_WINDOW_MS = 60_000;
+
+let piteasTimestamps: number[] = [];
+let piteasChain: Promise<void> = Promise.resolve();
+
+/** Test helper: reset process-wide Piteas limiter. */
+export function resetPiteasRateLimit(): void {
+  piteasTimestamps = [];
+  piteasChain = Promise.resolve();
+}
+
+async function respectPiteasRateLimit(): Promise<void> {
+  piteasChain = piteasChain.then(async () => {
+    const now = Date.now();
+    piteasTimestamps = piteasTimestamps.filter((t) => now - t < PITEAS_WINDOW_MS);
+    if (piteasTimestamps.length >= PITEAS_MAX_REQUESTS_PER_MINUTE) {
+      const wait = PITEAS_WINDOW_MS - (now - piteasTimestamps[0]!) + 25;
+      if (wait > 0) {
+        await new Promise((r) => setTimeout(r, wait));
+      }
+      const later = Date.now();
+      piteasTimestamps = piteasTimestamps.filter((t) => later - t < PITEAS_WINDOW_MS);
+    }
+    piteasTimestamps.push(Date.now());
+  });
+  await piteasChain;
+}
+
 export async function piteasGetJson(
   url: string,
   config: Pick<AppConfig, "httpTimeoutMs">,
@@ -925,6 +957,9 @@ export async function piteasGetJson(
     }
   | { ok: false; reason: string; status?: number; url: string }
 > {
+  if (!options.skipSpacing) {
+    await respectPiteasRateLimit();
+  }
   const timeoutMs = options.timeoutMs ?? config.httpTimeoutMs ?? 30_000;
   const fetchImpl = options.fetchImpl ?? fetch;
   const controller = new AbortController();

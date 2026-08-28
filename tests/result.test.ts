@@ -21,6 +21,7 @@ describe("result envelope", () => {
     const good = toMcpToolResponse(ok(true));
     expect(good.isError).toBeUndefined();
     expect(JSON.parse(good.content[0]!.text).ok).toBe(true);
+    expect(good.structuredContent).toEqual({ ok: true, data: true });
 
     const bad = toMcpToolResponse(fail("x", "ERR"));
     expect(bad.isError).toBe(true);

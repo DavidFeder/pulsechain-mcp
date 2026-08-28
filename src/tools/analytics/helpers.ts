@@ -156,8 +156,10 @@ export function computeSafetyScore(signals: SafetySignals): {
   }
 
   // Honeypot / ABI risk
-  const flagCount =
-    signals.honeypotFlags.length + signals.suspiciousAbi.length;
+  const flagLabels = [
+    ...new Set([...signals.honeypotFlags, ...signals.suspiciousAbi]),
+  ];
+  const flagCount = flagLabels.length;
   let riskScore = 100;
   if (flagCount >= 3) riskScore = 10;
   else if (flagCount === 2) riskScore = 30;
@@ -168,7 +170,7 @@ export function computeSafetyScore(signals: SafetySignals): {
     riskScore,
     flagCount === 0
       ? "No heuristic honeypot/tax flags detected"
-      : `Flags: ${[...signals.honeypotFlags, ...signals.suspiciousAbi].join(", ")}`,
+      : `Flags: ${flagLabels.join(", ")}`,
   );
 
   const score =
@@ -730,6 +732,23 @@ export function rankPairsBySaneLiquidity<
         s === "reserveUSD" ? 2 : s === "estimated" ? 1 : 0;
       return sourceRank(b._liquiditySource) - sourceRank(a._liquiditySource);
     });
+}
+
+/**
+ * Deduplicate pair rows by lowercase id, preserving first-seen order.
+ * Used so shared stablecoin pools are not double-counted in bridge TVL.
+ */
+export function uniquePairsById<T extends { id?: string }>(
+  groups: T[][],
+): T[] {
+  const map = new Map<string, T>();
+  for (const group of groups) {
+    for (const p of group) {
+      const id = (p.id ?? "").toLowerCase();
+      if (id && !map.has(id)) map.set(id, p);
+    }
+  }
+  return [...map.values()];
 }
 
 /**

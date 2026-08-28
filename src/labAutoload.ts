@@ -43,7 +43,11 @@ function loadEnvFile(path: string): void {
     ) {
       val = val.slice(1, -1);
     }
-    if (key) process.env[key] = val;
+    // Do not override host-provided env (dotenv default). A sticky host that
+    // set AGENT_WALLET_ENABLED=false must stay research-only.
+    if (key && process.env[key] === undefined) {
+      process.env[key] = val;
+    }
   }
 }
 
@@ -52,7 +56,7 @@ function loadEnvFile(path: string): void {
  * (same rules as start-wallet-mcp). Idempotent; no-op when marker absent
  * (RO default preserved).
  */
-export function applyLabAutoloadIfEnabled(): {
+export function applyLabAutoloadIfEnabled(rootDir?: string): {
   applied: boolean;
   reason: string;
   walletDir?: string;
@@ -65,7 +69,7 @@ export function applyLabAutoloadIfEnabled(): {
     return { applied: false, reason: "already_wallet_launcher" };
   }
 
-  const root = repoRoot();
+  const root = rootDir ?? repoRoot();
   const walletEnv = resolve(root, ".env.wallet");
   const labEnv = resolve(root, ".env.lab");
   const envPath = existsSync(walletEnv)

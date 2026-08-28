@@ -76,7 +76,29 @@ export function txTimestamp(tx: ExplorerTxLike): number | undefined {
   const raw = tx.timeStamp ?? tx.timestamp;
   if (raw === undefined || raw === "") return undefined;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** Min of finite positive timestamps; undefined when the list is empty (avoids Math.min(...[]) === Infinity). */
+export function earliestTxTimestamp(txs: ExplorerTxLike[]): number | undefined {
+  const times = txs
+    .map(txTimestamp)
+    .filter((t): t is number => t !== undefined);
+  if (times.length === 0) return undefined;
+  return Math.min(...times);
+}
+
+export function isPositiveWeiString(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const s = value.trim();
+  if (!s) return false;
+  try {
+    if (s.startsWith("0x") || s.startsWith("0X")) return BigInt(s) > 0n;
+    if (!/^\d+$/.test(s)) return false;
+    return BigInt(s) > 0n;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -120,7 +142,7 @@ export function inferFirstFunder(
     const to = (tx.to ?? "").toLowerCase();
     const from = (tx.from ?? "").toLowerCase();
     const value = tx.value ?? "0";
-    if (to === addr && from && from !== addr && value !== "0") {
+    if (to === addr && from && from !== addr && isPositiveWeiString(value)) {
       return {
         funder: from,
         valueWei: value,
@@ -490,6 +512,7 @@ export function computeHolderRank(
     page: number;
     offset: number;
     totalSupply?: string | null;
+    source?: "v2" | "module";
   },
 ): {
   found: boolean;
@@ -571,7 +594,9 @@ export function computeHolderRank(
     shareOfSupplyPct,
     percentileEstimate,
     method:
-      "BlockScout module=token&action=getTokenHolders. Rank = (page-1)*offset + index + 1 when found on page.",
+      options.source === "v2"
+        ? "BlockScout API v2 /tokens/{addr}/holders (top holders page). Rank = index + 1 on the returned page."
+        : "BlockScout module=token&action=getTokenHolders. Rank = (page-1)*offset + index + 1 when found on page.",
     confidence: options.page === 1 && rank <= options.offset ? "medium" : "low",
     caveats,
   };

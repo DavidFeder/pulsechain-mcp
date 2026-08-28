@@ -40,6 +40,7 @@ import {
   computeAddressAge,
   computeHolderRank,
   detectScamAlerts,
+  earliestTxTimestamp,
   inferFirstFunder,
   isKnownSafeAddress,
   scoreAddressRisk,
@@ -116,15 +117,7 @@ export function registerAdvancedAnalyticsTools(
       const recent = asTxArray(recentDesc);
       const earliest = asTxArray(earliestAsc);
       const earliestTs =
-        earliest.length > 0
-          ? txTimestamp(earliest[0]!)
-          : recent.length > 0
-            ? Math.min(
-                ...recent
-                  .map((t) => txTimestamp(t))
-                  .filter((t): t is number => t !== undefined),
-              )
-            : undefined;
+        earliestTxTimestamp(earliest) ?? earliestTxTimestamp(recent);
 
       const failedTxCount = recent.filter((t) => t.isError === "1").length;
       const contractCreations = recent.filter(
@@ -491,14 +484,16 @@ export function registerAdvancedAnalyticsTools(
 
       const tokenSet = new Map<string, { address: string; symbol?: string }>();
 
-      if (includeCore) {
-        for (const t of defaultPortfolioTokens()) {
-          tokenSet.set(t.toLowerCase(), { address: t });
-        }
-      }
+      // Explicit extras first so they survive maxTokens truncation.
       for (const t of extra) {
         const a = assertAddress(t);
         tokenSet.set(a.toLowerCase(), { address: a });
+      }
+      if (includeCore) {
+        for (const t of defaultPortfolioTokens()) {
+          const key = t.toLowerCase();
+          if (!tokenSet.has(key)) tokenSet.set(key, { address: t });
+        }
       }
 
       let discoveryMethod = "core_tokens";
@@ -742,17 +737,24 @@ export function registerAdvancedAnalyticsTools(
       let totalSupply: string | null = null;
       let tokenInfo: unknown = null;
 
-      try {
-        const v2 = await getTokenHolders(cfg, token, { limit: offset });
-        holders = (v2.items ?? []).map((item: TokenHolderItem) => ({
-          address: item.address?.hash,
-          value: item.value,
-        }));
-        const tip = v2.items?.[0]?.token;
-        if (tip?.total_supply) totalSupply = tip.total_supply;
-        source = "v2";
-      } catch {
+      // BlockScout v2 holders are cursor-based; page>1 is only honored on the module API.
+      if (page === 1) {
+        try {
+          const v2 = await getTokenHolders(cfg, token, { limit: offset });
+          holders = (v2.items ?? []).map((item: TokenHolderItem) => ({
+            address: item.address?.hash,
+            value: item.value,
+          }));
+          const tip = v2.items?.[0]?.token;
+          if (tip?.total_supply) totalSupply = tip.total_supply;
+          source = "v2";
+        } catch {
+          source = "module";
+        }
+      } else {
         source = "module";
+      }
+      if (source === "module") {
         const [holdersRaw, supplyRaw, info] = await Promise.all([
           getTokenHoldersModule(cfg, token, page, offset),
           getTokenSupply(cfg, token).catch(() => null),
@@ -779,6 +781,7 @@ export function registerAdvancedAnalyticsTools(
         page: source === "v2" ? 1 : page,
         offset,
         totalSupply,
+        source,
       });
 
       return ok({
@@ -813,8 +816,7 @@ async function buildDeployerReport(
   ]);
   const recentTxs = asTxArray(recent);
   const earliestTxs = asTxArray(earliest);
-  const earliestTs =
-    earliestTxs.length > 0 ? txTimestamp(earliestTxs[0]!) : undefined;
+  const earliestTs = earliestTxTimestamp(earliestTxs) ?? earliestTxTimestamp(recentTxs);
   const age = computeAddressAge(earliestTs);
 
   const deployments = recentTxs.filter(

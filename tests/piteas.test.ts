@@ -335,6 +335,7 @@ describe("getPiteasQuote HTTP fail-soft (shipped)", () => {
         amount: "1000",
       },
       {
+        skipSpacing: true,
         fetchImpl: async () =>
           ({
             ok: false,
@@ -362,6 +363,7 @@ describe("getPiteasQuote HTTP fail-soft (shipped)", () => {
         account: "0x21957F94D6bB63Fc2A2B110d16D07952899c6f11",
       },
       {
+        skipSpacing: true,
         fetchImpl: async (url) => {
           hitUrl = String(url);
           return {
@@ -397,6 +399,7 @@ describe("getPiteasQuote HTTP fail-soft (shipped)", () => {
       baseConfig,
       { tokenIn: "PLS", tokenOut: "eUSDC", amount: "1000" },
       {
+        skipSpacing: true,
         fetchImpl: async () =>
           ({
             ok: true,

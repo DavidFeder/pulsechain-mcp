@@ -10,8 +10,7 @@
  * get_honeypots, get_bridge_stats, get_holder_leagues.
  */
 
-import { z } from "zod";
-import type { Address } from "viem";
+import { decodeAbiParameters, type Address, type Hex } from "viem";
 import type { McpServer } from "@modelcontextprotocol/server";
 import {
   CORE_TOKENS,
@@ -63,6 +62,7 @@ import {
   scanSuspiciousPatterns,
   selectTopPairsByLiquidity,
   sumSanePairLiquidity,
+  uniquePairsById,
   tierForUsd,
 } from "./helpers.js";
 
@@ -127,7 +127,8 @@ export function registerFreeTierAnalyticsTools(
     description:
       "USD and PLS **price by token address** from PulseX subgraph " +
       "(derivedUSD / derivedPLS). Prefer this over DexScreener search for size/price. " +
-      "Includes 24h change from tokenDayData when available. Catalog origin labels " +
+      "Includes UTC calendar-day change from tokenDayData when available " +
+      "(not a rolling 24h window — see volume_window). Catalog origin labels " +
       "attach for known addresses. Public data only.",
     category: "analytics",
     inputSchema: {
@@ -193,6 +194,10 @@ export function registerFreeTierAnalyticsTools(
         pls_usd: num(bundleRes.bundle?.plsPrice),
         price_change_24h: priceChange24h,
         volume_24h: volume24h,
+        volume_window: "utc_calendar_day",
+        price_change_window: "utc_calendar_day",
+        window_note:
+          "volume_24h and price_change_24h use PulseX tokenDayData UTC calendar days; the latest row is often a partial day, not a trailing 24 hours.",
         liquidity_usd: liquidityUsd,
         market_cap: marketCap,
         method: "PulseX subgraph derivedUSD/derivedPLS + tokenDayData",
@@ -623,6 +628,10 @@ export function registerFreeTierAnalyticsTools(
           latest && prev
             ? pctChange(num(latest.dailyVolumeUSD), num(prev.dailyVolumeUSD))
             : null,
+        volume_window: "utc_calendar_day",
+        price_change_window: "utc_calendar_day",
+        window_note:
+          "volume_24h / volume_change_24h / top_gainers price_change_24h use PulseX UTC calendar days (latest row often partial), not a rolling 24-hour window.",
         total_volume_usd_cumulative: num(factory?.totalVolumeUSD),
         pair_count: num(factory?.totalPairs),
         tx_count: num(factory?.totalTransactions),
@@ -730,12 +739,7 @@ export function registerFreeTierAnalyticsTools(
       if (topHolderShare !== null && topHolderShare > 0.8) {
         honeypotFlags.push("extreme_holder_concentration");
       }
-      if (suspiciousAbi.includes("mutable_tax")) {
-        honeypotFlags.push("mutable_tax_functions");
-      }
-      if (suspiciousAbi.includes("blacklist")) {
-        honeypotFlags.push("blacklist_functions");
-      }
+      // ABI findings stay in suspiciousAbi only — do not duplicate into honeypotFlags.
 
       // Optional transfer simulation: try transfer from top holder → dead address
       // via eth_call (static). If it reverts, flag. This is approximate only.
@@ -759,16 +763,25 @@ export function registerFreeTierAnalyticsTools(
             "0x000000000000000000000000000000000000dEaD",
             amount,
           );
-          await client.call({
+          const ret = await client.call({
             account: holder,
             to: address,
             data,
           });
+          const dataHex = (typeof ret === "string" ? ret : (ret as { data?: Hex })?.data) as
+            | Hex
+            | undefined;
+          const succeeded = erc20CallIndicatesSuccess(dataHex);
           sellSimulation = {
             attempted: true,
-            success: true,
-            detail: "staticcall transfer(1) from top holder to dead did not revert",
+            success: succeeded,
+            detail: succeeded
+              ? "staticcall transfer(1) from top holder to dead did not revert"
+              : "staticcall transfer(1) returned ABI false (token rejected the transfer without reverting)",
           };
+          if (!succeeded) {
+            honeypotFlags.push("transfer_simulation_false");
+          }
         } catch (err) {
           sellSimulation = {
             attempted: true,
@@ -1002,6 +1015,17 @@ export function registerFreeTierAnalyticsTools(
         { symbol: "USDT", address: USDT_FROM_ETH_ADDRESS },
       ];
 
+      const pairGroups: Array<
+        Array<{
+          id?: string;
+          reserveUSD?: string | number;
+          reserve0?: string | number;
+          reserve1?: string | number;
+          volumeUSD?: string | number;
+          token0?: { derivedUSD?: string | number; id?: string; symbol?: string };
+          token1?: { derivedUSD?: string | number; id?: string; symbol?: string };
+        }>
+      > = [];
       const assets = await Promise.all(
         bridged.map(async (b) => {
           try {
@@ -1009,6 +1033,7 @@ export function registerFreeTierAnalyticsTools(
               fetchToken(cfg, b.address, version),
               fetchPairsForToken(cfg, b.address, 5, version),
             ]);
+            pairGroups.push(pairs);
             const t = tokenRes.token;
             const liq = sumSanePairLiquidity(pairs);
             return {
@@ -1038,15 +1063,10 @@ export function registerFreeTierAnalyticsTools(
         }),
       );
 
-      const totalBridgedLiquidity = assets.reduce(
-        (s, a) => s + num((a as { pulsex_liquidity_usd?: number }).pulsex_liquidity_usd),
-        0,
-      );
-      const pollutedPairs = assets.reduce(
-        (s, a) =>
-          s + num((a as { polluted_pair_count?: number }).polluted_pair_count),
-        0,
-      );
+      const uniquePairs = uniquePairsById(pairGroups);
+      const uniqueLiq = sumSanePairLiquidity(uniquePairs);
+      const totalBridgedLiquidity = uniqueLiq.totalUsd;
+      const pollutedPairs = uniqueLiq.pollutedPairCount;
 
       return ok({
         bridged_assets: assets,
@@ -1191,4 +1211,16 @@ function encodeTransferCalldata(to: string, amount: bigint): `0x${string}` {
   const toClean = to.toLowerCase().replace(/^0x/, "").padStart(64, "0");
   const amt = amount.toString(16).padStart(64, "0");
   return `0x${selector}${toClean}${amt}`;
+}
+
+/** ERC-20 transfer() may revert OR return ABI false without reverting. */
+function erc20CallIndicatesSuccess(data: Hex | undefined): boolean {
+  if (data === undefined || data === "0x") return true;
+  try {
+    const [ok] = decodeAbiParameters([{ type: "bool" }], data);
+    return ok === true;
+  } catch {
+    const stripped = data.replace(/^0x/i, "");
+    return stripped.length > 0 && !/^0+$/.test(stripped);
+  }
 }

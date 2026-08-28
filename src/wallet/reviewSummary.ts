@@ -99,6 +99,8 @@ export interface TxReviewSummary {
   /** Short note for agents reading remainingDaily / maxPls* fields. */
   legacyCapsNote: string;
   tokenMovements: ReviewTokenMovement[];
+  /** How many decoded movements were omitted from tokenMovements (cap 12). */
+  omittedMovementCount: number;
   /** Human-readable movement lines for agents */
   movementExplanations: string[];
   tokenNotional?: {
@@ -302,7 +304,7 @@ function compactMovements(
   tn: TokenNotionalPolicyView | undefined,
 ): ReviewTokenMovement[] {
   if (!tn?.movements?.length) return [];
-  // Cap list for operator readability
+  // Cap list for operator readability; callers should also surface omitted count.
   return tn.movements.slice(0, 12).map((m) => ({
     token: m.token,
     amountRaw: m.amountRaw,
@@ -311,6 +313,14 @@ function compactMovements(
     spender: m.spender,
     explanation: explainMovement(m),
   }));
+}
+
+export function omittedMovementCount(
+  tn: TokenNotionalPolicyView | undefined,
+  kept = 12,
+): number {
+  const n = tn?.movements?.length ?? 0;
+  return n > kept ? n - kept : 0;
 }
 
 function buildDecodeKnowledge(
@@ -576,6 +586,7 @@ export function buildTxReviewSummary(
 
   const hasCalldata = !isEmptyData(input.data);
   const movements = compactMovements(check.tokenNotional);
+  const omitted = omittedMovementCount(check.tokenNotional);
   const movementExplanations = movements
     .map((m) => m.explanation)
     .filter((x): x is string => Boolean(x));
@@ -585,7 +596,7 @@ export function buildTxReviewSummary(
       : movements
           .slice(0, 3)
           .map((m) => `${m.role} ${m.amountRaw} raw @ ${shortAddr(m.token)}`)
-          .join("; ") + (movements.length > 3 ? "…" : "");
+          .join("; ") + (movements.length > 3 || omitted > 0 ? "…" : "");
 
   const headline =
     decision === "allow"
@@ -602,12 +613,19 @@ export function buildTxReviewSummary(
     decision === "deny" ? check.reasons.map(categorizeDenyReason) : [];
 
   const decodeKnowledge = buildDecodeKnowledge(check.tokenNotional, hasCalldata);
-  const { agentGuidance, safetyHints } = buildAgentGuidance({
+  const { agentGuidance, safetyHints: baseHints } = buildAgentGuidance({
     decision,
     decode: decodeKnowledge,
     hasCalldata,
     nativeValuePls: valuePls,
   });
+  const safetyHints =
+    omitted > 0
+      ? [
+          ...baseHints,
+          `Review truncated: ${omitted} additional decoded movement(s) not shown`,
+        ]
+      : baseHints;
 
   const ctx = input.context ?? "propose";
   let nextStep: string;
@@ -655,6 +673,7 @@ export function buildTxReviewSummary(
     legacyCapsDisplayOnly: true,
     legacyCapsNote: LEGACY_CAPS_DISPLAY_ONLY_NOTE,
     tokenMovements: movements,
+    omittedMovementCount: omitted,
     movementExplanations,
     tokenNotional: tn
       ? {
@@ -740,13 +759,21 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
     );
   }
   if (summary.movementExplanations.length) {
-    lines.push(`Moves: ${summary.movementExplanations.slice(0, 3).join("; ")}`);
+    const shown = summary.movementExplanations.slice(0, 3);
+    const extra =
+      summary.omittedMovementCount > 0 || summary.movementExplanations.length > 3
+        ? ` (+${summary.omittedMovementCount + Math.max(0, summary.movementExplanations.length - 3)} more not shown)`
+        : "";
+    lines.push(`Moves: ${shown.join("; ")}${extra}`);
   } else if (summary.tokenMovements.length) {
     lines.push(
       `Tokens: ${summary.tokenMovements
         .slice(0, 4)
         .map((m) => `${m.role} ${m.amountRaw}@${shortAddr(m.token)}`)
-        .join("; ")}`,
+        .join("; ")}` +
+        (summary.omittedMovementCount > 0
+          ? ` (+${summary.omittedMovementCount} more not shown)`
+          : ""),
     );
   }
   if (summary.decision === "deny" && summary.reasons[0]) {

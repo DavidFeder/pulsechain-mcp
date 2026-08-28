@@ -131,7 +131,19 @@ export function buildSwapPath(
   explicitPath?: string[],
 ): Address[] {
   if (explicitPath && explicitPath.length >= 2) {
-    return explicitPath.map((a) => assertAddress(a));
+    const path = explicitPath.map((a) => assertAddress(a));
+    const expectedIn = resolveTokenAddress(tokenIn).toLowerCase();
+    const expectedOut = resolveTokenAddress(tokenOut).toLowerCase();
+    const pathIn = path[0]!.toLowerCase();
+    const pathOut = path[path.length - 1]!.toLowerCase();
+    if (pathIn !== expectedIn || pathOut !== expectedOut) {
+      throw new AppError(
+        `explicit path must start with tokenIn (${expectedIn}) and end with tokenOut (${expectedOut}); ` +
+          `got ${pathIn} → ${pathOut}`,
+        "VALIDATION_ERROR",
+      );
+    }
+    return path;
   }
   const a = resolveTokenAddress(tokenIn);
   const b = resolveTokenAddress(tokenOut);

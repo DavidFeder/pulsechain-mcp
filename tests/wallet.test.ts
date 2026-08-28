@@ -97,6 +97,15 @@ describe("wallet crypto", () => {
     expect(decryptSecret(blob, master)).toBe(plain);
   });
 
+  it("treats 0X-prefixed 64-hex as raw AES key (not scrypt passphrase)", () => {
+    const body = randomBytes(32).toString("hex");
+    const master = `0X${body}`;
+    expect(isRawHexKey(master)).toBe(true);
+    const blob = encryptSecret("roundtrip", master);
+    expect(blob.kdf).toBe("raw-hex");
+    expect(decryptSecret(blob, `0x${body}`)).toBe("roundtrip");
+  });
+
   it("encrypt/decrypt private key roundtrip", () => {
     const master = randomBytes(32).toString("hex");
     const pk = generatePrivateKey();

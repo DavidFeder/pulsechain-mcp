@@ -31,7 +31,8 @@ function clientCacheKey(config: AppConfig): string {
   return `${config.network}|${config.httpTimeoutMs}|${config.rpcUrls.join(",")}`;
 }
 
-function chainForConfig(config: AppConfig) {
+/** viem chain for this config — used by both public reads and wallet signing. */
+export function chainForConfig(config: Pick<AppConfig, "network">) {
   return config.network === "testnet" ? pulsechainV4 : pulsechain;
 }
 

@@ -60,6 +60,8 @@ export interface ConfirmRequestState {
   policySnapshotId: string;
   /** Unix seconds expiry (also enforced by codec TTL). */
   exp: number;
+  /** Optional sealed proposal id (transfer_pls propose-then-confirm). */
+  proposalId?: string;
 }
 
 const confirmElicitSchema = z.object({
@@ -169,6 +171,37 @@ export function computeIntentHash(
   return sha256Hex(`${tool}:${stableStringify(cleaned)}`);
 }
 
+/**
+ * Bind execute/settle confirmation to proposal *contents*, not just the id.
+ * Callers must reload the proposal on resume so a rewritten JSON fails the
+ * intentHash check.
+ */
+export function proposalExecutionIntentArgs(proposal: {
+  id: string;
+  walletId: string;
+  from: string;
+  to: string;
+  valueWei: string;
+  data?: string;
+}): Record<string, unknown> {
+  return {
+    proposalId: proposal.id,
+    walletId: proposal.walletId,
+    from: proposal.from.toLowerCase(),
+    to: proposal.to.toLowerCase(),
+    valueWei: proposal.valueWei,
+    data: (proposal.data ?? "0x").toLowerCase(),
+  };
+}
+
+function confirmationDeclinedMessage(tool: string): string {
+  return (
+    `Write tool "${tool}" confirmation was declined. No broadcast. ` +
+    `Pass confirm=true to authorize, or omit confirm on a modern MRTR client ` +
+    `to receive a fresh confirmation challenge.`
+  );
+}
+
 /** Policy snapshot id for requestState (never embeds raw policy secrets). */
 export function policySnapshotId(
   policy: AgentWalletPolicy | null | undefined,
@@ -254,6 +287,8 @@ export interface ResolveConfirmOptions {
   walletId?: string;
   /** Precomputed policy snapshot id; defaults to "none". */
   policySnapshotId?: string;
+  /** Optional proposal id sealed into requestState (reuse on MRTR resume). */
+  sealedProposalId?: string;
 }
 
 /**
@@ -273,11 +308,15 @@ export async function resolveConfirm(
     ctx,
     walletId,
     policySnapshotId: snap = "none",
+    sealedProposalId,
   } = options;
 
   // Path 1: explicit tool argument (legacy / scripts / dual).
   if (args.confirm === true) {
     return { confirmed: true, via: "arg" };
+  }
+  if (args.confirm === false) {
+    throw new PolicyError(confirmationDeclinedMessage(tool));
   }
 
   const intentHash = computeIntentHash(tool, args);
@@ -289,6 +328,9 @@ export async function resolveConfirm(
     "confirm",
     confirmElicitSchema,
   );
+  if (accepted?.confirm === false) {
+    throw new PolicyError(confirmationDeclinedMessage(tool));
+  }
   if (accepted?.confirm === true) {
     const state = await readVerifiedConfirmState(ctx);
     if (!state) {
@@ -336,6 +378,7 @@ export async function resolveConfirm(
       intentHash,
       policySnapshotId: snap,
       exp,
+      ...(sealedProposalId ? { proposalId: sealedProposalId } : {}),
     };
     // Never mint secrets into state (payload is public-but-signed).
     const requestState = await getConfirmStateCodec().mint(payload, ctx?.mcpCtx);
