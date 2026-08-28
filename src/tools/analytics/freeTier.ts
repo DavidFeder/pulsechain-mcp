@@ -10,6 +10,7 @@
  * get_honeypots, get_bridge_stats, get_holder_leagues.
  */
 
+import { z } from "zod";
 import { decodeAbiParameters, type Address, type Hex } from "viem";
 import type { McpServer } from "@modelcontextprotocol/server";
 import {
