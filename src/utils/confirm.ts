@@ -202,6 +202,32 @@ function confirmationDeclinedMessage(tool: string): string {
   );
 }
 
+/** Fail closed when a verified requestState is present but does not match this call. */
+function assertSealedStateMatches(
+  state: ConfirmRequestState,
+  tool: string,
+  args: Record<string, unknown>,
+  walletId?: string,
+): void {
+  const intentHash = computeIntentHash(tool, args);
+  if (state.tool !== tool || state.step !== CONFIRM_STEP) {
+    throw new PolicyError(
+      `Write tool "${tool}" requestState tool/step mismatch (forgery rejected).`,
+    );
+  }
+  if (state.intentHash !== intentHash) {
+    throw new PolicyError(
+      `Write tool "${tool}" intent changed after confirmation challenge ` +
+        `(requestState intentHash mismatch). Re-issue the tool call.`,
+    );
+  }
+  if (walletId && state.walletId && state.walletId !== walletId) {
+    throw new PolicyError(
+      `Write tool "${tool}" walletId mismatch in requestState (forgery rejected).`,
+    );
+  }
+}
+
 /** Policy snapshot id for requestState (never embeds raw policy secrets). */
 export function policySnapshotId(
   policy: AgentWalletPolicy | null | undefined,
@@ -312,7 +338,13 @@ export async function resolveConfirm(
   } = options;
 
   // Path 1: explicit tool argument (legacy / scripts / dual).
+  // If the host also echoed requestState (Grok dual-path resume), still bind
+  // intentHash so a rewritten proposal cannot ride confirm=true.
   if (args.confirm === true) {
+    const state = await readVerifiedConfirmState(ctx);
+    if (state) {
+      assertSealedStateMatches(state, tool, args, walletId);
+    }
     return { confirmed: true, via: "arg" };
   }
   if (args.confirm === false) {
@@ -340,22 +372,7 @@ export async function resolveConfirm(
           `Re-issue the tool call to obtain a fresh confirmation challenge.`,
       );
     }
-    if (state.tool !== tool || state.step !== CONFIRM_STEP) {
-      throw new PolicyError(
-        `Write tool "${tool}" requestState tool/step mismatch (forgery rejected).`,
-      );
-    }
-    if (state.intentHash !== intentHash) {
-      throw new PolicyError(
-        `Write tool "${tool}" intent changed after confirmation challenge ` +
-          `(requestState intentHash mismatch). Re-issue the tool call.`,
-      );
-    }
-    if (walletId && state.walletId && state.walletId !== walletId) {
-      throw new PolicyError(
-        `Write tool "${tool}" walletId mismatch in requestState (forgery rejected).`,
-      );
-    }
+    assertSealedStateMatches(state, tool, args, walletId);
     if (state.policySnapshotId !== snap && snap !== "none") {
       // Policy changed since challenge — force re-confirm.
       // Fall through to re-issue InputRequired if MRTR, else error.

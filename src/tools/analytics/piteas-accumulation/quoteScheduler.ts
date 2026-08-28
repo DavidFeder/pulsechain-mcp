@@ -114,21 +114,15 @@ async function getPiteasQuoteWithTimeout(
   },
 ): Promise<PiteasQuoteResult> {
   const timeoutMs = Math.max(1, config.httpTimeoutMs ?? 10_000);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<PiteasQuoteResult>((resolve) => {
-    timer = setTimeout(() => {
-      resolve({
-        ok: false,
-        source: "piteas",
-        reason: `Piteas request timed out after ${timeoutMs}ms`,
-        advisory: true,
-      });
-    }, timeoutMs);
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    return await Promise.race([deps.getPiteasQuote(config, req), timeout]);
+    return await deps.getPiteasQuote(config, req, {
+      signal: ac.signal,
+      timeoutMs,
+    });
   } finally {
-    if (timer) clearTimeout(timer);
+    clearTimeout(timer);
   }
 }
 

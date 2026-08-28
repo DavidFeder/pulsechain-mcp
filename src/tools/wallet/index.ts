@@ -49,6 +49,7 @@ import {
   requireConfirmOrInput,
 } from "../../utils/confirm.js";
 import { registerTool } from "../define.js";
+import { parsePlsToWei } from "../../wallet/value.js";
 
 /** Extra security banner for every wallet write tool description. */
 export const WALLET_SECURITY_WARNING =
@@ -126,6 +127,44 @@ function snapshotForWallet(
     return policySnapshotId(record.policy);
   } catch {
     return "none";
+  }
+}
+
+function assertSameExecutionIntent(
+  before: Parameters<typeof proposalExecutionIntentArgs>[0],
+  after: Parameters<typeof proposalExecutionIntentArgs>[0],
+): void {
+  const a = proposalExecutionIntentArgs(before);
+  const b = proposalExecutionIntentArgs(after);
+  if (
+    a.proposalId !== b.proposalId ||
+    a.walletId !== b.walletId ||
+    a.from !== b.from ||
+    a.to !== b.to ||
+    a.valueWei !== b.valueWei ||
+    a.data !== b.data
+  ) {
+    throw new PolicyError(
+      "Proposal changed after confirmation; re-issue the tool call.",
+    );
+  }
+}
+
+function assertNativeTransferMatchesArgs(
+  proposal: { to: string; valueWei: string; data?: string },
+  to: string,
+  amountPls: number | string,
+): void {
+  const wantWei = parsePlsToWei(amountPls).toString();
+  const data = (proposal.data ?? "0x").toLowerCase();
+  if (
+    proposal.to.toLowerCase() !== to.toLowerCase() ||
+    proposal.valueWei !== wantWei ||
+    data !== "0x"
+  ) {
+    throw new PolicyError(
+      "Sealed transfer_pls proposal does not match args; re-issue the tool call.",
+    );
   }
 }
 
@@ -628,6 +667,9 @@ export function registerWalletTools(
       });
       if (gate !== true) return gate;
 
+      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
+      assertSameExecutionIntent(peek, fresh);
+
       // Service re-checks AGENT_WALLET_ENABLED + kill/enabled + simulate before sign.
       const result = await executeAgentTx(cfg, proposalId, true);
       return ok(neverReturnPrivateKey(result));
@@ -663,6 +705,9 @@ export function registerWalletTools(
         policySnapshotId: "none",
       });
       if (gate !== true) return gate;
+
+      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
+      assertSameExecutionIntent(peek, fresh);
 
       const result = await executeAgentTx(cfg, proposalId, true);
       return ok(neverReturnPrivateKey(result));
@@ -704,6 +749,9 @@ export function registerWalletTools(
       });
       if (gate !== true) return gate;
 
+      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
+      assertSameExecutionIntent(peek, fresh);
+
       const result = await settleInterruptedBroadcast(cfg, proposalId, true);
       return ok(neverReturnPrivateKey(result));
     },
@@ -736,6 +784,12 @@ export function registerWalletTools(
       const amountPls = args.amountPls as number | string;
       const to = assertAddress(args.to as string);
 
+      if (args.confirm === false) {
+        throw new PolicyError(
+          'Write tool "transfer_pls" confirmation was declined. No broadcast.',
+        );
+      }
+
       // Reuse a proposal sealed into MRTR requestState so resume does not
       // create a second pending transfer.
       const prior = await readVerifiedConfirmState(ctx);
@@ -746,11 +800,7 @@ export function registerWalletTools(
         prior.walletId === walletId
       ) {
         proposal = loadProposal(cfg.agentWalletDir, prior.proposalId);
-        if (proposal.to.toLowerCase() !== to.toLowerCase()) {
-          throw new PolicyError(
-            "Sealed transfer_pls proposal destination does not match args; re-issue the tool call.",
-          );
-        }
+        assertNativeTransferMatchesArgs(proposal, to, amountPls);
       } else {
         proposal = await proposeAgentTx(cfg, {
           walletId,
@@ -777,14 +827,8 @@ export function registerWalletTools(
       if (gate !== true) return gate;
 
       const fresh = loadProposal(cfg.agentWalletDir, proposal.id);
-      if (
-        fresh.to.toLowerCase() !== to.toLowerCase() ||
-        fresh.valueWei !== proposal.valueWei
-      ) {
-        throw new PolicyError(
-          "Proposal changed after confirmation; re-issue transfer_pls.",
-        );
-      }
+      assertSameExecutionIntent(proposal, fresh);
+      assertNativeTransferMatchesArgs(fresh, to, amountPls);
 
       const result = await executeAgentTx(cfg, proposal.id, true);
       return ok(

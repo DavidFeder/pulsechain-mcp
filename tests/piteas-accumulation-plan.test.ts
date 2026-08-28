@@ -214,7 +214,7 @@ describe("piteas_accumulation_plan", () => {
       tokenOut: PHIAT,
       amount: "1",
       account: ACCOUNT,
-    }));
+    }), expect.any(Object));
   });
 
   it("accepts public tokenIn tokenOut and quoteSizesHuman aliases", async () => {
@@ -250,7 +250,7 @@ describe("piteas_accumulation_plan", () => {
       tokenIn: EUSDC,
       tokenOut: PHIAT,
       amount: "5000000",
-    }));
+    }), expect.any(Object));
   });
 
   it("rejects ambiguous USDC symbols before quote calls", async () => {

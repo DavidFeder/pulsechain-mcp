@@ -215,6 +215,8 @@ export interface PiteasFetchOptions {
   apiBase?: string;
   /** Skip process-wide 10/min limiter (unit tests with mock fetch). */
   skipSpacing?: boolean;
+  /** Abort in-flight limiter wait + HTTP (outer quote timeouts). */
+  signal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -925,21 +927,48 @@ export function resetPiteasRateLimit(): void {
   piteasChain = Promise.resolve();
 }
 
-async function respectPiteasRateLimit(): Promise<void> {
-  piteasChain = piteasChain.then(async () => {
+async function respectPiteasRateLimit(signal?: AbortSignal): Promise<void> {
+  const run = async () => {
+    if (signal?.aborted) {
+      throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+    }
     const now = Date.now();
     piteasTimestamps = piteasTimestamps.filter((t) => now - t < PITEAS_WINDOW_MS);
     if (piteasTimestamps.length >= PITEAS_MAX_REQUESTS_PER_MINUTE) {
       const wait = PITEAS_WINDOW_MS - (now - piteasTimestamps[0]!) + 25;
       if (wait > 0) {
-        await new Promise((r) => setTimeout(r, wait));
+        await abortableDelay(wait, signal);
       }
       const later = Date.now();
       piteasTimestamps = piteasTimestamps.filter((t) => later - t < PITEAS_WINDOW_MS);
     }
+    if (signal?.aborted) {
+      throw Object.assign(new Error("Aborted"), { name: "AbortError" });
+    }
     piteasTimestamps.push(Date.now());
+  };
+  const queued = piteasChain.then(run, run);
+  // Swallow so one aborted/failed waiter cannot permanently jam the queue.
+  piteasChain = queued.then(
+    () => undefined,
+    () => undefined,
+  );
+  await queued;
+}
+
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
-  await piteasChain;
 }
 
 export async function piteasGetJson(
@@ -957,15 +986,20 @@ export async function piteasGetJson(
     }
   | { ok: false; reason: string; status?: number; url: string }
 > {
-  if (!options.skipSpacing) {
-    await respectPiteasRateLimit();
-  }
   const timeoutMs = options.timeoutMs ?? config.httpTimeoutMs ?? 30_000;
   const fetchImpl = options.fetchImpl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener("abort", onExternalAbort, { once: true });
+  }
 
   try {
+    if (!options.skipSpacing) {
+      await respectPiteasRateLimit(controller.signal);
+    }
     const res = await fetchImpl(url, {
       method: "GET",
       signal: controller.signal,
@@ -1029,6 +1063,7 @@ export async function piteasGetJson(
     };
   } finally {
     clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onExternalAbort);
   }
 }
 

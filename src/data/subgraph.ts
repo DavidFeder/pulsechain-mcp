@@ -983,13 +983,21 @@ export async function fetchWalletSwaps(
   const client = getPulseXClient(config, options.version ?? "v2");
   const first = Math.min(options.first ?? 25, 100);
   const skip = Math.max(0, options.skip ?? 0);
-  // Fetch skip+first from each feed (capped at 100), merge, then apply global skip.
-  const fetchCount = Math.min(skip + first, 100);
+  // Small pages: fetch skip+first from tip (skip 0), merge, then slice — correct
+  // across sender/to feeds. Deep pages exceed the 100-row GraphQL cap, so pass
+  // skip to each feed (approximate merged page, same as pre-fix deep behavior).
+  const deep = skip + first > 100;
+  const fetchCount = deep ? first : Math.min(skip + first, 100);
+  const gqlSkip = deep ? skip : 0;
 
   const data = await requestSafe<{
     asSender: SubgraphSwap[];
     asTo: SubgraphSwap[];
-  }>(client, SWAPS_BY_WALLET_QUERY, { wallet, first: fetchCount, skip: 0 });
+  }>(client, SWAPS_BY_WALLET_QUERY, {
+    wallet,
+    first: fetchCount,
+    skip: gqlSkip,
+  });
 
   const byId = new Map<string, SubgraphSwap>();
   for (const s of [...(data.asSender ?? []), ...(data.asTo ?? [])]) {
@@ -999,8 +1007,10 @@ export async function fetchWalletSwaps(
     (a, b) => Number(b.timestamp) - Number(a.timestamp),
   );
   return {
-    swaps: swaps.slice(skip, skip + first),
-    method: "subgraph swaps where sender or to equals wallet",
+    swaps: deep ? swaps.slice(0, first) : swaps.slice(skip, skip + first),
+    method: deep
+      ? "subgraph swaps where sender or to equals wallet (deep skip uses per-feed skip; merged page is approximate)"
+      : "subgraph swaps where sender or to equals wallet",
   };
 }
 
@@ -1586,10 +1596,11 @@ export async function fetchSwapsAdvanced(
       };
     }
 
-    const batchFirst = Math.min(
-      Math.max((first + skip) * 2, first + skip + 10),
-      100,
-    );
+    const deep = skip + first > 100;
+    const batchFirst = deep
+      ? first
+      : Math.min(Math.max((first + skip) * 2, first + skip + 10), 100);
+    const batchSkip = deep ? skip : 0;
     let batchSwaps: SubgraphSwap[] = [];
     let batchError: string | undefined;
     try {
@@ -1597,7 +1608,7 @@ export async function fetchSwapsAdvanced(
       const data = await requestSafe<{ swaps: SubgraphSwap[] }>(
         client,
         SWAPS_BY_PAIRS_QUERY,
-        { pairs: pairIds, first: batchFirst, skip: 0 },
+        { pairs: pairIds, first: batchFirst, skip: batchSkip },
       );
       batchSwaps = data.swaps ?? [];
     } catch (err) {
@@ -1619,7 +1630,7 @@ export async function fetchSwapsAdvanced(
         pairIdSet,
       ).length;
       return {
-        swaps: swaps.slice(skip, skip + first),
+        swaps: deep ? swaps.slice(0, first) : swaps.slice(skip, skip + first),
         filter: {
           token: tokenFilter,
           pairsUsed: pairIds,
@@ -1646,7 +1657,7 @@ export async function fetchSwapsAdvanced(
         requestSafe<{ swaps: SubgraphSwap[] }>(client, SWAPS_QUERY, {
           pair: pairId,
           first: perPairFirst,
-          skip: 0,
+          skip: deep ? skip : 0,
         }).then((data) => ({
           pairId,
           swaps: data.swaps ?? [],
@@ -1668,7 +1679,7 @@ export async function fetchSwapsAdvanced(
       results,
       tokenFilter,
       first,
-      skip,
+      skip: deep ? 0 : skip,
       minUsd: options.minUsd,
     });
 

@@ -13,6 +13,8 @@ Correctness and hardening from a 1.0.4 read-only review. Operator-trust wallet m
 
 - Wallet signing uses the configured network chain (PulseChain testnet 943 vs mainnet 369)
 - Execute/settle confirmation binds proposal contents (to, value, data), not only proposal id
+- Dual-path `confirm=true` still verifies echoed MRTR `requestState` intentHash
+- `transfer_pls` decline happens before propose; sealed reuse binds amount as well as destination
 - Proposal/wallet JSON `id` must match the filename
 - `confirm=false` / MRTR reject declines instead of re-issuing a challenge
 - `transfer_pls` simulates (propose) before confirm so the prompt includes review/fees
@@ -34,7 +36,7 @@ Correctness and hardening from a 1.0.4 read-only review. Operator-trust wallet m
 - Tool results include `structuredContent` alongside JSON text (existing text parse still works)
 - `volume_24h` / `price_change_24h` labeled as UTC calendar-day windows
 - Confirm prompts disclose truncated token-movement lists
-- Process-wide Piteas 10/min limiter; 429 is not rapidly retried
+- Process-wide Piteas 10/min limiter; outer quote timeouts abort the limiter wait and HTTP (no ghost requests); 429 is not rapidly retried
 - `agent_wallet_check_policy` accepts optional `walletId` for kill/enabled state
 
 ## [1.0.4] - 2026-08-05
