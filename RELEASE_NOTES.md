@@ -1,16 +1,17 @@
-# Release notes — pulsechain-mcp 1.0.4
+# Release notes — pulsechain-mcp 1.0.5
 
 Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.
 
-## What shipped (1.0.4)
+## What shipped (1.0.5)
 
-- **`phiat_dashboard`:** read-only PHIAT research dashboard (address-first identity, holders, market, transfers, safety) with bounded fast Piteas depth and optional adaptive mode.
-- **`piteas_accumulation_plan`:** standalone adaptive Piteas quote-depth planner for accumulation research; dual analytical vs operational thresholds; decimal-safe ladder math.
-- **Security boundary:** both tools are research-only (`write: false`); they call **`getPiteasQuote` only** — no prepare/sign/broadcast, no agent wallet, no master-key access.
-- **Maintainer review fixes (on merge):** last usable adaptive recommendation retained when a later batch is unusable; exact threshold inclusivity aligned across dashboard and planner; constant quote `endpoint` is not freshness evidence; `includeGasEstimate: false` strips gas fields and related warnings.
-- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.4**.
+Correctness and hardening from PR #2 on the 1.0.4 tree. **Not** a protocol or wallet-model change.
 
-Wallet model and agent-safe install path are **unchanged** from 1.0.3.
+- **Wallet:** signing uses `chainForConfig` (mainnet 369 / testnet 943); execute/settle/`transfer_pls` confirm binds proposal contents (`to`, `valueWei`, `data`), not only `proposalId`; `confirm=false` / MRTR reject **declines** (no re-challenge); `transfer_pls` simulates before confirm; store dirs `0700` / files `0600`; filename vs embedded `id` must match.
+- **Analytics:** token-filtered and wallet-swap skip pagination; explicit PulseX paths must start/end with `tokenIn`/`tokenOut`; bridge TVL unique-pair total; `volume_24h` labeled UTC calendar day (`volume_window`); holder-rank `page>1` uses the module API; `extraTokens` survive truncation; empty explorer timestamps are not age-zero.
+- **Reliability:** process-wide Piteas 10 req/min limiter (outer timeouts abort wait + HTTP); tool results include `structuredContent` alongside JSON text; GitHub Actions (Node 20, typecheck, test).
+- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.5**.
+
+Operator-trust, dual-era MCP (`2026-07-28` + `2025-11-25`), and research-first agent install are **unchanged**.
 
 ## Upgrade
 
@@ -19,19 +20,20 @@ git pull
 npm install
 npm run build
 # Prefer: node scripts/install-for-host.mjs --host <host> --mode research
-# reload the MCP host so pulsechain_health.version shows 1.0.4
+# reload the MCP host so pulsechain_health.version shows 1.0.5
 ```
 
 Optional smoke after reload:
 
-1. `pulsechain_health` → version `1.0.4`
-2. `phiat_dashboard` with a verified token address (research)
-3. `piteas_accumulation_plan` with verified tokenIn/tokenOut (quote research only)
+1. `pulsechain_health` → version `1.0.5`
+2. `get_token_price` on a known address → `volume_window` is `utc_calendar_day`
+3. Research-only: write tools still refuse while `AGENT_WALLET_ENABLED=false`
 
-No OT wallet model change. Tags **v1.0.0**–**v1.0.3** remain historical; **v1.0.4** is this feature release.
+No OT wallet model change. Tags **v1.0.0**–**v1.0.4** remain historical; **v1.0.5** is this patch.
 
 ## What shipped earlier
 
+- **1.0.4:** `phiat_dashboard` + `piteas_accumulation_plan` (research-only quote analytics).
 - **1.0.3:** key-install hygiene (write-only recovery text; no console.log key recipe).
 - **1.0.2:** agent-safe install path (research-first, write-only keys, install-for-host).
 - **1.0.1:** pair ranking trust polish, legacy caps display-only markers, PulseSwap readiness flags.
@@ -50,9 +52,9 @@ No OT wallet model change. Tags **v1.0.0**–**v1.0.3** remain historical; **v1.
 
 ## Operator-trust reminder
 
-Funding the agent is authorization. Fund only what you accept the agent may spend. Prefer small balances + kill_switch. New 1.0.4 analytics tools do not spend or sign.
+Funding the agent is authorization. Fund only what you accept the agent may spend. Prefer small balances + kill_switch.
 
 ## Tag / about topics
 
-1. Confirm tags: **`v1.0.0`**–**`v1.0.3`** untouched; **`v1.0.4`** on this release commit.
+1. Confirm tags: **`v1.0.0`**–**`v1.0.4`** untouched; **`v1.0.5`** on this release commit.
 2. About / topics: pulsechain, mcp, web3, defi, phiat, piteas (operator choice).

@@ -82,7 +82,7 @@ export const DEFAULT_PULSEX_SUBGRAPH_V2 =
 export const DEFAULT_LOG_LEVEL = "info" as const;
 
 export const SERVER_NAME = "pulsechain-mcp";
-export const SERVER_VERSION = "1.0.4";
+export const SERVER_VERSION = "1.0.5";
 
 /**
  * Achieved wire protocol mode for dual-era serving:

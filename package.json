@@ -1,6 +1,6 @@
 {
   "name": "pulsechain-mcp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "PulseChain MCP server for AI agents and local encrypted wallets",
   "type": "module",
   "main": "dist/index.js",
