@@ -13,9 +13,9 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
-import { pulsechain } from "viem/chains";
 import type { AppConfig } from "../types.js";
 import {
+  chainForConfig,
   estimateGas,
   ethCall,
   getNativeBalance,
@@ -766,6 +766,14 @@ async function executeAgentTxLocked(
   const proposal = loadProposal(config.agentWalletDir, proposalId);
 
   if (new Date(proposal.expiresAt).getTime() < Date.now()) {
+    // Already-broadcast proposals must remain settleable — do not wipe txHash
+    // recovery by flipping pending+txHash to expired.
+    if (proposal.txHash) {
+      throw new PolicyError(
+        `Proposal expired but already broadcast (txHash=${proposal.txHash}); ` +
+          `use settle_interrupted_broadcast, do not re-send: ${proposalId}`,
+      );
+    }
     if (proposal.status === "pending") {
       proposal.status = "expired";
       saveProposal(config.agentWalletDir, proposal);
@@ -888,16 +896,17 @@ async function executeAgentTxLocked(
         config,
       });
     } else {
+      const chain = chainForConfig(config);
       const walletClient = createWalletClient({
         account,
-        chain: pulsechain,
+        chain,
         transport: getRpcTransport(config),
       });
       txHash = await walletClient.sendTransaction({
         to: proposal.to,
         value: valueWei,
         data: proposal.data as Hex,
-        chain: pulsechain,
+        chain,
       });
     }
 
@@ -1068,10 +1077,11 @@ export async function settleInterruptedBroadcast(
 
     if (
       proposal.status !== "broadcasting" &&
-      !(proposal.status === "pending" && proposal.txHash)
+      !(proposal.status === "pending" && proposal.txHash) &&
+      !(proposal.status === "expired" && proposal.txHash)
     ) {
       throw new PolicyError(
-        `Proposal status ${proposal.status} is not settleable (need broadcasting + txHash): ${proposalId}`,
+        `Proposal status ${proposal.status} is not settleable (need broadcasting/pending/expired + txHash): ${proposalId}`,
       );
     }
 

@@ -300,6 +300,28 @@ describe("subgraph advanced fetchers (mocked)", () => {
     expect(result.swaps[0]?.id).toBe("s2"); // newest first
     expect(result.method).toContain("sender or to");
   });
+
+  it("fetchWalletSwaps deep skip is passed to subgraph instead of emptying the page", async () => {
+    const fetchMock = vi.fn(async () =>
+      gqlResponse({
+        asSender: [{ id: "deep-s", timestamp: "1", sender: ADDR_A, to: ADDR_B }],
+        asTo: [],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchWalletSwaps(baseConfig, ADDR_A, {
+      first: 25,
+      skip: 100,
+    });
+    expect(result.swaps).toHaveLength(1);
+    expect(result.method).toMatch(/deep skip/i);
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]?.[1] as { body?: string })?.body ?? "{}",
+    );
+    expect(body.variables.skip).toBe(100);
+    expect(body.variables.first).toBe(25);
+  });
 });
 
 describe("explorer advanced helpers (mocked)", () => {

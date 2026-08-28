@@ -58,7 +58,7 @@ Answered automatically by the SDK when serving via `serveStdio` / `createMcpHand
 Write wallet tools still require confirmation. Dual path:
 
 1. **All clients / scripts:** pass `confirm=true` (same as 0.1.0).
-2. **Modern MRTR-capable clients:** omit `confirm` (or leave false); server may return `InputRequiredResult` (`resultType: "inputRequired"`, `inputRequests.confirm`, HMAC-signed `requestState`). Client retries with `inputResponses` + echoed `requestState`.
+2. **Modern MRTR-capable clients:** omit `confirm`; server may return `InputRequiredResult` (`resultType: "input_required"`, `inputRequests.confirm`, HMAC-signed `requestState`). Client retries with `inputResponses` + echoed `requestState`. Pass `confirm=false` to decline (does not re-issue a challenge).
 
 Implementation: `src/utils/confirm.ts` (`resolveConfirm` / `requireConfirmOrInput`). `requestState` never contains private keys, master keys, or ciphertext. Service layer still re-checks policy and simulation before sign/broadcast.
 
@@ -66,7 +66,7 @@ Optional env: `AGENT_WALLET_MRTR_SECRET` (≥32-byte UTF-8 HMAC secret for `requ
 
 ### Tool surface
 
-**69 tools** — same names and categories as 0.1.0. Registration moved to SDK v2 `registerTool` + Zod object schemas; behavior of analytics / chain / wallet tools is intentionally unchanged aside from confirm dual-path.
+**96 tools** (health + chain + analytics + wallet; grew from 69 at the 0.1.0 protocol cut). Registration uses SDK v2 `registerTool` + Zod object schemas. Dual-path confirm applies to wallet writes.
 
 ---
 

@@ -1,4 +1,4 @@
-import type { PiteasQuoteData, PiteasQuoteResult } from "../../../data/index.js";
+import type { PiteasQuoteData } from "../../../data/index.js";
 import { USDC_FROM_ETH_ADDRESS } from "../../../constants.js";
 import type { AppConfig } from "../../../types.js";
 import {
@@ -479,34 +479,19 @@ async function requestFastPiteasQuote(input: {
     };
   }
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutResult = new Promise<PiteasQuoteResult>((resolve) => {
-    timer = setTimeout(
-      () =>
-        resolve({
-          ok: false,
-          source: "piteas",
-          reason: `Piteas ${input.label} request timed out after ${requestTimeoutMs}ms`,
-          advisory: true,
-        }),
-      requestTimeoutMs,
-    );
-  });
-
-  const result = await Promise.race([
-    input.deps.getPiteasQuote(
-      input.config,
-      {
-        tokenIn: USDC_FROM_ETH_ADDRESS,
-        tokenOut: input.tokenAddress,
-        amount: inputRaw,
-        allowedSlippage: 0.5,
-      },
-      { timeoutMs: requestTimeoutMs },
-    ),
-    timeoutResult,
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), requestTimeoutMs);
+  const result = await input.deps.getPiteasQuote(
+    input.config,
+    {
+      tokenIn: USDC_FROM_ETH_ADDRESS,
+      tokenOut: input.tokenAddress,
+      amount: inputRaw,
+      allowedSlippage: 0.5,
+    },
+    { timeoutMs: requestTimeoutMs, signal: ac.signal },
+  ).finally(() => {
+    clearTimeout(timer);
   });
 
   const receivedMs = nowMs(input.deps);

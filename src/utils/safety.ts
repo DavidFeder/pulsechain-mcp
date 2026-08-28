@@ -80,7 +80,7 @@ export function assertWriteAllowed(
   if (!agentWalletEnabled) {
     throw new PolicyError(
       `Write tool "${toolName}" is disabled. Set AGENT_WALLET_ENABLED=true to enable ` +
-        `encrypted agent wallets (operator-trust when funded). Default is false for safety.`,
+        `encrypted agent wallets (operator-trust when funded). Set AGENT_WALLET_ENABLED=false for research-only.`,
     );
   }
   if (confirm !== true) {

@@ -10,6 +10,7 @@ import {
   existsSync,
   fsyncSync,
   mkdirSync,
+  chmodSync,
   openSync,
   readFileSync,
   readdirSync,
@@ -34,7 +35,12 @@ import type {
 
 function ensureDir(dir: string): void {
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  try {
+    chmodSync(dir, 0o700);
+  } catch {
+    // Windows / unsupported POSIX modes — best-effort only
   }
 }
 
@@ -109,6 +115,11 @@ export function atomicWriteJson(
       }
     }
   }
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // Windows / unsupported POSIX modes — best-effort only
+  }
 }
 
 export function ensureWalletDir(dir: string): void {
@@ -145,6 +156,13 @@ export function loadWalletRecord(
     parsed.tokenDailySpend = normalizeTokenDailySpend(
       parsed.tokenDailySpend ?? {},
     );
+    if (parsed.id && parsed.id !== id) {
+      throw new AppError(
+        `Wallet file id mismatch: requested ${id}, file contains ${parsed.id}`,
+        "VALIDATION_ERROR",
+      );
+    }
+    parsed.id = id;
     return parsed;
   } catch (err) {
     if (err instanceof AppError) throw err;
@@ -223,7 +241,15 @@ export function loadProposal(dir: string, id: string): TxProposal {
   if (!existsSync(path)) {
     throw new AppError(`Proposal not found: ${id}`, "NOT_FOUND");
   }
-  return JSON.parse(readFileSync(path, "utf8")) as TxProposal;
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as TxProposal;
+  if (parsed.id && parsed.id !== id) {
+    throw new AppError(
+      `Proposal file id mismatch: requested ${id}, file contains ${parsed.id}`,
+      "VALIDATION_ERROR",
+    );
+  }
+  parsed.id = id;
+  return parsed;
 }
 
 /** Append-only audit log (JSON lines). Never includes private keys. */

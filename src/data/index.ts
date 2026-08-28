@@ -1,6 +1,7 @@
 export {
   getPublicClient,
   getRpcTransport,
+  chainForConfig,
   getBlockNumber,
   getNativeBalance,
   getBlock,

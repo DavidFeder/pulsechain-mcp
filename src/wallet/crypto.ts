@@ -25,15 +25,20 @@ const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SALT_LEN = 16;
 
-/** True if value is exactly 32 bytes as hex (optional 0x prefix). */
+function stripOptionalHexPrefix(masterKey: string): string {
+  return masterKey.startsWith("0x") || masterKey.startsWith("0X")
+    ? masterKey.slice(2)
+    : masterKey;
+}
+
+/** True if value is exactly 32 bytes as hex (optional 0x / 0X prefix). */
 export function isRawHexKey(masterKey: string): boolean {
-  const hex = masterKey.startsWith("0x") ? masterKey.slice(2) : masterKey;
+  const hex = stripOptionalHexPrefix(masterKey);
   return /^[a-fA-F0-9]{64}$/.test(hex);
 }
 
 function parseRawHexKey(masterKey: string): Buffer {
-  const hex = masterKey.startsWith("0x") ? masterKey.slice(2) : masterKey;
-  return Buffer.from(hex, "hex");
+  return Buffer.from(stripOptionalHexPrefix(masterKey), "hex");
 }
 
 /**

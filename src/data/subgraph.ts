@@ -191,9 +191,10 @@ export const SWAPS_QUERY = gql`
  * Avoids sequential/parallel per-pair fan-out that times out on public subgraph.
  */
 export const SWAPS_BY_PAIRS_QUERY = gql`
-  query SwapsByPairs($pairs: [String!]!, $first: Int!) {
+  query SwapsByPairs($pairs: [String!]!, $first: Int!, $skip: Int!) {
     swaps(
       first: $first
+      skip: $skip
       orderBy: timestamp
       orderDirection: desc
       where: { pair_in: $pairs }
@@ -981,12 +982,22 @@ export async function fetchWalletSwaps(
   const wallet = assertAddress(walletAddress).toLowerCase();
   const client = getPulseXClient(config, options.version ?? "v2");
   const first = Math.min(options.first ?? 25, 100);
-  const skip = options.skip ?? 0;
+  const skip = Math.max(0, options.skip ?? 0);
+  // Small pages: fetch skip+first from tip (skip 0), merge, then slice — correct
+  // across sender/to feeds. Deep pages exceed the 100-row GraphQL cap, so pass
+  // skip to each feed (approximate merged page, same as pre-fix deep behavior).
+  const deep = skip + first > 100;
+  const fetchCount = deep ? first : Math.min(skip + first, 100);
+  const gqlSkip = deep ? skip : 0;
 
   const data = await requestSafe<{
     asSender: SubgraphSwap[];
     asTo: SubgraphSwap[];
-  }>(client, SWAPS_BY_WALLET_QUERY, { wallet, first, skip });
+  }>(client, SWAPS_BY_WALLET_QUERY, {
+    wallet,
+    first: fetchCount,
+    skip: gqlSkip,
+  });
 
   const byId = new Map<string, SubgraphSwap>();
   for (const s of [...(data.asSender ?? []), ...(data.asTo ?? [])]) {
@@ -996,8 +1007,10 @@ export async function fetchWalletSwaps(
     (a, b) => Number(b.timestamp) - Number(a.timestamp),
   );
   return {
-    swaps: swaps.slice(0, first),
-    method: "subgraph swaps where sender or to equals wallet",
+    swaps: deep ? swaps.slice(0, first) : swaps.slice(skip, skip + first),
+    method: deep
+      ? "subgraph swaps where sender or to equals wallet (deep skip uses per-feed skip; merged page is approximate)"
+      : "subgraph swaps where sender or to equals wallet",
   };
 }
 
@@ -1498,6 +1511,7 @@ export function mergeTokenFilteredSwaps(options: {
   results: Array<{ pairId: string; swaps: SubgraphSwap[]; error?: string }>;
   tokenFilter: string;
   first: number;
+  skip?: number;
   minUsd?: number;
 }): {
   swaps: SubgraphSwap[];
@@ -1523,8 +1537,9 @@ export function mergeTokenFilteredSwaps(options: {
     swaps = swaps.filter((s) => Number(s.amountUSD ?? 0) >= min);
   }
   const matched = filterSwapsByToken(all, options.tokenFilter, pairIdSet).length;
+  const skip = Math.max(0, options.skip ?? 0);
   return {
-    swaps: swaps.slice(0, options.first),
+    swaps: swaps.slice(skip, skip + options.first),
     pairsUsed: pairIds,
     pairsFailed,
     droppedUnrelated: all.length - matched,
@@ -1581,7 +1596,11 @@ export async function fetchSwapsAdvanced(
       };
     }
 
-    const batchFirst = Math.min(Math.max(first * 2, first + 10), 100);
+    const deep = skip + first > 100;
+    const batchFirst = deep
+      ? first
+      : Math.min(Math.max((first + skip) * 2, first + skip + 10), 100);
+    const batchSkip = deep ? skip : 0;
     let batchSwaps: SubgraphSwap[] = [];
     let batchError: string | undefined;
     try {
@@ -1589,7 +1608,7 @@ export async function fetchSwapsAdvanced(
       const data = await requestSafe<{ swaps: SubgraphSwap[] }>(
         client,
         SWAPS_BY_PAIRS_QUERY,
-        { pairs: pairIds, first: batchFirst },
+        { pairs: pairIds, first: batchFirst, skip: batchSkip },
       );
       batchSwaps = data.swaps ?? [];
     } catch (err) {
@@ -1611,12 +1630,13 @@ export async function fetchSwapsAdvanced(
         pairIdSet,
       ).length;
       return {
-        swaps: swaps.slice(0, first),
+        swaps: deep ? swaps.slice(0, first) : swaps.slice(skip, skip + first),
         filter: {
           token: tokenFilter,
           pairsUsed: pairIds,
           pairsFailed: [],
           minUsd: options.minUsd,
+          skip,
           strictTokenMatch: true,
           matchBy: "token_id_or_verified_pair_id",
           droppedUnrelated: batchSwaps.length - matched,
@@ -1637,7 +1657,7 @@ export async function fetchSwapsAdvanced(
         requestSafe<{ swaps: SubgraphSwap[] }>(client, SWAPS_QUERY, {
           pair: pairId,
           first: perPairFirst,
-          skip: 0,
+          skip: deep ? skip : 0,
         }).then((data) => ({
           pairId,
           swaps: data.swaps ?? [],
@@ -1659,6 +1679,7 @@ export async function fetchSwapsAdvanced(
       results,
       tokenFilter,
       first,
+      skip: deep ? 0 : skip,
       minUsd: options.minUsd,
     });
 

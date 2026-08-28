@@ -12,6 +12,7 @@ import {
   computeIntentHash,
   getConfirmStateCodec,
   policySnapshotId,
+  proposalExecutionIntentArgs,
   requireConfirmOrInput,
   resetConfirmCodecForTests,
   resetMrtrSecretForTests,
@@ -120,7 +121,7 @@ describe("resolveConfirm dual path", () => {
         message: "Kill?",
         args: { confirm: false, walletId: "aw_" + "ab".repeat(16) },
       }),
-    ).rejects.toThrow(/confirm=true/);
+    ).rejects.toThrow(/declined|confirm/i);
   });
 
   it("missing confirm + MRTR-capable ctx returns input_required shape", async () => {
@@ -174,6 +175,40 @@ describe("resolveConfirm dual path", () => {
     );
   });
 
+  it("explicit confirm=false declines even when MRTR ctx is present", async () => {
+    await expect(
+      resolveConfirm({
+        tool: "kill_switch",
+        message: "Kill?",
+        args: { confirm: false, walletId: "aw_" + "ab".repeat(16) },
+        ctx: modernCtx(),
+      }),
+    ).rejects.toThrow(/declined/i);
+  });
+
+  it("proposalExecutionIntentArgs changes when destination changes", () => {
+    const base = {
+      id: "prop_" + "ab".repeat(12),
+      walletId: "aw_" + "cd".repeat(16),
+      from: "0x1111111111111111111111111111111111111111",
+      to: "0x2222222222222222222222222222222222222222",
+      valueWei: "1",
+      data: "0x",
+    };
+    const honest = computeIntentHash(
+      "execute_agent_tx",
+      proposalExecutionIntentArgs(base),
+    );
+    const tampered = computeIntentHash(
+      "execute_agent_tx",
+      proposalExecutionIntentArgs({
+        ...base,
+        to: "0x3333333333333333333333333333333333333333",
+      }),
+    );
+    expect(honest).not.toBe(tampered);
+  });
+
   it("MRTR resume with inputResponses.confirm + echoed requestState proceeds", async () => {
     const tool = "execute_agent_tx";
     const args = { proposalId: "prop_" + "cd".repeat(12) };
@@ -200,6 +235,48 @@ describe("resolveConfirm dual path", () => {
     });
     expect(second.confirmed).toBe(true);
     if (second.confirmed) expect(second.via).toBe("mrtr");
+  });
+
+  it("confirm=true still binds echoed requestState intentHash", async () => {
+    const tool = "execute_agent_tx";
+    const args = {
+      proposalId: "prop_" + "cd".repeat(12),
+      ...proposalExecutionIntentArgs({
+        id: "prop_" + "cd".repeat(12),
+        walletId: "aw_" + "11".repeat(16),
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x2222222222222222222222222222222222222222",
+        valueWei: "1",
+        data: "0x",
+      }),
+    };
+    const first = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args,
+      ctx: modernCtx(),
+    });
+    expect(first.confirmed).toBe(false);
+    if (first.confirmed) throw new Error("expected challenge");
+    const requestState = first.inputRequired.requestState!;
+
+    await expect(
+      resolveConfirm({
+        tool,
+        message: "Execute?",
+        args: { ...args, confirm: true, valueWei: "999" },
+        ctx: modernCtx({ requestState }),
+      }),
+    ).rejects.toThrow(/intent/i);
+
+    const ok = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args: { ...args, confirm: true },
+      ctx: modernCtx({ requestState }),
+    });
+    expect(ok.confirmed).toBe(true);
+    if (ok.confirmed) expect(ok.via).toBe("arg");
   });
 
   it("MRTR resume rejects tampered requestState", async () => {

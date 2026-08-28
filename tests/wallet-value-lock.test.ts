@@ -756,6 +756,30 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
     );
   });
 
+  it("settleInterruptedBroadcast accepts expired+txHash (do not strand broadcasts)", async () => {
+    const cfg = testConfig();
+    mockRpcEoa();
+
+    const w = await createAgentWallet(cfg);
+    const proposal = await proposeAgentTx(cfg, {
+      walletId: w.id,
+      to: "0x0000000000000000000000000000000000000001",
+      valuePls: 1,
+      data: "0x",
+    });
+
+    const p = loadProposal(cfg.agentWalletDir, proposal.id) as TxProposal;
+    persistBroadcastBarrier(cfg.agentWalletDir, p, FAKE_HASH);
+    const stranded = loadProposal(cfg.agentWalletDir, proposal.id) as TxProposal;
+    stranded.status = "expired";
+    stranded.expiresAt = new Date(Date.now() - 60_000).toISOString();
+    saveProposal(cfg.agentWalletDir, stranded);
+
+    const settled = await settleInterruptedBroadcast(cfg, proposal.id, true);
+    expect(settled.status).toBe("executed");
+    expect(settled.txHash).toBe(FAKE_HASH);
+  });
+
   it("completePostBroadcastSettlement promotes broadcasting → executed with spend", async () => {
     const cfg = testConfig();
     mockRpcEoa();
