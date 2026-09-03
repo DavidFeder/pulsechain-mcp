@@ -8,12 +8,15 @@ export {
   decryptSecret,
   encryptPrivateKey,
   decryptPrivateKey,
+  encodePrivateKeyAad,
+  PRIVATE_KEY_AAD_VERSION,
   isRawHexKey,
   resolveAesKey,
   generateWalletId,
   generateProposalId,
   safeEqualHex,
 } from "./crypto.js";
+export type { PrivateKeyAadBinding } from "./crypto.js";
 
 export {
   evaluatePolicy,

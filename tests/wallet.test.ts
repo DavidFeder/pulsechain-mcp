@@ -1,14 +1,17 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import {
   decryptPrivateKey,
   decryptSecret,
+  encodePrivateKeyAad,
   encryptPrivateKey,
   encryptSecret,
+  generateWalletId,
   isRawHexKey,
+  PRIVATE_KEY_AAD_VERSION,
 } from "../src/wallet/crypto.js";
 import {
   evaluatePolicy,
@@ -27,7 +30,9 @@ import {
   executeAgentTx,
   getAgentWalletInfo,
   killSwitch,
+  proposeAgentTx,
   setAgentPolicy,
+  setTestBroadcast,
   transferPls,
 } from "../src/wallet/service.js";
 import { DEFAULT_POLICY, type AgentWalletRecord } from "../src/wallet/types.js";
@@ -35,6 +40,7 @@ import type { AppConfig } from "../src/types.js";
 import { neverReturnPrivateKey, stripSecrets } from "../src/utils/safety.js";
 import { PolicyError } from "../src/utils/errors.js";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import * as rpc from "../src/data/rpc.js";
 
 /** Matches 0x-prefixed 64-hex private key material (must not appear in responses). */
 const PRIVATE_KEY_HEX_RE = /0x[a-fA-F0-9]{64}/;
@@ -48,6 +54,8 @@ function tempWalletDir(): string {
 }
 
 afterEach(() => {
+  setTestBroadcast(null);
+  vi.restoreAllMocks();
   while (tempDirs.length) {
     const d = tempDirs.pop();
     if (d) rmSync(d, { recursive: true, force: true });
@@ -106,12 +114,94 @@ describe("wallet crypto", () => {
     expect(decryptSecret(blob, `0x${body}`)).toBe("roundtrip");
   });
 
-  it("encrypt/decrypt private key roundtrip", () => {
+  it("encrypt/decrypt private key roundtrip with AAD (aadVersion 1)", () => {
     const master = randomBytes(32).toString("hex");
     const pk = generatePrivateKey();
-    const blob = encryptPrivateKey(pk, master);
-    const out = decryptPrivateKey(blob, master);
+    const account = privateKeyToAccount(pk);
+    const binding = { walletId: generateWalletId(), address: account.address };
+    const blob = encryptPrivateKey(pk, master, binding);
+    expect(blob.alg).toBe("aes-256-gcm");
+    expect(blob.aadVersion).toBe(PRIVATE_KEY_AAD_VERSION);
+    expect(blob.aadVersion).toBe(1);
+    const out = decryptPrivateKey(blob, master, binding);
     expect(out.toLowerCase()).toBe(pk.toLowerCase());
+    // Checksum vs lowercase address must produce the same AAD bytes
+    const lower = {
+      walletId: binding.walletId,
+      address: account.address.toLowerCase(),
+    };
+    expect(decryptPrivateKey(blob, master, lower).toLowerCase()).toBe(
+      pk.toLowerCase(),
+    );
+    expect(encodePrivateKeyAad(binding.walletId, account.address)).toEqual(
+      Buffer.from(
+        `${binding.walletId}:${account.address.toLowerCase()}`,
+        "utf8",
+      ),
+    );
+  });
+
+  it("legacy private-key blob without aadVersion still decrypts (no setAAD)", () => {
+    const master = randomBytes(32).toString("hex");
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
+    const legacy = encryptSecret(pk, master);
+    expect(legacy.alg).toBe("aes-256-gcm");
+    expect(legacy.aadVersion).toBeUndefined();
+    expect("aadVersion" in legacy).toBe(false);
+    const out = decryptPrivateKey(legacy, master, {
+      walletId: "aw_" + "11".repeat(16),
+      address: account.address,
+    });
+    expect(out.toLowerCase()).toBe(pk.toLowerCase());
+  });
+
+  it("transplanted ciphertext fails closed under another wallet id/address", () => {
+    const master = randomBytes(32).toString("hex");
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
+    const bindingA = {
+      walletId: "aw_" + "aa".repeat(16),
+      address: account.address,
+    };
+    const blobA = encryptPrivateKey(pk, master, bindingA);
+    const bindingB = {
+      walletId: "aw_" + "bb".repeat(16),
+      address: "0x0000000000000000000000000000000000000001",
+    };
+    const wrongKey = () =>
+      decryptPrivateKey(blobA, randomBytes(32).toString("hex"), bindingA);
+    const transplanted = () => decryptPrivateKey(blobA, master, bindingB);
+    const unknownVersion = () =>
+      decryptPrivateKey(
+        { ...blobA, aadVersion: 99 as unknown as 1 },
+        master,
+        bindingA,
+      );
+    expect(wrongKey).toThrow(/decrypt|MASTER_KEY/i);
+    expect(transplanted).toThrow(/decrypt|MASTER_KEY/i);
+    expect(unknownVersion).toThrow(/decrypt|MASTER_KEY/i);
+    let wrongKeyMsg = "";
+    let transplantMsg = "";
+    let versionMsg = "";
+    try {
+      wrongKey();
+    } catch (err) {
+      wrongKeyMsg = err instanceof Error ? err.message : String(err);
+    }
+    try {
+      transplanted();
+    } catch (err) {
+      transplantMsg = err instanceof Error ? err.message : String(err);
+    }
+    try {
+      unknownVersion();
+    } catch (err) {
+      versionMsg = err instanceof Error ? err.message : String(err);
+    }
+    expect(transplantMsg).toBe(wrongKeyMsg);
+    expect(versionMsg).toBe(wrongKeyMsg);
+    expect(transplantMsg).not.toMatch(/aad|address|wallet id/i);
   });
 
   it("fails decrypt with wrong master key", () => {
@@ -331,12 +421,16 @@ describe("wallet store + create (no key leak)", () => {
     const record = loadWalletRecord(cfg.agentWalletDir, info.id);
     expect(record.encryptedKey.ciphertext).toBeTruthy();
     expect(record.encryptedKey.alg).toBe("aes-256-gcm");
+    expect(record.encryptedKey.aadVersion).toBe(1);
     const diskJson = readFileSync(
       join(cfg.agentWalletDir, `${info.id}.json`),
       "utf8",
     );
     // decrypted key must not appear on disk as plaintext 0x+64hex matching account
-    const pk = decryptPrivateKey(record.encryptedKey, cfg.agentWalletMasterKey!);
+    const pk = decryptPrivateKey(record.encryptedKey, cfg.agentWalletMasterKey!, {
+      walletId: record.id,
+      address: record.address,
+    });
     expect(privateKeyToAccount(pk).address.toLowerCase()).toBe(
       info.address.toLowerCase(),
     );
@@ -523,6 +617,7 @@ describe("wallet store + create (no key leak)", () => {
     const pk = decryptPrivateKey(
       record.encryptedKey,
       cfg.agentWalletMasterKey!,
+      { walletId: record.id, address: record.address },
     );
 
     const publicSurfaces = [
@@ -587,7 +682,10 @@ describe("wallet store + create (no key leak)", () => {
       id: "aw_" + "ab".repeat(16),
       address: account.address,
       createdAt: new Date().toISOString(),
-      encryptedKey: encryptPrivateKey(pk, master),
+      encryptedKey: encryptPrivateKey(pk, master, {
+        walletId: "aw_" + "ab".repeat(16),
+        address: account.address,
+      }),
       policy: DEFAULT_POLICY(1, 10),
       dailySpend: { date: "2020-01-01", spentPls: 0 },
       tokenDailySpend: {},
@@ -595,14 +693,111 @@ describe("wallet store + create (no key leak)", () => {
     saveWalletRecord(dir, record);
     const loaded = loadWalletRecord(dir, record.id);
     expect(loaded.address).toBe(record.address);
-    expect(decryptPrivateKey(loaded.encryptedKey, master).toLowerCase()).toBe(
-      pk.toLowerCase(),
-    );
+    expect(
+      decryptPrivateKey(loaded.encryptedKey, master, {
+        walletId: record.id,
+        address: record.address,
+      }).toLowerCase(),
+    ).toBe(pk.toLowerCase());
     appendAudit(dir, {
       ts: new Date().toISOString(),
       action: "create_wallet",
       walletId: record.id,
       ok: true,
     });
+  });
+
+  it("loadWalletRecord does not rewrite legacy blobs (decrypt-only)", () => {
+    const dir = tempWalletDir();
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
+    const master = randomBytes(32).toString("hex");
+    const id = "aw_" + "cd".repeat(16);
+    const legacyBlob = encryptSecret(pk, master);
+    expect(legacyBlob.aadVersion).toBeUndefined();
+    const record: AgentWalletRecord = {
+      id,
+      address: account.address,
+      createdAt: new Date().toISOString(),
+      encryptedKey: legacyBlob,
+      policy: DEFAULT_POLICY(1, 10),
+      dailySpend: { date: "2020-01-01", spentPls: 0 },
+      tokenDailySpend: {},
+    };
+    saveWalletRecord(dir, record);
+    const path = join(dir, `${id}.json`);
+    const before = readFileSync(path, "utf8");
+    expect(before).not.toMatch(/aadVersion/);
+    const loaded = loadWalletRecord(dir, id);
+    const after = readFileSync(path, "utf8");
+    expect(after).toBe(before);
+    expect(loaded.encryptedKey.aadVersion).toBeUndefined();
+    expect(
+      decryptPrivateKey(loaded.encryptedKey, master, {
+        walletId: id,
+        address: account.address,
+      }).toLowerCase(),
+    ).toBe(pk.toLowerCase());
+  });
+
+  it("create_agent_wallet ciphertext fails under another wallet's binding", async () => {
+    const cfg = testConfig();
+    const a = await createAgentWallet(cfg, { label: "donor" });
+    const b = await createAgentWallet(cfg, { label: "host" });
+    const recA = loadWalletRecord(cfg.agentWalletDir, a.id);
+    const recB = loadWalletRecord(cfg.agentWalletDir, b.id);
+    recB.encryptedKey = recA.encryptedKey;
+    saveWalletRecord(cfg.agentWalletDir, recB);
+    const transplanted = loadWalletRecord(cfg.agentWalletDir, b.id);
+    expect(() =>
+      decryptPrivateKey(transplanted.encryptedKey, cfg.agentWalletMasterKey!, {
+        walletId: transplanted.id,
+        address: transplanted.address,
+      }),
+    ).toThrow(/decrypt|MASTER_KEY/i);
+    // Original wallet still decrypts; address still matches
+    const pkA = decryptPrivateKey(recA.encryptedKey, cfg.agentWalletMasterKey!, {
+      walletId: recA.id,
+      address: recA.address,
+    });
+    expect(privateKeyToAccount(pkA).address.toLowerCase()).toBe(
+      a.address.toLowerCase(),
+    );
+  });
+
+  it("execute fails closed on transplanted ciphertext before broadcast", async () => {
+    vi.spyOn(rpc, "getPublicClient").mockReturnValue({
+      getBytecode: async () => undefined,
+    } as never);
+    vi.spyOn(rpc, "estimateGas").mockResolvedValue({ gasEstimate: "21000" });
+    vi.spyOn(rpc, "ethCall").mockResolvedValue({ data: "0x" });
+    vi.spyOn(rpc, "getFeeData").mockResolvedValue({
+      gasPriceWei: "100000000000000",
+      maxFeePerGas: "100000000000000",
+      maxPriorityFeePerGas: "1000000000",
+    });
+    let broadcasted = false;
+    setTestBroadcast(async () => {
+      broadcasted = true;
+      return `0x${"11".repeat(32)}`;
+    });
+    const cfg = testConfig();
+    const donor = await createAgentWallet(cfg);
+    const host = await createAgentWallet(cfg);
+    const recDonor = loadWalletRecord(cfg.agentWalletDir, donor.id);
+    const recHost = loadWalletRecord(cfg.agentWalletDir, host.id);
+    recHost.encryptedKey = recDonor.encryptedKey;
+    saveWalletRecord(cfg.agentWalletDir, recHost);
+
+    const proposal = await proposeAgentTx(cfg, {
+      walletId: host.id,
+      to: "0x0000000000000000000000000000000000000001",
+      valuePls: 1,
+      data: "0x",
+    });
+    await expect(executeAgentTx(cfg, proposal.id, true)).rejects.toThrow(
+      /decrypt|MASTER_KEY/i,
+    );
+    expect(broadcasted).toBe(false);
   });
 });

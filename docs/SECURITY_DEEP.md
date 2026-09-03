@@ -145,6 +145,7 @@ Implementation: `src/wallet/crypto.ts` (Node.js `crypto` only).
 | IV | 12 random bytes per encryption |
 | Key length | 32 bytes |
 | Master key forms | **64-char hex** (optional `0x`) → raw AES key (`kdf: raw-hex`); **any other string** → scrypt (`N=16384,r=8,p=1`) with per-blob salt (`kdf: scrypt`) |
+| Private-key AAD | New blobs set `aadVersion: 1` and GCM AAD = UTF-8 `` `${walletId}:${address.toLowerCase()}` ``. Legacy blobs omit `aadVersion` and decrypt with no AAD. Load does not rewrite on-disk wallets. |
 
 Encrypted blobs are stored under `AGENT_WALLET_DIR` as JSON wallet records (`encryptedKey` only — never plaintext private keys). File mode aims at `0o600` where the OS supports it.
 

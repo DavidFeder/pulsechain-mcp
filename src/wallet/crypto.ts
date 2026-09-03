@@ -5,6 +5,11 @@
  * Master key (AGENT_WALLET_MASTER_KEY):
  * - 64-char hex (32 bytes) → used directly as AES key (kdf: raw-hex)
  * - any other non-empty string → scrypt-derived with per-blob salt (kdf: scrypt)
+ *
+ * Private-key blobs (`encryptPrivateKey`):
+ * - New blobs set GCM AAD and record `aadVersion: 1` (see `encodePrivateKeyAad`).
+ * - Legacy blobs omit `aadVersion` and decrypt with no `setAAD`.
+ * - `alg` stays `aes-256-gcm` for both; unsupported `alg` still fails closed.
  */
 
 import {
@@ -24,6 +29,30 @@ const SCRYPT_N = 16384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SALT_LEN = 16;
+
+/** Private-key blobs that bind GCM AAD to wallet id + address. */
+export const PRIVATE_KEY_AAD_VERSION = 1 as const;
+
+/** Same ConfigError for bad key, bad tag, AAD mismatch, or unknown aadVersion. */
+const DECRYPT_FAIL_MESSAGE =
+  "Failed to decrypt wallet key — check AGENT_WALLET_MASTER_KEY";
+
+/** Wallet id + address used as AES-GCM AAD for private-key blobs. */
+export type PrivateKeyAadBinding = {
+  walletId: string;
+  address: string;
+};
+
+/**
+ * Canonical AES-GCM AAD bytes for private-key blobs with `aadVersion: 1`.
+ *
+ * Encoding: UTF-8 of `` `${walletId}:${address.toLowerCase()}` ``
+ * (wallet id as stored; address lowercased 0x hex). No extra separators,
+ * checksum, chain id, or trailing newline. Same bytes on encrypt and decrypt.
+ */
+export function encodePrivateKeyAad(walletId: string, address: string): Buffer {
+  return Buffer.from(`${walletId}:${address.toLowerCase()}`, "utf8");
+}
 
 function stripOptionalHexPrefix(masterKey: string): string {
   return masterKey.startsWith("0x") || masterKey.startsWith("0X")
@@ -75,10 +104,17 @@ export function resolveAesKey(
 }
 
 /** Encrypt plaintext (e.g. private key hex) with AES-256-GCM. */
-export function encryptSecret(plaintext: string, masterKey: string): EncryptedBlob {
+export function encryptSecret(
+  plaintext: string,
+  masterKey: string,
+  aad?: Uint8Array,
+): EncryptedBlob {
   const { key, kdf, salt } = resolveAesKey(masterKey);
   const iv = randomBytes(IV_LEN);
   const cipher = createCipheriv(ALG, key, iv);
+  if (aad) {
+    cipher.setAAD(Buffer.from(aad));
+  }
   const ciphertext = Buffer.concat([
     cipher.update(plaintext, "utf8"),
     cipher.final(),
@@ -98,8 +134,12 @@ export function encryptSecret(plaintext: string, masterKey: string): EncryptedBl
   return blob;
 }
 
-/** Decrypt an EncryptedBlob. Throws on auth failure / wrong key. */
-export function decryptSecret(blob: EncryptedBlob, masterKey: string): string {
+/** Decrypt an EncryptedBlob. Throws on auth failure / wrong key / AAD mismatch. */
+export function decryptSecret(
+  blob: EncryptedBlob,
+  masterKey: string,
+  aad?: Uint8Array,
+): string {
   if (blob.alg !== ALG) {
     throw new ConfigError(`Unsupported cipher: ${blob.alg}`);
   }
@@ -113,6 +153,9 @@ export function decryptSecret(blob: EncryptedBlob, masterKey: string): string {
       key,
       Buffer.from(blob.iv, "hex"),
     );
+    if (aad) {
+      decipher.setAAD(Buffer.from(aad));
+    }
     decipher.setAuthTag(Buffer.from(blob.tag, "hex"));
     const plain = Buffer.concat([
       decipher.update(Buffer.from(blob.ciphertext, "hex")),
@@ -120,9 +163,7 @@ export function decryptSecret(blob: EncryptedBlob, masterKey: string): string {
     ]);
     return plain.toString("utf8");
   } catch {
-    throw new ConfigError(
-      "Failed to decrypt wallet key — check AGENT_WALLET_MASTER_KEY",
-    );
+    throw new ConfigError(DECRYPT_FAIL_MESSAGE);
   } finally {
     key.fill(0);
   }
@@ -130,11 +171,12 @@ export function decryptSecret(blob: EncryptedBlob, masterKey: string): string {
 
 /**
  * Encrypt a private key for storage. Accepts 0x-prefixed or bare 64-hex.
- * Returns ciphertext blob only (never logs plaintext).
+ * Binds GCM AAD to wallet id + address (`aadVersion: 1`). Never logs plaintext.
  */
 export function encryptPrivateKey(
   privateKey: `0x${string}` | string,
   masterKey: string,
+  binding: PrivateKeyAadBinding,
 ): EncryptedBlob {
   const normalized = privateKey.startsWith("0x")
     ? privateKey
@@ -142,15 +184,34 @@ export function encryptPrivateKey(
   if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
     throw new ConfigError("Invalid private key format for encryption");
   }
-  return encryptSecret(normalized, masterKey);
+  const blob = encryptSecret(
+    normalized,
+    masterKey,
+    encodePrivateKeyAad(binding.walletId, binding.address),
+  );
+  blob.aadVersion = PRIVATE_KEY_AAD_VERSION;
+  return blob;
 }
 
-/** Decrypt to 0x-prefixed private key hex. Caller must not log or return this. */
+/**
+ * Decrypt to 0x-prefixed private key hex. Caller must not log or return this.
+ *
+ * `aadVersion: 1` requires the same wallet id + address AAD used at encrypt.
+ * Legacy blobs (no `aadVersion`) decrypt with no setAAD. Unknown versions and
+ * AAD / key / tag failures share `DECRYPT_FAIL_MESSAGE` (no plaintext).
+ */
 export function decryptPrivateKey(
   blob: EncryptedBlob,
   masterKey: string,
+  binding: PrivateKeyAadBinding,
 ): `0x${string}` {
-  const plain = decryptSecret(blob, masterKey);
+  let aad: Buffer | undefined;
+  if (blob.aadVersion === PRIVATE_KEY_AAD_VERSION) {
+    aad = encodePrivateKeyAad(binding.walletId, binding.address);
+  } else if (blob.aadVersion !== undefined) {
+    throw new ConfigError(DECRYPT_FAIL_MESSAGE);
+  }
+  const plain = decryptSecret(blob, masterKey, aad);
   if (!/^0x[a-fA-F0-9]{64}$/.test(plain)) {
     throw new ConfigError("Decrypted material is not a valid private key");
   }
