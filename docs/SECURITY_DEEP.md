@@ -69,7 +69,7 @@ After `npm run build`, restart the MCP host / refresh MCP so the process loads t
 |---------|-------|-----|
 | `AGENT_WALLET_ENABLED` | `true` (default) | Signing available on this process |
 | `AGENT_WALLET_DIR` | unique path (e.g. `./data/wallets`) | One process → one dir; never share across hosts |
-| `AGENT_WALLET_MULTIPROC_STRICT` | `true` recommended | Refuse writes on live foreign-owner conflict |
+| `AGENT_WALLET_MULTIPROC_STRICT` | `true` (wallets-on default) | Refuse writes on live foreign-owner conflict; explicit `false`/`0` is warn-only |
 | `AGENT_WALLET_MASTER_KEY` | 64-char hex preferred (or passphrase ≥16) | Offline-generated; password manager only |
 | `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` | **omit** (optional legacy parse only) | **Not product controls** — display-only if set; not hard gates; not template defaults |
 
@@ -339,22 +339,23 @@ Do **not** share `AGENT_WALLET_DIR` across multiple MCP processes (two Cursor pr
 
 **This is not a distributed lock and is not multi-writer-safe by architecture.** Process-local `withWalletLock` never serializes across processes. The ownership marker is a best-effort foot-gun detector (PID liveness via `kill(pid, 0)`; EPERM treated as alive; rare PID-reuse residual remains).
 
-From **v0.1.6**, when agent wallets are enabled the server writes a best-effort ownership marker (`.mcp-wallet-owner.json`) containing `pid`, random `ownerId`, `startedAt`, and optional `hostname`:
+From **v0.1.6**, when agent wallets are enabled the server writes a best-effort ownership marker (`.mcp-wallet-owner.json`) containing `pid`, random `ownerId`, `startedAt`, and optional `hostname`.
 
-| Situation | Default behavior (`AGENT_WALLET_MULTIPROC_STRICT` unset/false) |
-|-----------|----------|
+**Wallets-on default:** `AGENT_WALLET_MULTIPROC_STRICT` is **true** when the env is unset or empty. Research-only (`AGENT_WALLET_ENABLED=false`) keeps historic unset → false. Explicit `false` or `0` is warn-only opt-out. Strict still is **not** a distributed lock; shared `AGENT_WALLET_DIR` is still **not** multi-writer-safe.
+
+| Situation | Ownership marker |
+|-----------|------------------|
 | No marker / dead PID | This process claims the directory (reclaim after crash is normal) |
 | Marker is this process | Refresh; no multi-process risk (`riskLevel: "none"`) |
-| Marker PID still alive (other process) | **Loud stderr warning** (startup + each write attempt) + status `multiProcessRisk=true`, `riskLevel: "warn"`, `multiprocMode: "warn-only"` — **writes still allowed** so clean single-process use is not hard-blocked |
+| Marker PID still alive (other process) | `multiProcessRisk=true`. **Wallets-on default / `true` / `1`:** writes refused (`riskLevel: "blocked"`, `multiprocMode: "strict-fail-closed"`). **Explicit `false` / `0`:** loud warning, writes still allowed (`riskLevel: "warn"`, `multiprocMode: "warn-only"`) |
 
-#### Optional fail-closed mode (v0.1.13+)
+#### Fail-closed vs warn-only opt-out (v0.1.13+; wallets-on default strict)
 
-Set **`AGENT_WALLET_MULTIPROC_STRICT=true`** to refuse wallet **writes** when `multiProcessRisk` is true:
-
-| Env | On conflict with live foreign owner |
-|-----|-------------------------------------|
-| unset / `false` (default) | Warn only; writes allowed (each write logs multiproc risk) |
-| `true` / `1` | **Fail closed** — explicit `PolicyError` on write tools; status `riskLevel: "blocked"`, `writesBlockedByMultiproc=true`, `multiprocMode: "strict-fail-closed"` |
+| Env (wallets on) | On conflict with live foreign owner |
+|------------------|-------------------------------------|
+| unset / empty (**default**) | **Fail closed** — `PolicyError` on write tools; status `riskLevel: "blocked"`, `writesBlockedByMultiproc=true`, `multiprocMode: "strict-fail-closed"` |
+| `true` / `1` | Same fail-closed posture |
+| `false` / `0` | Warn only; writes allowed (each write logs multiproc risk). Opt-out, not the wallets-on default |
 
 **Write tools gated by multiproc strict** (`requireWritable` — same gate as wallet-enabled writes):
 
@@ -422,7 +423,7 @@ Keep these in mind when enabling wallets. None of these are “silent bugs” �
 
 | Limit | What it means in practice |
 |-------|---------------------------|
-| **Shared `AGENT_WALLET_DIR` is not multi-writer-safe** | Two MCP processes on one dir can double-broadcast, race daily caps, or last-write-wins policy/kill. Locks are **process-local only**. Use **one process → one unique dir**. Default multiproc is **warn-only** (risk is loud, **writes still allowed** — easy to miss). Optional `AGENT_WALLET_MULTIPROC_STRICT=true` refuses writes on live foreign owner — still **not** a distributed lock and still **not** multi-writer-safe if you keep sharing the dir. Status: `operatorAtAGlance`, `walletDirOwnership`, `security.multiprocModeMeanings`. |
+| **Shared `AGENT_WALLET_DIR` is not multi-writer-safe** | Two MCP processes on one dir can double-broadcast, race daily caps, or last-write-wins policy/kill. Locks are **process-local only**. Use **one process → one unique dir**. Wallets-on default is **strict** (unset/empty). Explicit `false`/`0` is **warn-only** (risk is loud, **writes still allowed** — easy to miss). Strict still **not** a distributed lock and still **not** multi-writer-safe if you keep sharing the dir. Status: `operatorAtAGlance`, `walletDirOwnership`, `security.multiprocModeMeanings`. |
 | **`confirm=true` is host UX only** | Any host/agent that can call tools with arbitrary args can pass confirm without a human. Confirm is **not** cryptographic operator intent. Operator-trust: funding authorizes — do not treat confirm or legacy caps as a security product. |
 | **No hard spend-policy backstop (v0.1.38+)** | Caps/allowlists/token-notional are not hard gates. Fund only what you accept losing; use kill_switch if needed. |
 | **Pre-barrier crash window** | After RPC accept, before `broadcasting`+`txHash` barrier, a crash can leave the proposal `pending`. Do **not** blindly re-execute — check the explorer. Not eliminable without chain/nonce recovery product work. |
@@ -461,10 +462,10 @@ Path: `{AGENT_WALLET_DIR}/audit.jsonl` (append-only JSON lines).
 
 Modern confirm elicitation seals `requestState` with an HMAC key from:
 
-1. **`AGENT_WALLET_MRTR_SECRET`** (≥32 bytes UTF-8) when set — **required for multi-process or multi-instance** deployments that resume confirmations across processes, or  
-2. A **process-local random secret** when unset — valid only for single-process round-trips (typical Claude Desktop / Cursor stdio).
+1. **`AGENT_WALLET_MRTR_SECRET`** (≥32 bytes UTF-8) — **required** when wallets are enabled **and** `HTTP_TRANSPORT_PORT` is set (`loadConfig` fails closed). Also needed to resume confirmations across processes/instances, or  
+2. A **process-local random secret** when unset — **stdio wallets-on only** (typical Claude Desktop / Cursor). Restarts and a second instance cannot resume MRTR.
 
-Do **not** reuse `AGENT_WALLET_MASTER_KEY` as the MRTR secret. If you set `HTTP_TRANSPORT_PORT` and run more than one server instance (or restart mid-elicitation), set a stable `AGENT_WALLET_MRTR_SECRET` or confirmations will fail integrity checks after restart / on another instance.
+Do **not** reuse `AGENT_WALLET_MASTER_KEY` as the MRTR secret. Research-only + HTTP does not require the secret. A secret that is set but shorter than 32 bytes UTF-8 still fails at startup.
 
 ---
 
@@ -475,11 +476,11 @@ Do **not** reuse `AGENT_WALLET_MASTER_KEY` as the MRTR secret. If you set `HTTP_
 3. Generate a strong master key offline (64-char hex preferred, or passphrase ≥16 chars); store in a password manager / OS secret store — **not** in chat history.
 4. **Operator-trust:** funding the agent is authorization. Do not treat `MAX_PLS_*` / allowlists as hard safety gates (legacy fields may still appear in config).
 5. Fund agent EOAs with **value + PulseChain gas headroom** (**after** create + address verify) — transfers often cost tens of PLS gas; swaps ~250+.
-6. Use a **unique `AGENT_WALLET_DIR` per MCP process** — multi-process sharing is warned by default; set `AGENT_WALLET_MULTIPROC_STRICT=true` to refuse writes on live foreign-owner conflict (still not a distributed lock).
+6. Use a **unique `AGENT_WALLET_DIR` per MCP process** — wallets-on default is `AGENT_WALLET_MULTIPROC_STRICT=true` (explicit `false`/`0` stays warn-only); unique dirs remain required (still not a distributed lock).
 7. Prefer **`inspect_tx_intent` → `propose_agent_tx` → read `reviewSummary` / `safetyHints` (value vs gas) → `execute_agent_tx`**.
 8. On incident: `kill_switch` immediately (`confirm=true`).
 9. Never paste private keys or master keys into the LLM.
-10. Set `AGENT_WALLET_MRTR_SECRET` if using multi-process HTTP or long-lived multi-instance confirm flows.
+10. Set `AGENT_WALLET_MRTR_SECRET` when using HTTP with wallets on (required at startup) or long-lived multi-instance confirm flows. Stdio may omit it (process-local HMAC).
 11. Remember: `confirm=true` / MRTR is **host UX only** — this is not a custody-policy product.
 
 ---

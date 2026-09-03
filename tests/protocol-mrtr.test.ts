@@ -15,6 +15,7 @@ import {
   clientSupportsMrtr,
   computeIntentHash,
   getConfirmStateCodec,
+  getMrtrHmacSecret,
   policySnapshotId,
   proposalExecutionIntentArgs,
   assertSameExecutionIntent,
@@ -27,7 +28,8 @@ import {
   type ConfirmHandlerContext,
   type ConfirmRequestState,
 } from "../src/utils/confirm.js";
-import { PolicyError } from "../src/utils/errors.js";
+import { PolicyError, ConfigError } from "../src/utils/errors.js";
+import { loadConfig } from "../src/config.js";
 import { stripSecrets } from "../src/utils/safety.js";
 import { isInputRequiredResult as defineGuard } from "@modelcontextprotocol/server";
 import { DEFAULT_POLICY } from "../src/wallet/types.js";
@@ -939,5 +941,56 @@ describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
     const text = toolErrorText(first);
     expect(text).toMatch(/policy snapshot|Wallet not found/i);
     expect(text).not.toMatch(/"policySnapshotId":\s*"none"/);
+  });
+});
+
+describe("MRTR secret: stdio fallback vs HTTP wallets-on require", () => {
+  const TEST_MASTER_KEY = "a".repeat(64);
+  const TEST_MRTR = "s".repeat(32);
+
+  it("getMrtrHmacSecret falls back to a process-local secret when env is unset", () => {
+    delete process.env.AGENT_WALLET_MRTR_SECRET;
+    resetMrtrSecretForTests();
+    const a = getMrtrHmacSecret();
+    const b = getMrtrHmacSecret();
+    expect(a.length).toBeGreaterThanOrEqual(32);
+    expect(a).toBe(b);
+  });
+
+  it("wallets + HTTP without MRTR secret fail closed at loadConfig", () => {
+    expect(() =>
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        HTTP_TRANSPORT_PORT: "8787",
+      }),
+    ).toThrow(ConfigError);
+    expect(() =>
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        HTTP_TRANSPORT_PORT: "8787",
+      }),
+    ).toThrow(/AGENT_WALLET_MRTR_SECRET/);
+  });
+
+  it("wallets + HTTP with MRTR ≥32 bytes load; stdio wallets-on without MRTR load", () => {
+    const http = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      HTTP_TRANSPORT_PORT: "8787",
+      AGENT_WALLET_MRTR_SECRET: TEST_MRTR,
+    });
+    expect(http.httpTransportPort).toBe(8787);
+    const stdio = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+    });
+    expect(stdio.httpTransportPort).toBeUndefined();
+    const researchHttp = loadConfig({
+      AGENT_WALLET_ENABLED: "false",
+      HTTP_TRANSPORT_PORT: "8787",
+    });
+    expect(researchHttp.httpTransportPort).toBe(8787);
   });
 });

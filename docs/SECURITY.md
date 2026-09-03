@@ -40,7 +40,7 @@ If something looks wrong: call **`kill_switch`** / `revoke` with `confirm=true` 
 
 ## Multiproc (one line)
 
-**One MCP process → one unique `AGENT_WALLET_DIR`.** Do not share the dir across hosts. Optional `AGENT_WALLET_MULTIPROC_STRICT=true` refuses writes on live foreign-owner conflict (still not a distributed lock).
+**One MCP process → one unique `AGENT_WALLET_DIR`.** Do not share the dir across hosts. Wallets-on default is `AGENT_WALLET_MULTIPROC_STRICT=true` (unset/empty). Explicit `false` or `0` is warn-only opt-out. Strict is not a distributed lock; shared dir is still not multi-writer-safe.
 
 ## Keys never in chat
 

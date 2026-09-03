@@ -164,7 +164,7 @@ async function main(): Promise<void> {
           "recommended model: one process → one unique AGENT_WALLET_DIR. " +
           (config.agentWalletMultiprocStrict
             ? "AGENT_WALLET_MULTIPROC_STRICT=true: wallet writes will be refused until conflict clears."
-            : "Writes still allowed (warn-only). Set AGENT_WALLET_MULTIPROC_STRICT=true to fail closed."),
+            : "Writes still allowed (explicit warn-only opt-out). Wallets-on default is STRICT=true; this process set false/0."),
         {
           walletDir: config.agentWalletDir,
           foreignPid: ownership.owner.pid,

@@ -466,6 +466,9 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
     expect(String(st.security.multiprocModeMeanings)).toMatch(
       /warn-only|strict|distributed lock/i,
     );
+    expect(
+      (st.security as { multiprocStrictDefault?: boolean }).multiprocStrictDefault,
+    ).toBe(true);
     expect(st.security.confirmHostStrengthOnly).toBe(true);
     expect(String(st.security.confirmRequired)).toMatch(/host UX|confirm/i);
     // operatorAtAGlance must make shared-dir / not-distributed-lock hard to miss

@@ -96,6 +96,37 @@ describe("optional agent wallet path (shipped service)", () => {
     expect(cfg.maxPlsDaily).toBe(LEGACY_MAX_PLS_DAILY);
   });
 
+  it("wallets-on MULTIPROC unset/empty defaults true; explicit false stays warn-only", () => {
+    const dir = tempWalletDir();
+    const master = randomBytes(32).toString("hex");
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: master,
+        AGENT_WALLET_DIR: dir,
+        LOG_LEVEL: "error",
+      }).agentWalletMultiprocStrict,
+    ).toBe(true);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: master,
+        AGENT_WALLET_DIR: dir,
+        AGENT_WALLET_MULTIPROC_STRICT: "",
+        LOG_LEVEL: "error",
+      }).agentWalletMultiprocStrict,
+    ).toBe(true);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: master,
+        AGENT_WALLET_DIR: dir,
+        AGENT_WALLET_MULTIPROC_STRICT: "false",
+        LOG_LEVEL: "error",
+      }).agentWalletMultiprocStrict,
+    ).toBe(false);
+  });
+
   it("default env posture keeps wallets off (write refuse)", async () => {
     const cfg = loadConfig({
       AGENT_WALLET_ENABLED: "false",

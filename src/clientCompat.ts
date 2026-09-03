@@ -27,12 +27,12 @@ export function formatFatalStartupHint(options?: {
     "Fix environment variables (see .env.example and examples/README.md).",
     "Common issues: missing npm run build (dist/index.js), non-absolute args path,",
     "invalid PULSECHAIN_RPC_URLS, wallets on without/short MASTER_KEY,",
-    "MAX_PLS_PER_TX > MAX_PLS_DAILY, short AGENT_WALLET_MRTR_SECRET, bad LOG_LEVEL.",
+    "MAX_PLS_PER_TX > MAX_PLS_DAILY, missing/short AGENT_WALLET_MRTR_SECRET (required for wallets+HTTP), bad LOG_LEVEL.",
     "Cursor / Grok Build / Claude Desktop use stdio — do not set HTTP_TRANSPORT_PORT.",
     "Agent install default: research-only (AGENT_WALLET_ENABLED=false). For signing:",
     "scripts/start-wallet-mcp.mjs + gitignored .env.wallet (generate-wallet-env.mjs write-only).",
     "Never put AGENT_WALLET_MASTER_KEY in host config or chat.",
-    "With wallets on: unique AGENT_WALLET_DIR per process; optional MULTIPROC_STRICT=true; " +
+    "With wallets on: unique AGENT_WALLET_DIR per process; MULTIPROC_STRICT defaults true (explicit false stays warn-only); " +
       "then agent_wallet_status → create → fund → inspect/propose/review/execute.",
   ];
   if (options?.mentionHttpPort === false) {

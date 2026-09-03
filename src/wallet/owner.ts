@@ -117,9 +117,9 @@ export function buildWalletDirOwnershipStatusView(
       recommendedAction:
         "When enabling wallets: one MCP process → one unique AGENT_WALLET_DIR " +
         "(shared dir is NOT multi-writer-safe; locks are process-local only — not a distributed lock). " +
-        "Default multiproc is warn-only (writes still allowed on conflict — easy to miss). " +
-        "Set AGENT_WALLET_MULTIPROC_STRICT=true to refuse writes if a live foreign owner is detected " +
-        "(still not multi-writer-safe if you keep sharing the dir).",
+        "Wallets-on default is AGENT_WALLET_MULTIPROC_STRICT=true (unset/empty). " +
+        "Explicit false or 0 stays warn-only (writes still allowed on conflict — easy to miss). " +
+        "Strict is still not multi-writer-safe if you keep sharing the dir.",
     };
   }
 
@@ -145,9 +145,9 @@ export function buildWalletDirOwnershipStatusView(
       "(foreign pid=" +
       ownership.owner.pid +
       "). " +
-      "Writes are STILL ALLOWED under default multiproc — double-spend / race risk is real. " +
-      "Use a unique dir per process now. Set AGENT_WALLET_MULTIPROC_STRICT=true to refuse writes on conflict " +
-      "(strict is still not a distributed lock).";
+      "Writes are STILL ALLOWED under explicit warn-only (AGENT_WALLET_MULTIPROC_STRICT=false or 0) — " +
+      "double-spend / race risk is real. Use a unique dir per process now. " +
+      "Wallets-on default is STRICT=true; this process opted out (strict is still not a distributed lock).";
   } else {
     recommendedAction =
       "OK: this process owns AGENT_WALLET_DIR. Keep one process per unique directory. " +
@@ -302,8 +302,9 @@ export function claimWalletDirOwnership(dir: string): OwnershipResult {
       `Wallet execute/kill/policy locks are process-local only — concurrent writers ` +
       `can double-broadcast, race daily caps, or undo kill/policy. ` +
       `Recommended model: one MCP process → one unique AGENT_WALLET_DIR. ` +
-      `Set AGENT_WALLET_MULTIPROC_STRICT=true to refuse writes on conflict. ` +
-      `See docs/SECURITY.md (multi-process). This is NOT a distributed lock.`;
+      `Wallets-on default is AGENT_WALLET_MULTIPROC_STRICT=true (writes refused on conflict). ` +
+      `Explicit false or 0 is warn-only. See docs/SECURITY.md (multi-process). ` +
+      `This is NOT a distributed lock.`;
     return {
       owner: existing,
       status: "conflict",

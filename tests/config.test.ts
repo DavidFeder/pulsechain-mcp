@@ -72,6 +72,7 @@ describe("loadConfig", () => {
     expect(cfg.pulseXSubgraphV2).toBe(DEFAULT_PULSEX_SUBGRAPH_V2);
     expect(cfg.httpTimeoutMs).toBe(DEFAULT_HTTP_TIMEOUT_MS);
     expect(cfg.httpTransportPort).toBeUndefined();
+    expect(cfg.agentWalletMultiprocStrict).toBe(true);
   });
 
   it("disables wallets without master key when AGENT_WALLET_ENABLED=false", () => {
@@ -281,14 +282,40 @@ describe("loadConfig", () => {
     expect(cfg.agentWalletDir).toBe("./data/wallets");
   });
 
-  it("AGENT_WALLET_MULTIPROC_STRICT defaults false and parses true", () => {
+  it("AGENT_WALLET_MULTIPROC_STRICT: wallets-on unset/empty → true; explicit false/0 → false; research-only unset → false", () => {
     expect(
       loadConfig({ AGENT_WALLET_ENABLED: "false" }).agentWalletMultiprocStrict,
     ).toBe(false);
     expect(
       loadConfig({
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      }).agentWalletMultiprocStrict,
+    ).toBe(true);
+    expect(
+      loadConfig({
         AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: "c".repeat(64),
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_MULTIPROC_STRICT: "",
+      }).agentWalletMultiprocStrict,
+    ).toBe(true);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_MULTIPROC_STRICT: "false",
+      }).agentWalletMultiprocStrict,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_MULTIPROC_STRICT: "0",
+      }).agentWalletMultiprocStrict,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
         AGENT_WALLET_MULTIPROC_STRICT: "true",
       }).agentWalletMultiprocStrict,
     ).toBe(true);
@@ -298,6 +325,55 @@ describe("loadConfig", () => {
         AGENT_WALLET_MULTIPROC_STRICT: "1",
       }).agentWalletMultiprocStrict,
     ).toBe(true);
+  });
+
+  it("wallets + HTTP require AGENT_WALLET_MRTR_SECRET; stdio and research-only HTTP do not", () => {
+    const secret = "m".repeat(32);
+    let httpMsg = "";
+    try {
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        HTTP_TRANSPORT_PORT: "3100",
+      });
+    } catch (e) {
+      expect(e).toBeInstanceOf(ConfigError);
+      httpMsg = e instanceof Error ? e.message : String(e);
+    }
+    expect(httpMsg).toMatch(/AGENT_WALLET_MRTR_SECRET/);
+    expect(httpMsg).toMatch(/HTTP_TRANSPORT_PORT|HTTP/);
+    expect(httpMsg).toMatch(/32 bytes|≥32|at least 32/i);
+    expect(httpMsg).toMatch(/Do not reuse AGENT_WALLET_MASTER_KEY/i);
+
+    const walletsHttp = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      HTTP_TRANSPORT_PORT: "3100",
+      AGENT_WALLET_MRTR_SECRET: secret,
+    });
+    expect(walletsHttp.httpTransportPort).toBe(3100);
+    expect(walletsHttp.agentWalletEnabled).toBe(true);
+
+    const walletsStdio = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+    });
+    expect(walletsStdio.httpTransportPort).toBeUndefined();
+    expect(walletsStdio.agentWalletEnabled).toBe(true);
+
+    const walletsEmptyHttp = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      HTTP_TRANSPORT_PORT: "",
+    });
+    expect(walletsEmptyHttp.httpTransportPort).toBeUndefined();
+
+    const researchHttp = loadConfig({
+      AGENT_WALLET_ENABLED: "false",
+      HTTP_TRANSPORT_PORT: "3100",
+    });
+    expect(researchHttp.httpTransportPort).toBe(3100);
+    expect(researchHttp.agentWalletEnabled).toBe(false);
   });
 });
 

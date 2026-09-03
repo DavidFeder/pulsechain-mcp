@@ -90,7 +90,8 @@ let processMrtrSecret: string | undefined;
 /**
  * HMAC secret for MRTR requestState.
  * Prefer AGENT_WALLET_MRTR_SECRET; never reuse wallet master key as ciphertext key.
- * Falls back to a process-local random secret (valid for single-process round-trips).
+ * Falls back to a process-local random secret (valid for single-process stdio round-trips).
+ * loadConfig requires AGENT_WALLET_MRTR_SECRET when wallets are on and HTTP_TRANSPORT_PORT is set.
  */
 export function getMrtrHmacSecret(): string {
   const fromEnv = process.env.AGENT_WALLET_MRTR_SECRET?.trim();

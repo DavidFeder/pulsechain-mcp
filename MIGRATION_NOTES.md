@@ -62,7 +62,7 @@ Write wallet tools still require confirmation. Dual path:
 
 Implementation: `src/utils/confirm.ts` (`resolveConfirm` / `requireConfirmOrInput`). `requestState` never contains private keys, master keys, or ciphertext. Service layer still re-checks policy and simulation before sign/broadcast.
 
-Optional env: `AGENT_WALLET_MRTR_SECRET` (≥32-byte UTF-8 HMAC secret for `requestState`). If unset, a process-local random secret is used (fine for single-process stdio).
+Optional env: `AGENT_WALLET_MRTR_SECRET` (≥32-byte UTF-8 HMAC secret for `requestState`). Stdio wallets-on may omit it (process-local random secret). Wallets + `HTTP_TRANSPORT_PORT` require the secret at startup. Do not reuse `AGENT_WALLET_MASTER_KEY`.
 
 ### Tool surface
 

@@ -51,7 +51,8 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `AGENT_WALLET_ENABLED` | **`true`** | Product default; set `false` for research-only |
 | `AGENT_WALLET_MASTER_KEY` | empty | **Required** when wallets on (including default) |
 | `AGENT_WALLET_DIR` | `./data/wallets` | One process → one unique dir |
-| `AGENT_WALLET_MULTIPROC_STRICT` | `false` | `true` refuse writes on foreign owner |
+| `AGENT_WALLET_MULTIPROC_STRICT` | wallets-on: `true` if unset/empty; research-only unset: `false` | `false`/`0` warn-only opt-out; `true`/`1` refuse writes on foreign owner. Not a distributed lock |
+| `AGENT_WALLET_MRTR_SECRET` | process-local HMAC (stdio) | **Required** (≥32 bytes UTF-8) when wallets on **and** `HTTP_TRANSPORT_PORT` is set. Do not reuse `AGENT_WALLET_MASTER_KEY` |
 | `MAX_PLS_*` | **omit** | Not shipped in templates; optional legacy display only — **not** hard gates or product safety |
 | `SWITCH_API_KEY` | empty | Operator-gated Switch only |
 | `HTTP_TRANSPORT_PORT` | empty | If set: HTTP-only (breaks stdio hosts) |
@@ -120,4 +121,4 @@ docker run --rm -it -e AGENT_WALLET_ENABLED=false pulsechain-mcp:1.0.5
 
 ## Optional Streamable HTTP (local only)
 
-Set `HTTP_TRANSPORT_PORT` only when **not** using stdio agent hosts. Serves `/mcp` + `GET /health` on `127.0.0.1`.
+Set `HTTP_TRANSPORT_PORT` only when **not** using stdio agent hosts. Serves `/mcp` + `GET /health` on `127.0.0.1`. Wallets-on HTTP requires `AGENT_WALLET_MRTR_SECRET` (≥32 bytes UTF-8); stdio may omit it (process-local HMAC). Do not reuse `AGENT_WALLET_MASTER_KEY`. Shared `AGENT_WALLET_DIR` is still not multi-writer-safe.

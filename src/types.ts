@@ -32,7 +32,9 @@ export interface AppConfig {
   agentWalletDir: string;
   /**
    * When true, wallet write/sign paths refuse if AGENT_WALLET_DIR appears shared
-   * with another live process (multiProcessRisk). Default false = warn only.
+   * with another live process (multiProcessRisk). Wallets-on default (env
+   * unset/empty) is true. Explicit false/0 is warn-only opt-out. Research-only
+   * unset stays false. Not a distributed lock.
    */
   agentWalletMultiprocStrict: boolean;
   maxPlsPerTx: number;
