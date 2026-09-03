@@ -161,11 +161,11 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(out).not.toMatch(/(^|\/)\.env\.wallet(\s|$)/);
   }, 30_000);
 
-  it("version surfaces are 1.0.5", () => {
+  it("version surfaces are 1.0.6", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
-    expect(pkg.version).toBe("1.0.5");
-    expect(SERVER_VERSION).toBe("1.0.5");
-    expect(read("docker-compose.yml")).toMatch(/pulsechain-mcp:1\.0\.5/);
+    expect(pkg.version).toBe("1.0.6");
+    expect(SERVER_VERSION).toBe("1.0.6");
+    expect(read("docker-compose.yml")).toMatch(/pulsechain-mcp:1\.0\.6/);
   });
 });
 

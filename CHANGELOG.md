@@ -7,38 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-03
+
+**Agent-surface, correctness, reliability, and packaging patch** on the 1.0.5 tree (PRs #3–#16). Operator-trust wallet model, dual-era MCP (`2026-07-28` + `2025-11-25`), and research-first agent install are unchanged. Version surfaces **1.0.6**. Tool counts stay **96** (wallets-on) / **87** (research-only).
+
+### Highlights
+
+| Area | Change |
+|------|--------|
+| **Agent / MCP** | Tool `annotations`; research-only omits write tools from `tools/list`; `outputSchema` on health and wallet tools |
+| **Correctness** | Configured chainId (369/943) everywhere it is reported; sealed proposal `chainId`; real `policySnapshotId` on execute/settle/`sign_and_send`; machine-readable `incomplete` / `truncated` |
+| **Reliability** | Explorer/subgraph HTTP 429 retry with capped Retry-After; CI ESLint + Node 20/22 + targeted coverage + docker build |
+| **Wallet** | AES-GCM AAD binds wallet id + address; wallets-on `MULTIPROC_STRICT` defaults true; HTTP + wallets require MRTR secret; opt-in `AGENT_WALLET_ENFORCE_LEGACY_CAPS` |
+| **Packaging** | npm pack includes `docs/` + `examples/`; unused production helpers and barrel re-exports removed |
+
 ### Added
 
-- npm pack includes `docs/` (BOOTSTRAP and the rest of the agent/operator set) and `examples/` so README/BOOTSTRAP links are not dead in a published tarball. `bin` stays `dist/index.js`. Secrets, `data/wallets`, coverage, and `node_modules` stay out of the package
-- Opt-in `AGENT_WALLET_ENFORCE_LEGACY_CAPS` (`true`/`1`) makes stored legacy wallet fields hard denies in `evaluatePolicy` (native `maxPlsPerTx`/`maxPlsDaily`, allowlists/`allowlistExpiresAt`, `tokenSpendCaps`/`tokenDailyCaps`, `erc20NotionalCaps` when decode is reliable, `requireDecodableCalldata`, `allowNativeTransfers`). Unset/`false`/`0`/empty keeps operator-trust (display-only; existing over-cap tests still `allowed=true`). Product default is unchanged — not a custody-policy product. Status, `agent_wallet_check_policy`, and `reviewSummary` say whether this process is enforcing or display-only
-- AES-256-GCM private-key blobs bind wallet id + address as AAD (`aadVersion: 1`; UTF-8 `${walletId}:${address.toLowerCase()}`). Transplanted ciphertext fails closed at decrypt (same `ConfigError` as a bad master key). Legacy blobs with no `aadVersion` still decrypt with no AAD; existing wallet files are not rewritten on load
-- CI hygiene: ESLint 10 flat config (`eslint.config.js`) with typescript-eslint recommended and `npm run lint`; GitHub Actions matrix Node 20 and 22 for typecheck + test (lint once on Node 20); targeted Vitest v8 coverage on `src/wallet/**`, `src/utils/confirm.ts`, and `src/tools/analytics/helpers.ts` with a modest floor of 80% statements/lines, 75% branches, 90% functions; optional `docker build -t pulsechain-mcp:ci .` job (packaging still gated by `tests/docker-packaging.test.ts`)
-- Swap and explorer pages expose machine-readable incompleteness: `get_wallet_swaps` / `get_recent_swaps` set `incomplete` plus a `coverage` object on deep or pair-capped subgraph pages; `blockscout_event_logs` / `pulsechain_get_logs` and PHIAT Transfer `getLogs` set `truncated` plus a `window` when the row cap is hit (not full history)
-- Health and wallet tools declare MCP `outputSchema` for the existing ToolResult envelope (`ok` / `data?` / `error?` / `code?` / `warnings?`); analytics and chain tools stay unset. Health `data` matches `HealthStatus` / RPC health fields (including optional `networkMismatch`). Wallet `data` is a conservative object passthrough with no privateKey/mnemonic/ciphertext fields. SDK v2 already skips output validation for MRTR `InputRequiredResult` and `isError: true`.
+- MCP `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on tool registrations; unsigned prepare tools stay read-only
+- Health and wallet tools declare `outputSchema` for the existing ToolResult envelope; analytics and chain tools stay unset
+- Swap/explorer pages set `incomplete`/`coverage` or `truncated`/`window` when a row cap is hit
+- Opt-in `AGENT_WALLET_ENFORCE_LEGACY_CAPS` (`true`/`1`) hard-denies stored `maxPls*` / allowlists / token caps / `requireDecodableCalldata` / `allowNativeTransfers` on this process. Unset keeps operator-trust (display-only)
+- AES-256-GCM private-key blobs bind `walletId` + address as AAD (`aadVersion: 1`). Legacy blobs still decrypt with no AAD; existing files are not rewritten
+- npm pack ships `docs/` and `examples/` (`bin` stays `dist/index.js`)
+- CI: ESLint 10 flat config, Node 20/22 test matrix, targeted coverage floors, docker image build job
 
 ### Changed
 
-- Legacy `pulsechain_*` chain scaffold tools stay registered (behavior unchanged) but descriptions lead with `DEPRECATED:` and point at canonical replacements (`get_*`, `pulsechain_health`, `blockscout_event_logs`); agents should prefer those names
-- Research-only mode (`AGENT_WALLET_ENABLED=false`) omits write/signing tools from `tools/list`; wallet reads still register; wallets-on still advertises the full 96-tool surface
-- MCP tool registrations include SDK `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) derived from the existing `write` flag; unsigned prepare tools stay read-only
-- Write-tool warning mentions `confirm=true` and modern MRTR `InputRequiredResult` elicitation (host UX only, not a cryptographic lock)
-- `createServer` instructions branch on `agentWalletEnabled` (research-only vs operator-trust wallets)
-- Wallets-on `AGENT_WALLET_MULTIPROC_STRICT` defaults to `true` when the env is unset or empty (`false`/`0` stays warn-only opt-out; research-only unset stays `false`). Wallets + `HTTP_TRANSPORT_PORT` require `AGENT_WALLET_MRTR_SECRET` (≥32 bytes UTF-8); stdio still allows the process-local HMAC fallback. Shared `AGENT_WALLET_DIR` is still not multi-writer-safe
-- `registerTool` callback is typed as SDK `AnyToolHandler<typeof schema>` instead of `as never`
-
-### Removed
-
-- Production-dead `assertWriteAllowed` (only tests called it). Wallet writes still use register-time `AGENT_WALLET_ENABLED` gating plus confirm/MRTR. `stripSecrets` and `WRITE_TOOL_WARNING` stay
-- Unused explorer helpers with no `src/` or `tests/` callers: `getBlockReward`, `getEthSupply`, `getAccountBalance`, `getTransactionStatus`, `getTransactionReceiptStatus`. Live backends such as `getAccountInternalTxs` stay
-- Unused DexScreener `buildDexScreenerBoostsTopUrl` and unused DefiLlama `buildDefiLlamaHistoricalChainTvlUrl`. Live backends such as `getDexScreenerProfilesLatest` stay
-- Unused explorer / DexScreener / DefiLlama barrel re-exports from `src/data/index.ts` (internal-only URL builders, `enrichTokenSide`, `defillamaGetJson`, `DEFAULT_GETLOGS_OFFSET`, and unused type re-exports)
+- Research-only (`AGENT_WALLET_ENABLED=false`) omits write/signing tools from `tools/list`; wallets-on still advertises 96 tools
+- Legacy `pulsechain_*` chain tools stay registered but descriptions lead with `DEPRECATED:`
+- Wallets-on `AGENT_WALLET_MULTIPROC_STRICT` defaults to `true` when unset/empty (`false`/`0` warn-only opt-out; research-only unset stays `false`)
+- Wallets + `HTTP_TRANSPORT_PORT` require `AGENT_WALLET_MRTR_SECRET` (≥32 bytes UTF-8); stdio may use process-local HMAC
+- `createServer` instructions branch on `agentWalletEnabled`; write-tool warning mentions `confirm=true` and MRTR elicitation (host UX only)
 
 ### Fixed
 
-- Explorer GET (`explorerGet`, `explorerV2Get`) and PulseX subgraph GraphQL query POSTs retry HTTP 429 up to 2 times (3 attempts), honoring `Retry-After` (delta-seconds or HTTP-date) with a 2s sleep cap; timeouts still map to `TimeoutError`. Piteas 10/min limiter and DexScreener spacing are unchanged
-- `execute_agent_tx`, `sign_and_send`, and `settle_interrupted_broadcast` pass a real `policySnapshotId` (same `snapshotForWallet` helper as other wallet writes) so an MRTR confirm challenge re-prompts if kill, disable, or other policy JSON changes between challenge and resume; a missing wallet record fails closed instead of snapshot `"none"`
-- Persist `chainId` and `network` on `TxProposal` at propose time; refuse execute (and `transfer_pls`) when the sealed chain is missing or does not match live config, and bind chain in confirm intent so MRTR cannot reuse a proposal after a mainnet ↔ testnet env flip
-- Report the configured PulseChain id (369 mainnet / 943 testnet) on chain tools, unsigned prepare payloads, health, and `pulsechain://chain/config` instead of always stamping 369; testnet with default mainnet explorer/subgraph surfaces `networkMismatch`; Piteas/Switch/PulseSwap quotes stay on aggregator chain 369 and warn when the server is on testnet
+- Chain tools, unsigned prepare payloads, health, and `pulsechain://chain/config` report the configured id (369/943) instead of always 369; testnet with default mainnet explorer/subgraph surfaces `networkMismatch`
+- `TxProposal` seals `chainId`/`network` at propose time; execute/`transfer_pls` refuse a missing or mismatched sealed chain
+- `execute_agent_tx`, `sign_and_send`, and `settle_interrupted_broadcast` pass a real `policySnapshotId` (missing wallet fails closed)
+- Explorer GET and PulseX subgraph POSTs retry HTTP 429 up to 2 times, honoring capped Retry-After
+
+### Removed
+
+- Production-dead `assertWriteAllowed` (writes still gated at register time plus confirm/MRTR)
+- Unused explorer / DexScreener / DefiLlama helpers and barrel re-exports with no production callers
+
+### Unchanged
+
+- Operator-trust: **funding authorizes**; product default `AGENT_WALLET_ENABLED` unset → true (test-locked)
+- Dual-era MCP SDK `@modelcontextprotocol/server@2.0.0`; agent install remains research-first
+- Default `MAX_PLS_*` / allowlists remain display-only unless `AGENT_WALLET_ENFORCE_LEGACY_CAPS` is on
+
+### Residual honesty (not blockers)
+
+- Multiproc is process-local; unique `AGENT_WALLET_DIR` remains the multi-instance model
+- Confirm / MRTR UX is only as strong as the host
+- Empty `contractAllowlist` with enforce-on is fail-closed for contract calls (native PLS still uses `maxPls*`)
 
 ## [1.0.5] - 2026-08-28
 
