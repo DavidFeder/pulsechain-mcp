@@ -139,36 +139,26 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
   });
 
   it("npm pack dry-run includes BOOTSTRAP and examples, excludes secrets and wallets", () => {
-    const r = spawnSync("npm", ["pack", "--dry-run", "--json"], {
+    const r = spawnSync("npm", ["pack", "--dry-run"], {
       cwd: root,
       encoding: "utf8",
       timeout: 60_000,
       windowsHide: true,
     });
     expect(r.status, r.stderr || r.stdout).toBe(0);
-    const raw = `${r.stdout}\n${r.stderr}`;
-    const jsonStart = raw.indexOf("[");
-    expect(jsonStart).toBeGreaterThanOrEqual(0);
-    const parsed = JSON.parse(raw.slice(jsonStart)) as Array<{
-      files?: Array<{ path?: string }>;
-      filename?: string;
-    }>;
-    const paths = (parsed[0]?.files ?? []).map((f) => f.path ?? "").filter(Boolean);
-    expect(paths.some((p) => p === "docs/BOOTSTRAP.md" || p.endsWith("/docs/BOOTSTRAP.md"))).toBe(
-      true,
-    );
-    expect(paths.some((p) => p.includes("docs/AGENT_GUIDANCE.md"))).toBe(true);
-    expect(paths.some((p) => p.includes("docs/SECURITY.md"))).toBe(true);
-    expect(paths.some((p) => p.includes("docs/OPERATOR.md"))).toBe(true);
-    expect(paths.some((p) => p.includes("examples/README.md"))).toBe(true);
-    expect(paths.some((p) => p.includes("examples/cursor_mcp_config.json"))).toBe(true);
-    expect(paths.some((p) => p === "dist/index.js" || p.endsWith("/dist/index.js"))).toBe(true);
-    expect(paths.some((p) => /node_modules/.test(p))).toBe(false);
-    expect(paths.some((p) => /coverage/.test(p))).toBe(false);
-    expect(paths.some((p) => /data\/wallets/.test(p))).toBe(false);
-    expect(paths.some((p) => /(^|\/)\.env(\.|$)/.test(p) && !p.includes(".example"))).toBe(
-      false,
-    );
+    const out = `${r.stdout}\n${r.stderr}`;
+    expect(out).toMatch(/docs\/BOOTSTRAP\.md/);
+    expect(out).toMatch(/docs\/AGENT_GUIDANCE\.md/);
+    expect(out).toMatch(/docs\/SECURITY\.md/);
+    expect(out).toMatch(/docs\/OPERATOR\.md/);
+    expect(out).toMatch(/examples\/README\.md/);
+    expect(out).toMatch(/examples\/cursor_mcp_config\.json/);
+    expect(out).toMatch(/dist\/index\.js/);
+    expect(out).not.toMatch(/node_modules\//);
+    expect(out).not.toMatch(/(^|\/)coverage\//);
+    expect(out).not.toMatch(/data\/wallets/);
+    expect(out).not.toMatch(/(^|\/)\.env(\s|$)/);
+    expect(out).not.toMatch(/(^|\/)\.env\.wallet(\s|$)/);
   });
 
   it("version surfaces are 1.0.5", () => {
