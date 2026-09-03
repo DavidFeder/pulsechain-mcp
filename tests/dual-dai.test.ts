@@ -231,6 +231,7 @@ describe("free-tier get_token_price dual-DAI labels (shipped handler)", () => {
     agentWalletMasterKey: undefined,
     agentWalletDir: "./data/wallets",
     agentWalletMultiprocStrict: false,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 100,
     maxPlsDaily: 1000,
     httpTransportPort: undefined,

@@ -41,6 +41,14 @@ const envSchema = z.object({
   AGENT_WALLET_MULTIPROC_STRICT: z
     .enum(["true", "false", "1", "0", ""])
     .optional(),
+  /**
+   * Opt-in: stored legacy wallet fields become hard denies in evaluatePolicy.
+   * Unset / false / 0 / empty → operator-trust (display-only). true / 1 → enforce.
+   * Does not change the product default (not a custody-policy product).
+   */
+  AGENT_WALLET_ENFORCE_LEGACY_CAPS: z
+    .enum(["true", "false", "1", "0", ""])
+    .optional(),
   MAX_PLS_PER_TX: z.string().optional(),
   MAX_PLS_DAILY: z.string().optional(),
   HTTP_TRANSPORT_PORT: z.string().optional(),
@@ -367,6 +375,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     e.AGENT_WALLET_MULTIPROC_STRICT,
     agentWalletEnabled,
   );
+  const agentWalletEnforceLegacyCaps = parseBool(
+    e.AGENT_WALLET_ENFORCE_LEGACY_CAPS,
+  );
 
   // Loud, fail-closed posture reminder when signing is enabled
   if (agentWalletEnabled) {
@@ -376,6 +387,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       masterKeyConfigured: true,
       rpcCount: rpcUrls.length,
       multiprocStrict: agentWalletMultiprocStrict,
+      enforceLegacyCaps: agentWalletEnforceLegacyCaps,
     });
   }
 
@@ -392,6 +404,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     agentWalletMasterKey,
     agentWalletDir,
     agentWalletMultiprocStrict,
+    agentWalletEnforceLegacyCaps,
     maxPlsPerTx,
     maxPlsDaily,
     httpTransportPort,

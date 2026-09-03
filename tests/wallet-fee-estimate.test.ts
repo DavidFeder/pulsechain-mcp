@@ -73,6 +73,7 @@ describe("enrichSimulationWithApproxFee (shipped, fee failure non-blocking)", ()
     agentWalletMasterKey: "a".repeat(64),
     agentWalletDir: "/tmp/unused",
     agentWalletMultiprocStrict: false,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 100,
     maxPlsDaily: 1000,
     httpTransportPort: undefined,

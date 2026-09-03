@@ -21,6 +21,7 @@ const baseConfig: AppConfig = {
   agentWalletMasterKey: undefined,
   agentWalletDir: "./data/wallets",
   agentWalletMultiprocStrict: false,
+  agentWalletEnforceLegacyCaps: false,
   maxPlsPerTx: 100,
   maxPlsDaily: 1000,
   httpTransportPort: undefined,

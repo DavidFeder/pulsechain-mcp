@@ -635,6 +635,7 @@ function snapshotTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: dir,
     agentWalletMultiprocStrict: false,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 10,
     maxPlsDaily: 100,
     httpTransportPort: undefined,

@@ -16,7 +16,7 @@ Also: [AGENT_GUIDANCE.md](AGENT_GUIDANCE.md) · [TOKEN_IDENTITY.md](TOKEN_IDENTI
 6. Prefer **token addresses** over symbols — see [TOKEN_IDENTITY.md](TOKEN_IDENTITY.md).
 7. Treat safety/scam/USD heuristics as **directional**, not settlement-grade.
 
-Run wallets on a machine you control, with a strong master key and unique `AGENT_WALLET_DIR`. This is **not** a custody-policy product: when enabled and funded, spend caps/allowlists are not hard gates.
+Run wallets on a machine you control, with a strong master key and unique `AGENT_WALLET_DIR`. This is **not** a custody-policy product: when enabled and funded, spend caps/allowlists are not hard gates unless you opt in with `AGENT_WALLET_ENFORCE_LEGACY_CAPS=true`/`1` on **this process**.
 
 ### Two product modes
 
@@ -71,7 +71,8 @@ After `npm run build`, restart the MCP host / refresh MCP so the process loads t
 | `AGENT_WALLET_DIR` | unique path (e.g. `./data/wallets`) | One process → one dir; never share across hosts |
 | `AGENT_WALLET_MULTIPROC_STRICT` | `true` (wallets-on default) | Refuse writes on live foreign-owner conflict; explicit `false`/`0` is warn-only |
 | `AGENT_WALLET_MASTER_KEY` | 64-char hex preferred (or passphrase ≥16) | Offline-generated; password manager only |
-| `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` | **omit** (optional legacy parse only) | **Not product controls** — display-only if set; not hard gates; not template defaults |
+| `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` | **omit** (optional legacy parse only) | **Not product controls** — display-only if set; not hard gates unless `AGENT_WALLET_ENFORCE_LEGACY_CAPS`; not template defaults |
+| `AGENT_WALLET_ENFORCE_LEGACY_CAPS` | **omit / false** (product default) | Opt-in. Unset/`false`/`0`/empty = display-only. `true`/`1` = stored legacy fields become hard denies on this process |
 
 Docker images keep **`AGENT_WALLET_ENABLED=false`** so containers stay secretless unless you opt in via `.env.docker`.
 
@@ -185,7 +186,7 @@ Wallet write tools accept either:
 
 The boolean path is **not** a cryptographic operator signature. If the MCP host (or the agent) can call tools with arbitrary arguments, it can pass `confirm=true` without a human click.
 
-**Operator-trust model (v0.1.38+):** this product is **not** a custody-policy / spend-limit backstop. **Funding the agent is authorization.** Hard spend caps, deny-by-default contract allowlists, and token-notional denies are **not** enforced as safety gates. Real operator controls:
+**Operator-trust model (v0.1.38+):** this product is **not** a custody-policy / spend-limit backstop. **Funding the agent is authorization.** Hard spend caps, deny-by-default contract allowlists, and token-notional denies are **not** enforced as safety gates unless this process sets **`AGENT_WALLET_ENFORCE_LEGACY_CAPS=true` or `1`** (opt-in; default remains display-only). Real operator controls:
 
 1. Set `AGENT_WALLET_ENABLED=false` for research-only; otherwise protect the master key  
 2. Protect `AGENT_WALLET_MASTER_KEY` (keys stay AES-256-GCM encrypted at rest)  
@@ -251,7 +252,7 @@ Source: `src/wallet/policy.ts`.
 
 **This is not a custody-policy product.** If wallets are enabled and funded, ordinary native transfers and contract calls are **not** blocked by allowlists, PLS caps, or token-notional rules.
 
-### Hard blocks at send time (only)
+### Hard blocks at send time (always)
 
 | Control | Effect |
 |---------|--------|
@@ -259,9 +260,13 @@ Source: `src/wallet/policy.ts`.
 | `enabled=false` | Soft disable — signing disabled |
 | Invalid `to` / unparseable value | Technical input error |
 
-### Legacy stored fields (not hard gates)
+### Legacy stored fields (display-only unless opted in)
 
-`maxPlsPerTx`, `maxPlsDaily`, `contractAllowlist`, `tokenAllowlist`, `tokenSpendCaps`, `tokenDailyCaps`, `erc20NotionalCaps`, `requireDecodableCalldata`, and `allowNativeTransfers` may still be stored and shown for compatibility / spend accounting. They are **not** enforced as allow/deny safety backstops in v0.1.38+.
+`maxPlsPerTx`, `maxPlsDaily`, `contractAllowlist`, `tokenAllowlist`, `allowlistExpiresAt`, `tokenSpendCaps`, `tokenDailyCaps`, `erc20NotionalCaps`, `requireDecodableCalldata`, and `allowNativeTransfers` may still be stored and shown for compatibility / spend accounting.
+
+**Product default:** they are **not** hard send gates. `status` / `agent_wallet_check_policy` / `reviewSummary` report **display-only**.
+
+**Opt-in:** `AGENT_WALLET_ENFORCE_LEGACY_CAPS=true` or `1` makes those **existing stored fields** hard denies in `evaluatePolicy` on **this process** (native `maxPls*` use the same wei math as `remainingDaily`; token-notional caps / `requireDecodableCalldata` apply from `inspectTokenNotional` only when that inspection is already reliable, except `requireDecodableCalldata` which denies unreliable decode). No new cap types. Unset / `false` / `0` / empty keeps operator-trust. This is **not** a custody-policy product default.
 
 ### Token-notional decode (advisory)
 

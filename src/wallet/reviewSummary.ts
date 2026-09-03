@@ -87,15 +87,15 @@ export interface TxReviewSummary {
   nativeValuePls: number;
   nativeValueWei: string;
   /**
-   * Headroom vs stored legacy maxPlsDaily (display only under operator-trust).
-   * 0 does NOT mean deny — caps are not hard gates.
+   * Headroom vs stored legacy maxPlsDaily. Display-only under operator-trust
+   * (product default). Hard when this process set AGENT_WALLET_ENFORCE_LEGACY_CAPS.
    */
   remainingDailyPls?: number;
   projectedDailySpendPls?: number;
-  /** Always true under OT: remainingDaily / maxPls* are non-blocking display fields. */
-  remainingDailyIsDisplayOnly: true;
-  /** Always true under OT: legacy maxPls* / allowlist fields are not hard gates. */
-  legacyCapsDisplayOnly: true;
+  /** True when remainingDaily / maxPls* are non-blocking display fields. */
+  remainingDailyIsDisplayOnly: boolean;
+  /** True when legacy maxPls* / allowlist fields are not hard gates. */
+  legacyCapsDisplayOnly: boolean;
   /** Short note for agents reading remainingDaily / maxPls* fields. */
   legacyCapsNote: string;
   tokenMovements: ReviewTokenMovement[];
@@ -162,6 +162,13 @@ export const LEGACY_CAPS_DISPLAY_ONLY_NOTE =
   "Legacy maxPlsPerTx / maxPlsDaily / remainingDailyPls are display-only under " +
   "operator-trust (v0.1.38+). They do not hard-block sends. Funding the agent is authorization.";
 
+/** This-process note when stored legacy fields are hard denies (opt-in env). */
+export const LEGACY_CAPS_ENFORCED_NOTE =
+  "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS enabled: stored maxPlsPerTx/daily, " +
+  "allowlists, tokenSpendCaps/tokenDailyCaps, erc20NotionalCaps (when decode is reliable), " +
+  "requireDecodableCalldata, and allowNativeTransfers are hard denies. " +
+  "Product default remains operator-trust (display-only) when that env is unset/false/0/empty.";
+
 export const POLICY_BACKSTOP_NOTE =
   "Operator-trust model (v0.1.38+): funding the agent is authorization. " +
   "There is no hard spend-cap / allowlist / token-notional policy backstop. " +
@@ -170,6 +177,13 @@ export const POLICY_BACKSTOP_NOTE =
   "fund only what you accept losing, use kill_switch in emergencies, " +
   "and do not share AGENT_WALLET_DIR across processes. " +
   LEGACY_CAPS_DISPLAY_ONLY_NOTE;
+
+export const POLICY_ENFORCE_LEGACY_CAPS_NOTE =
+  "This process opted into AGENT_WALLET_ENFORCE_LEGACY_CAPS (not the product default). " +
+  "Stored legacy fields are hard denies here. Product default remains operator-trust " +
+  "(display-only) when the env is unset/false/0/empty. " +
+  "confirm=true / MRTR is still host UX only. " +
+  LEGACY_CAPS_ENFORCED_NOTE;
 
 /**
  * PulseChain fee reality for operators and agents (not a live fee oracle).
@@ -253,17 +267,23 @@ export function categorizeDenyReason(message: string): DecisionReason {
 }
 
 function listChecksApplied(check: PolicyCheckResult): string[] {
-  const checks: string[] = [
-    "kill_switch",
-    "enabled",
-    "operator_trust (caps/allowlists not hard gates)",
-  ];
+  const enforcing = check.legacyCapsDisplayOnly === false;
+  const checks: string[] = ["kill_switch", "enabled"];
+  if (enforcing) {
+    checks.push(
+      "legacy_caps_enforced (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS)",
+    );
+  } else {
+    checks.push("operator_trust (caps/allowlists not hard gates)");
+  }
   const tn = check.tokenNotional;
   if (tn?.considered) {
     checks.push(
-      tn.riskRelevant
-        ? `tokenNotional_advisory(${tn.pattern}, confidence=${tn.confidence})`
-        : "tokenNotional_advisory(inspected)",
+      enforcing && tn.riskRelevant
+        ? `tokenNotional(${tn.pattern}, confidence=${tn.confidence}, reliable=${tn.reliable})`
+        : tn.riskRelevant
+          ? `tokenNotional_advisory(${tn.pattern}, confidence=${tn.confidence})`
+          : "tokenNotional_advisory(inspected)",
     );
   }
   return checks;
@@ -405,11 +425,14 @@ function buildAgentGuidance(params: {
   decode: DecodeKnowledge;
   hasCalldata: boolean;
   nativeValuePls: number;
+  legacyCapsDisplayOnly: boolean;
 }): { agentGuidance: AgentGuidance; safetyHints: string[] } {
   const hints: string[] = [];
   if (params.decision === "deny") {
     hints.push(
-      "Write blocked (kill switch, disabled wallet, or invalid input) — do not broadcast",
+      params.legacyCapsDisplayOnly
+        ? "Write blocked (kill switch, disabled wallet, or invalid input) — do not broadcast"
+        : "Write blocked (kill/disabled/invalid, or opt-in legacy caps on this process) — do not broadcast",
     );
     hints.push(...pulsechainGasSafetyHints(params.nativeValuePls));
     return { agentGuidance: "refuse", safetyHints: hints };
@@ -435,7 +458,9 @@ function buildAgentGuidance(params: {
     hints.push("Contract/calldata path — verify destination, value, and calldata intent");
   }
   hints.push(
-    "Operator-trust: funding the agent is authorization; confirm=true is host UX only",
+    params.legacyCapsDisplayOnly
+      ? "Operator-trust: funding the agent is authorization; confirm=true is host UX only"
+      : "This process enforces stored legacy fields (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS); confirm=true is still host UX only",
   );
   hints.push(...pulsechainGasSafetyHints(params.nativeValuePls));
   if (
@@ -644,11 +669,13 @@ export function buildTxReviewSummary(
     decision === "deny" ? check.reasons.map(categorizeDenyReason) : [];
 
   const decodeKnowledge = buildDecodeKnowledge(check.tokenNotional, hasCalldata);
+  const displayOnly = check.legacyCapsDisplayOnly !== false;
   const { agentGuidance, safetyHints: baseHints } = buildAgentGuidance({
     decision,
     decode: decodeKnowledge,
     hasCalldata,
     nativeValuePls: valuePls,
+    legacyCapsDisplayOnly: displayOnly,
   });
   const safetyHints =
     omitted > 0
@@ -661,32 +688,48 @@ export function buildTxReviewSummary(
   const ctx = input.context ?? "propose";
   let nextStep: string;
   if (decision === "deny" || agentGuidance === "refuse") {
-    nextStep =
-      "Do not execute. Clear kill switch / re-enable wallet, or fix invalid address/value. " +
-      "Caps and allowlists are not hard gates in operator-trust mode.";
+    nextStep = displayOnly
+      ? "Do not execute. Clear kill switch / re-enable wallet, or fix invalid address/value. " +
+        "Caps and allowlists are not hard gates in operator-trust mode."
+      : "Do not execute. This process is enforcing stored legacy fields (AGENT_WALLET_ENFORCE_LEGACY_CAPS). " +
+        "Product default remains operator-trust when that env is unset.";
   } else if (agentGuidance === "review_carefully") {
     nextStep =
       "Optional careful review of destination/calldata, then execute_agent_tx with confirm=true. " +
-      "Operator-trust: funding authorizes; still verify value + gas headroom.";
+      (displayOnly
+        ? "Operator-trust: funding authorizes; still verify value + gas headroom."
+        : "This process enforces stored legacy fields (opt-in); still verify value + gas headroom.");
   } else if (ctx === "execute" || ctx === "transfer") {
     nextStep =
       "Broadcast path after confirm. Re-read headline + destination + value vs gas. " +
-      "Operator-trust model — no hard policy cap backstop.";
+      (displayOnly
+        ? "Operator-trust model — no hard policy cap backstop."
+        : "This process enforces stored legacy fields (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS).");
   } else if (ctx === "check") {
     nextStep =
       "propose_agent_tx → read reviewSummary → execute_agent_tx with confirm=true / MRTR. " +
-      "Fund value + PulseChain gas; operator-trust mode.";
+      (displayOnly
+        ? "Fund value + PulseChain gas; operator-trust mode."
+        : "Fund value + PulseChain gas; this process is enforcing stored legacy caps (opt-in).");
   } else {
     nextStep =
       "Read reviewSummary (destination, value, gas hints), then execute_agent_tx with " +
-      "proposalId + confirm=true (or MRTR). Operator-trust: funding the agent is authorization.";
+      "proposalId + confirm=true (or MRTR). " +
+      (displayOnly
+        ? "Operator-trust: funding the agent is authorization."
+        : "This process enforces stored legacy fields (opt-in); product default remains operator-trust.");
   }
 
-  const confirmRationale =
-    "Broadcast requires confirm=true or modern MRTR InputRequiredResult (host UX only). " +
-    "Operator-trust model: there is no hard spend-cap/allowlist policy backstop. " +
-    "Always read destination, native PLS value, gas headroom, and decoded movements before confirming. " +
-    PLS_VALUE_VS_GAS_HINT;
+  const confirmRationale = displayOnly
+    ? "Broadcast requires confirm=true or modern MRTR InputRequiredResult (host UX only). " +
+      "Operator-trust model: there is no hard spend-cap/allowlist policy backstop. " +
+      "Always read destination, native PLS value, gas headroom, and decoded movements before confirming. " +
+      PLS_VALUE_VS_GAS_HINT
+    : "Broadcast requires confirm=true or modern MRTR InputRequiredResult (host UX only). " +
+      "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS on (opt-in hard denies for stored fields). " +
+      "Product default remains operator-trust (display-only) when that env is unset. " +
+      "Always read destination, native PLS value, gas headroom, and decoded movements before confirming. " +
+      PLS_VALUE_VS_GAS_HINT;
   const tn = check.tokenNotional;
   return {
     headline,
@@ -700,9 +743,11 @@ export function buildTxReviewSummary(
     nativeValueWei: valueWei,
     remainingDailyPls: check.remainingDaily,
     projectedDailySpendPls: check.projectedDailySpend,
-    remainingDailyIsDisplayOnly: true,
-    legacyCapsDisplayOnly: true,
-    legacyCapsNote: LEGACY_CAPS_DISPLAY_ONLY_NOTE,
+    remainingDailyIsDisplayOnly: displayOnly,
+    legacyCapsDisplayOnly: displayOnly,
+    legacyCapsNote: displayOnly
+      ? LEGACY_CAPS_DISPLAY_ONLY_NOTE
+      : LEGACY_CAPS_ENFORCED_NOTE,
     tokenMovements: movements,
     omittedMovementCount: omitted,
     movementExplanations,
@@ -725,7 +770,9 @@ export function buildTxReviewSummary(
     confirmRequiredForBroadcast: true,
     confirmRationale,
     nextStep,
-    policyBackstop: POLICY_BACKSTOP_NOTE,
+    policyBackstop: displayOnly
+      ? POLICY_BACKSTOP_NOTE
+      : POLICY_ENFORCE_LEGACY_CAPS_NOTE,
     simulation: input.simulation
       ? {
           attempted: input.simulation.attempted,
@@ -822,7 +869,9 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
     lines.push(`Deny: ${summary.reasons[0]}`);
   }
   lines.push(
-    "Confirm only after reviewing value + gas + destination. Operator-trust: funding authorizes; confirm is host UX only.",
+    summary.legacyCapsDisplayOnly
+      ? "Confirm only after reviewing value + gas + destination. Operator-trust: funding authorizes; confirm is host UX only."
+      : "Confirm only after reviewing value + gas + destination. This process is enforcing stored legacy caps (opt-in); product default remains operator-trust.",
   );
   return lines.join(" | ");
 }

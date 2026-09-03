@@ -4,14 +4,16 @@
  * Product model: if an operator enables wallets and funds an agent EOA, that is
  * authorization to sign. This module is NOT a custody-policy product.
  *
- * Hard blocks (operator emergency / technical only):
+ * Hard blocks always (operator emergency / technical):
  * - kill switch (killed=true)
  * - soft disable (enabled=false)
  * - invalid destination address or unparseable value
  *
  * Historical fields (maxPlsPerTx/daily, allowlists, token-notional caps,
- * requireDecodableCalldata) may still be stored and reported for compatibility,
- * but they are NOT enforced as blocking gates.
+ * requireDecodableCalldata, allowNativeTransfers) are stored and reported for
+ * compatibility. They are NOT hard gates unless PolicyEvalInput.enforceLegacyCaps
+ * is true (threaded from AppConfig.agentWalletEnforceLegacyCaps / env
+ * AGENT_WALLET_ENFORCE_LEGACY_CAPS). Do not read process.env here.
  */
 
 import { PolicyError } from "../utils/errors.js";
@@ -111,6 +113,11 @@ export interface PolicyEvalInput {
   /** True if eth_getCode(to) is non-empty */
   destinationIsContract: boolean;
   now?: Date;
+  /**
+   * When true, stored legacy fields become hard denies. Must be passed from
+   * AppConfig — never read process.env in this module.
+   */
+  enforceLegacyCaps?: boolean;
 }
 
 function resolveValueWei(input: PolicyEvalInput): {
@@ -158,23 +165,26 @@ function resolveValueWei(input: PolicyEvalInput): {
  * Operator-trust check for a proposed tx.
  * Does not throw — returns structured allow/deny with reasons.
  *
- * Hard deny only for kill switch, enabled=false, invalid address, or unparseable value.
- * Caps, allowlists, and token-notional rules are not blocking gates.
- * Spend projections remain for operator visibility (audit / reviewSummary).
+ * Always hard-deny: kill switch, enabled=false, invalid address, unparseable value.
+ * Caps, allowlists, and token-notional rules are blocking only when
+ * input.enforceLegacyCaps is true (AppConfig.agentWalletEnforceLegacyCaps).
+ * Spend projections remain for operator visibility in both modes.
  */
 export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
   const now = input.now ?? new Date();
+  const enforce = input.enforceLegacyCaps === true;
   const ledger = normalizeDailySpend(input.dailySpend, now);
   const reasons: string[] = [];
   const { valueWei, valuePlsDisplay, parseError } = resolveValueWei(input);
   const valuePls = valuePlsDisplay;
   const spentWei = getSpendWei(ledger);
   const projectedWei = spentWei + valueWei;
-  // Legacy cap fields are not enforced; remainingDaily reports headroom vs stored
-  // maxPlsDaily for display only (can be 0 when over the stored number).
+  // remainingDaily reports headroom vs stored maxPlsDaily (same wei math in both
+  // modes). When enforce is off this is display-only; when on, over-cap denies.
   let remainingWei: bigint;
+  let maxDailyWei: bigint | undefined;
   try {
-    const maxDailyWei = capPlsToWei(input.policy.maxPlsDaily);
+    maxDailyWei = capPlsToWei(input.policy.maxPlsDaily);
     remainingWei =
       projectedWei >= maxDailyWei ? 0n : maxDailyWei - projectedWei;
   } catch {
@@ -187,7 +197,7 @@ export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
   const isContractInteraction =
     input.destinationIsContract || !isEmptyData(input.data);
 
-  // --- Hard operator emergency controls only ---
+  // --- Always-on operator emergency / technical controls ---
   if (input.policy.killed) {
     reasons.push(
       "Wallet kill switch is active (killed=true). Signing disabled until cleared via set_agent_policy (killed=false + enabled=true).",
@@ -208,12 +218,47 @@ export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
     reasons.push(`Invalid to address: ${input.to}`);
   }
 
-  // Advisory inspection only — never adds deny reasons for allowlists/caps/notional
   const inspection = inspectTokenNotional({
     to: toNorm ?? input.to,
     data: input.data,
     valueWei,
   });
+
+  let capsApplied: TokenNotionalPolicyView["capsApplied"] = [];
+  let requireDecodableDenied = false;
+
+  if (enforce && !parseError) {
+    applyLegacyCapDenies({
+      policy: input.policy,
+      toNorm,
+      valueWei,
+      projectedWei,
+      maxDailyWei,
+      isContractInteraction,
+      allowlistExpired,
+      tokenDailySpend: input.tokenDailySpend,
+      now,
+      reasons,
+    });
+    if (inspection.reliable) {
+      const applied = applyErc20NotionalCaps(
+        inspection,
+        input.policy.erc20NotionalCaps ?? {},
+      );
+      capsApplied = applied.capsApplied;
+      reasons.push(...applied.overReasons);
+    }
+    if (
+      input.policy.requireDecodableCalldata === true &&
+      !inspection.reliable
+    ) {
+      requireDecodableDenied = true;
+      reasons.push(
+        `requireDecodableCalldata is set and calldata is not reliably decodable (pattern=${inspection.pattern}).`,
+      );
+    }
+  }
+
   const tokenNotional: TokenNotionalPolicyView = {
     considered: inspection.considered,
     confidence: inspection.confidence,
@@ -237,10 +282,12 @@ export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
     })),
     notes: [
       ...inspection.notes,
-      "Operator-trust mode: allowlists, PLS caps, and token-notional rules are not hard gates. Funding the agent is authorization.",
+      enforce
+        ? "This process is enforcing stored legacy caps/allowlists (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS). Product default remains operator-trust / display-only when that env is unset."
+        : "Operator-trust mode: allowlists, PLS caps, and token-notional rules are not hard gates. Funding the agent is authorization.",
     ],
-    capsApplied: [],
-    requireDecodableCalldata: false,
+    capsApplied,
+    requireDecodableCalldata: requireDecodableDenied,
   };
 
   return {
@@ -254,14 +301,189 @@ export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
     projectedDailySpendWei: projectedWei.toString(),
     remainingDaily: remaining,
     remainingDailyWei: remainingWei.toString(),
-    // Operator-trust: stored maxPls* / remainingDaily never hard-block sends.
-    legacyCapsDisplayOnly: true,
+    legacyCapsDisplayOnly: !enforce,
     allowlistExpired,
     tokenNotional,
   };
 }
 
-/** Throw PolicyError if check fails (kill/disabled/invalid only). */
+function applyLegacyCapDenies(args: {
+  policy: AgentWalletPolicy;
+  toNorm: string | undefined;
+  valueWei: bigint;
+  projectedWei: bigint;
+  maxDailyWei: bigint | undefined;
+  isContractInteraction: boolean;
+  allowlistExpired: boolean;
+  tokenDailySpend: Record<string, DailySpendLedger> | undefined;
+  now: Date;
+  reasons: string[];
+}): void {
+  const {
+    policy,
+    toNorm,
+    valueWei,
+    projectedWei,
+    maxDailyWei,
+    isContractInteraction,
+    allowlistExpired,
+    tokenDailySpend,
+    now,
+    reasons,
+  } = args;
+
+  try {
+    const maxTxWei = capPlsToWei(policy.maxPlsPerTx);
+    if (valueWei > maxTxWei) {
+      reasons.push(
+        `Native value exceeds maxPlsPerTx (${policy.maxPlsPerTx} PLS).`,
+      );
+    }
+  } catch {
+    reasons.push("maxPlsPerTx is not a valid PLS cap (fail closed).");
+  }
+
+  if (maxDailyWei === undefined) {
+    reasons.push("maxPlsDaily is not a valid PLS cap (fail closed).");
+  } else if (projectedWei > maxDailyWei) {
+    reasons.push(
+      `Projected daily spend exceeds maxPlsDaily (${policy.maxPlsDaily} PLS).`,
+    );
+  }
+
+  if (policy.allowNativeTransfers === false && !isContractInteraction) {
+    reasons.push(
+      "Native PLS transfers are disabled (allowNativeTransfers=false).",
+    );
+  }
+
+  if (!toNorm) {
+    return;
+  }
+
+  const contractList = effectiveContractAllowlist(policy, now);
+  const tokenList = effectiveTokenAllowlist(policy, now);
+
+  if (isContractInteraction) {
+    const onList = contractList.some((a) => a.toLowerCase() === toNorm);
+    if (!onList) {
+      if (allowlistExpired) {
+        reasons.push(
+          "Allowlist expired (allowlistExpiresAt); destination is not on the effective contractAllowlist.",
+        );
+      }
+      reasons.push(
+        contractList.length === 0
+          ? `Destination ${toNorm} is not on contractAllowlist (empty list).`
+          : `Destination ${toNorm} is not on contractAllowlist.`,
+      );
+    }
+  }
+
+  if (policy.tokenAllowlist.length > 0) {
+    const onList = tokenList.some((a) => a.toLowerCase() === toNorm);
+    if (!onList) {
+      if (allowlistExpired) {
+        reasons.push(
+          "Allowlist expired (allowlistExpiresAt); destination is not on tokenAllowlist.",
+        );
+      } else {
+        reasons.push(`Destination ${toNorm} is not on tokenAllowlist.`);
+      }
+    }
+  }
+
+  const spendCap = policy.tokenSpendCaps[toNorm];
+  if (spendCap !== undefined) {
+    try {
+      const capWei = capPlsToWei(spendCap);
+      if (valueWei > capWei) {
+        reasons.push(
+          `Native value exceeds tokenSpendCaps[${toNorm}] (${spendCap} PLS).`,
+        );
+      }
+    } catch {
+      reasons.push(
+        `tokenSpendCaps[${toNorm}] is not a valid PLS cap (fail closed).`,
+      );
+    }
+  }
+
+  const dailyCap = policy.tokenDailyCaps[toNorm];
+  if (dailyCap !== undefined) {
+    const destLedger = normalizeDailySpend(
+      tokenDailySpend?.[toNorm] ?? {
+        date: utcDateString(now),
+        spentPls: 0,
+      },
+      now,
+    );
+    const destProjected = getSpendWei(destLedger) + valueWei;
+    try {
+      const capWei = capPlsToWei(dailyCap);
+      if (destProjected > capWei) {
+        reasons.push(
+          `Projected destination daily spend exceeds tokenDailyCaps[${toNorm}] (${dailyCap} PLS).`,
+        );
+      }
+    } catch {
+      reasons.push(
+        `tokenDailyCaps[${toNorm}] is not a valid PLS cap (fail closed).`,
+      );
+    }
+  }
+}
+
+function applyErc20NotionalCaps(
+  inspection: ReturnType<typeof inspectTokenNotional>,
+  caps: Record<string, string>,
+): {
+  capsApplied: TokenNotionalPolicyView["capsApplied"];
+  overReasons: string[];
+} {
+  const sums = new Map<string, bigint>();
+  for (const m of inspection.movements) {
+    const key = m.token === "native" ? "native" : m.token.toLowerCase();
+    let amt: bigint;
+    try {
+      amt = BigInt(m.amountRaw);
+    } catch {
+      continue;
+    }
+    if (amt < 0n) continue;
+    sums.set(key, (sums.get(key) ?? 0n) + amt);
+  }
+  const capsApplied: TokenNotionalPolicyView["capsApplied"] = [];
+  const overReasons: string[] = [];
+  for (const [token, amount] of sums) {
+    const capRaw = caps[token];
+    if (capRaw === undefined) continue;
+    let cap: bigint;
+    try {
+      cap = BigInt(capRaw);
+    } catch {
+      overReasons.push(
+        `erc20NotionalCaps[${token}] is not a valid integer (fail closed).`,
+      );
+      continue;
+    }
+    const withinCap = amount <= cap;
+    capsApplied.push({
+      token,
+      amountRaw: amount.toString(),
+      capRaw,
+      withinCap,
+    });
+    if (!withinCap) {
+      overReasons.push(
+        `Token notional ${amount.toString()} raw exceeds erc20NotionalCaps[${token}]=${capRaw}`,
+      );
+    }
+  }
+  return { capsApplied, overReasons };
+}
+
+/** Throw PolicyError if check fails (kill/disabled/invalid, or opt-in legacy caps). */
 export function assertPolicyAllows(check: PolicyCheckResult): void {
   if (!check.allowed) {
     throw new PolicyError(

@@ -70,6 +70,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: false,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 100,
     maxPlsDaily: 1000,
     httpTransportPort: undefined,
@@ -631,7 +632,7 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
       });
       const strictCfg = testConfig({
         agentWalletDir: dir,
-        agentWalletMultiprocStrict: true,
+      agentWalletMultiprocStrict: true,
       });
       const stStrict = agentWalletSystemStatus(strictCfg) as {
         walletDirOwnership: {
@@ -690,7 +691,7 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
 
       const strictCfg = testConfig({
         agentWalletDir: dir,
-        agentWalletMultiprocStrict: true,
+      agentWalletMultiprocStrict: true,
       });
       await expect(killSwitch(strictCfg, w.id)).rejects.toThrow(
         /MULTIPROC_STRICT|write refused|foreign pid/i,

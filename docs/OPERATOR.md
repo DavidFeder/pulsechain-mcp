@@ -53,7 +53,8 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `AGENT_WALLET_DIR` | `./data/wallets` | One process → one unique dir |
 | `AGENT_WALLET_MULTIPROC_STRICT` | wallets-on: `true` if unset/empty; research-only unset: `false` | `false`/`0` warn-only opt-out; `true`/`1` refuse writes on foreign owner. Not a distributed lock |
 | `AGENT_WALLET_MRTR_SECRET` | process-local HMAC (stdio) | **Required** (≥32 bytes UTF-8) when wallets on **and** `HTTP_TRANSPORT_PORT` is set. Do not reuse `AGENT_WALLET_MASTER_KEY` |
-| `MAX_PLS_*` | **omit** | Not shipped in templates; optional legacy display only — **not** hard gates or product safety |
+| `AGENT_WALLET_ENFORCE_LEGACY_CAPS` | **off** (unset/`false`/`0`/empty) | Opt-in. `true`/`1` hard-denies stored `maxPls*` / allowlists / token caps / `requireDecodableCalldata` / `allowNativeTransfers` on **this process**. Product default remains display-only / operator-trust |
+| `MAX_PLS_*` | **omit** | Not shipped in templates; optional legacy display only — **not** hard gates or product safety unless `AGENT_WALLET_ENFORCE_LEGACY_CAPS` is on |
 | `SWITCH_API_KEY` | empty | Operator-gated Switch only |
 | `HTTP_TRANSPORT_PORT` | empty | If set: HTTP-only (breaks stdio hosts) |
 | `LOG_LEVEL` | `info` | stderr only |

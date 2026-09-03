@@ -139,11 +139,11 @@ export interface AgentWalletPublicInfo {
   /** True when allowlist time-box has expired (contracts denied). */
   allowlistExpired?: boolean;
   /**
-   * Operator-trust: policy.maxPlsPerTx / maxPlsDaily and dailySpend ledgers are
-   * display-only compatibility fields — not hard send gates.
+   * True when this process is operator-trust (display-only). False when
+   * AGENT_WALLET_ENFORCE_LEGACY_CAPS is on for this process.
    */
-  legacyCapsDisplayOnly: true;
-  /** Short note so agents do not treat maxPls* as enforceable backstops. */
+  legacyCapsDisplayOnly: boolean;
+  /** Short note: display-only vs this-process opt-in enforcement. */
   legacyCapsNote: string;
   balanceWei?: string;
   balancePls?: string;
@@ -153,6 +153,20 @@ export interface AgentWalletPublicInfo {
 export const LEGACY_CAPS_DISPLAY_ONLY_NOTE =
   "Legacy maxPlsPerTx / maxPlsDaily / dailySpend are display-only under " +
   "operator-trust. They do not hard-block sends. Funding the agent is authorization.";
+
+/** This-process note when AGENT_WALLET_ENFORCE_LEGACY_CAPS is true/1. */
+export const LEGACY_CAPS_ENFORCED_NOTE =
+  "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS enabled: stored " +
+  "maxPlsPerTx/daily, allowlists, tokenSpendCaps/tokenDailyCaps, " +
+  "erc20NotionalCaps (when decode is reliable), requireDecodableCalldata, " +
+  "and allowNativeTransfers are hard denies. Product default remains " +
+  "operator-trust (display-only) when that env is unset/false/0/empty.";
+
+export function legacyCapsNoteForProcess(enforceLegacyCaps: boolean): string {
+  return enforceLegacyCaps
+    ? LEGACY_CAPS_ENFORCED_NOTE
+    : LEGACY_CAPS_DISPLAY_ONLY_NOTE;
+}
 
 export interface TxProposalRequest {
   walletId: string;
@@ -238,10 +252,10 @@ export interface PolicyCheckResult {
   remainingDaily: number;
   remainingDailyWei?: string;
   /**
-   * Always true under operator-trust: remainingDaily / maxPls* are display-only
-   * accounting against stored legacy fields — not hard send gates.
+   * True under operator-trust (product default): remainingDaily / maxPls* are
+   * display-only. False when this process opted into AGENT_WALLET_ENFORCE_LEGACY_CAPS.
    */
-  legacyCapsDisplayOnly: true;
+  legacyCapsDisplayOnly: boolean;
   allowlistExpired: boolean;
   /** Token-notional inspection + how caps / fail-closed applied. */
   tokenNotional?: TokenNotionalPolicyView;
@@ -356,8 +370,10 @@ export const AGENT_WALLET_ENABLE_WARNING =
  */
 export const TOKEN_ALLOWLIST_SEMANTICS =
   "Legacy fields (tokenAllowlist, contractAllowlist, maxPls*, erc20NotionalCaps) may " +
-  "still be stored for compatibility but are NOT hard send gates in operator-trust mode. " +
-  "Funding the agent is authorization; kill_switch remains an emergency operator control.";
+  "still be stored for compatibility. Product default (operator-trust): they are NOT " +
+  "hard send gates. Opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1 makes those stored " +
+  "fields hard denies on this process only. Funding the agent is authorization unless " +
+  "that env is on; kill_switch remains an emergency operator control.";
 
 /**
  * Operator-facing multiproc posture (not a distributed lock).

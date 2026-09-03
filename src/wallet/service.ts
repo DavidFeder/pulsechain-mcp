@@ -71,7 +71,7 @@ import {
   AGENT_WALLET_ENABLE_WARNING,
   APPLIED_SPEND_PROPOSAL_IDS_CAP,
   DEFAULT_POLICY,
-  LEGACY_CAPS_DISPLAY_ONLY_NOTE,
+  legacyCapsNoteForProcess,
   MULTIPROC_MODE_MEANINGS,
   MULTIPROC_POSTURE_SUMMARY,
   MULTIPROC_RECOMMENDED_MODEL,
@@ -166,6 +166,7 @@ function requireMasterKey(config: AppConfig): string {
 function toPublic(
   record: AgentWalletRecord,
   balances?: { balanceWei: string; balancePls: string },
+  enforceLegacyCaps = false,
 ): AgentWalletPublicInfo {
   return {
     id: record.id,
@@ -176,9 +177,8 @@ function toPublic(
     dailySpend: record.dailySpend,
     tokenDailySpend: record.tokenDailySpend ?? {},
     allowlistExpired: isAllowlistExpired(record.policy),
-    // H2: every public wallet surface marks legacy maxPls* as display-only
-    legacyCapsDisplayOnly: true,
-    legacyCapsNote: LEGACY_CAPS_DISPLAY_ONLY_NOTE,
+    legacyCapsDisplayOnly: !enforceLegacyCaps,
+    legacyCapsNote: legacyCapsNoteForProcess(enforceLegacyCaps),
     balanceWei: balances?.balanceWei,
     balancePls: balances?.balancePls,
   };
@@ -455,7 +455,7 @@ export async function createAgentWallet(
     address: record.address,
   });
 
-  return toPublic(record);
+  return toPublic(record, undefined, config.agentWalletEnforceLegacyCaps);
 }
 
 export async function getAgentWalletInfo(
@@ -483,7 +483,7 @@ export async function getAgentWalletInfo(
       // balance optional on RPC failure
     }
   }
-  return toPublic(record, balances);
+  return toPublic(record, balances, config.agentWalletEnforceLegacyCaps);
 }
 
 /**
@@ -495,11 +495,15 @@ export function listAgentWallets(config: AppConfig): AgentWalletPublicInfo[] {
   // Soft ownership re-check for status/logs; does not refuse on conflict.
   ensureWalletDirClaimed(config.agentWalletDir, { forceRecheck: true });
   return listWalletRecords(config.agentWalletDir).map((r) =>
-    toPublic({
-      ...r,
-      dailySpend: normalizeDailySpend(r.dailySpend),
-      tokenDailySpend: normalizeTokenDailySpend(r.tokenDailySpend),
-    }),
+    toPublic(
+      {
+        ...r,
+        dailySpend: normalizeDailySpend(r.dailySpend),
+        tokenDailySpend: normalizeTokenDailySpend(r.tokenDailySpend),
+      },
+      undefined,
+      config.agentWalletEnforceLegacyCaps,
+    ),
   );
 }
 
@@ -540,7 +544,7 @@ export async function setAgentPolicy(
       }),
     });
 
-    return toPublic(record);
+    return toPublic(record, undefined, config.agentWalletEnforceLegacyCaps);
   });
 }
 
@@ -582,7 +586,7 @@ export async function killSwitch(
       address: record.address,
       alreadyKilled: already,
     });
-    return toPublic(record);
+    return toPublic(record, undefined, config.agentWalletEnforceLegacyCaps);
   });
 }
 
@@ -690,7 +694,7 @@ export async function proposeAgentTx(
     ? (req.data as Hex)
     : "0x") as Hex;
 
-  // Operator-trust: only kill/disabled/invalid blocks. Caps/allowlists are not gates.
+  // Kill/disabled/invalid always block. Legacy caps only when enforceLegacyCaps.
   const destinationIsContract = await detectIsContract(config, to);
   const policyCheck = evaluatePolicy({
     policy: record.policy,
@@ -701,6 +705,7 @@ export async function proposeAgentTx(
     valuePls,
     data,
     destinationIsContract,
+    enforceLegacyCaps: config.agentWalletEnforceLegacyCaps === true,
   });
 
   let simulation: SimulationResult = {
@@ -857,7 +862,7 @@ async function executeAgentTxLocked(
     throw new PolicyError(`Proposal ${proposalId} has negative valueWei`);
   }
 
-  // Re-check operator-trust gates at execution (kill/disabled/invalid only)
+  // Re-check gates at execution (kill/disabled/invalid; legacy caps if opted in)
   const destinationIsContract = await detectIsContract(config, proposal.to);
   const policyCheck = evaluatePolicy({
     policy: record.policy,
@@ -868,6 +873,7 @@ async function executeAgentTxLocked(
     valuePls: proposal.valuePls,
     data: proposal.data,
     destinationIsContract,
+    enforceLegacyCaps: config.agentWalletEnforceLegacyCaps === true,
   });
   if (!policyCheck.allowed) {
     auditPolicyDeny(config, {
@@ -916,6 +922,7 @@ async function executeAgentTxLocked(
     valuePls: proposal.valuePls,
     data: proposal.data,
     destinationIsContract,
+    enforceLegacyCaps: config.agentWalletEnforceLegacyCaps === true,
   });
   if (!preSendPolicy.allowed) {
     auditPolicyDeny(config, {
@@ -1327,12 +1334,16 @@ export interface OperatorAtAGlance {
   writesBlocked: boolean;
   multiprocMode: "strict-fail-closed" | "warn-only";
   /**
-   * Stored legacy MAX_PLS_* defaults (display only under operator-trust —
-   * not hard send gates). See defaultCapsDisplayOnly.
+   * Stored legacy MAX_PLS_* defaults. Display-only under operator-trust
+   * (product default). Hard when this process set AGENT_WALLET_ENFORCE_LEGACY_CAPS.
    */
   defaultCaps: { maxPlsPerTx: number; maxPlsDaily: number };
-  /** Always true under OT: defaultCaps / maxPls* are non-blocking. */
-  defaultCapsDisplayOnly: true;
+  /** True when defaultCaps / maxPls* are non-blocking on this process. */
+  defaultCapsDisplayOnly: boolean;
+  /** Whether this process opted into hard denies for stored legacy fields. */
+  legacyCapsEnforced: boolean;
+  /** display-only (product default) vs enforcing (opt-in env). */
+  legacyCapsMode: "display-only" | "enforcing";
   /**
    * Trust posture for agent wallets (v0.1.38+: operator_trust when enabled).
    * Legacy tight/moderate/loose labels may still appear in older tests only.
@@ -1358,6 +1369,7 @@ export function buildOperatorAtAGlance(params: {
   walletCount: number;
   killedWalletCount: number;
   ownership: WalletDirOwnershipStatusView;
+  enforceLegacyCaps?: boolean;
 }): OperatorAtAGlance {
   const {
     enabled,
@@ -1367,6 +1379,7 @@ export function buildOperatorAtAGlance(params: {
     walletCount,
     killedWalletCount,
     ownership,
+    enforceLegacyCaps = false,
   } = params;
 
   let policyPosture: OperatorPolicyPosture;
@@ -1377,12 +1390,15 @@ export function buildOperatorAtAGlance(params: {
       "Signing off until AGENT_WALLET_ENABLED=true. " +
       "Operator-trust model when enabled: funding the agent is authorization.";
   } else {
-    // Stored MAX_PLS_* / allowlist fields are legacy display only — not hard gates.
+    // Product model stays operator-trust. Opt-in env may hard-deny stored fields.
     policyPosture = "operator_trust";
-    policyPostureNote =
-      "Operator-trust mode (v0.1.38+): no hard spend-cap or deny-by-default allowlist gate. " +
-      "Funding the agent is authorization. Kill switch remains for emergencies. " +
-      `Legacy stored defaults shown as ${maxPlsPerTx}/${maxPlsDaily} PLS (not enforced as backstops).`;
+    policyPostureNote = enforceLegacyCaps
+      ? "Operator-trust product default. This process set AGENT_WALLET_ENFORCE_LEGACY_CAPS: " +
+        "stored maxPls*/allowlists/token caps are hard denies (opt-in, not a custody-policy product default). " +
+        `Stored defaults ${maxPlsPerTx}/${maxPlsDaily} PLS are enforced on this process.`
+      : "Operator-trust mode (v0.1.38+): no hard spend-cap or deny-by-default allowlist gate. " +
+        "Funding the agent is authorization. Kill switch remains for emergencies. " +
+        `Legacy stored defaults shown as ${maxPlsPerTx}/${maxPlsDaily} PLS (not enforced as backstops).`;
   }
 
   const multiprocRisk = ownership.multiProcessRisk === true;
@@ -1430,8 +1446,13 @@ export function buildOperatorAtAGlance(params: {
     bullets.push(WALLET_TX_ORDER_HINT);
   }
   bullets.push(
-    "confirm=true / MRTR is host UX only; operator-trust: funding the agent is authorization " +
-      "(no hard spend-cap/allowlist policy theater). Protect MASTER_KEY; use kill_switch if needed.",
+    enforceLegacyCaps
+      ? "Legacy caps mode: ENFORCING (AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1). " +
+        "Product default remains display-only / operator-trust when that env is unset. " +
+        "confirm=true / MRTR is still host UX only. Protect MASTER_KEY; use kill_switch if needed."
+      : "confirm=true / MRTR is host UX only; operator-trust: funding the agent is authorization " +
+        "(no hard spend-cap/allowlist policy theater). Protect MASTER_KEY; use kill_switch if needed. " +
+        "This process is display-only for stored legacy caps (AGENT_WALLET_ENFORCE_LEGACY_CAPS unset).",
   );
 
   let headline: string;
@@ -1487,7 +1508,9 @@ export function buildOperatorAtAGlance(params: {
     writesBlocked,
     multiprocMode: ownership.multiprocMode,
     defaultCaps: { maxPlsPerTx, maxPlsDaily },
-    defaultCapsDisplayOnly: true,
+    defaultCapsDisplayOnly: !enforceLegacyCaps,
+    legacyCapsEnforced: enforceLegacyCaps,
+    legacyCapsMode: enforceLegacyCaps ? "enforcing" : "display-only",
     policyPosture,
     policyPostureNote,
     bullets,
@@ -1524,6 +1547,7 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
       unavailable: ownershipUnavailable,
     },
   );
+  const enforceLegacyCaps = config.agentWalletEnforceLegacyCaps === true;
   const operatorAtAGlance = buildOperatorAtAGlance({
     enabled: config.agentWalletEnabled,
     masterKeyConfigured: Boolean(config.agentWalletMasterKey),
@@ -1532,14 +1556,20 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
     walletCount,
     killedWalletCount: killedCount,
     ownership: walletDirOwnership,
+    enforceLegacyCaps,
   });
   return {
     enabled: config.agentWalletEnabled,
     walletDir: config.agentWalletDir,
     maxPlsPerTxDefault: config.maxPlsPerTx,
     maxPlsDailyDefault: config.maxPlsDaily,
-    /** Operator-trust: maxPls* defaults are display/accounting only — not hard gates. */
-    maxPlsDefaultsDisplayOnly: true as const,
+    /** True when maxPls* defaults are display/accounting only on this process. */
+    maxPlsDefaultsDisplayOnly: !enforceLegacyCaps,
+    legacyCapsEnforced: enforceLegacyCaps,
+    legacyCapsMode: enforceLegacyCaps ? "enforcing" : "display-only",
+    legacyCapsModeNote: enforceLegacyCaps
+      ? "This process is ENFORCING stored legacy fields (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS). Product default remains operator-trust / display-only when the env is unset."
+      : "This process is DISPLAY-ONLY for stored legacy fields (operator-trust product default). Set AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1 to hard-deny those fields on this process.",
     masterKeyConfigured: Boolean(config.agentWalletMasterKey),
     walletCount,
     killedWalletCount: killedCount,
@@ -1561,15 +1591,19 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
       encryption: "AES-256-GCM",
       privateKeysInResponses: false,
       privateKeysInLogs: false,
-      trustModel:
-        "operator-trust (v0.1.38+): funding the agent is authorization; " +
-        "no hard spend-cap or deny-by-default allowlist safety backstop",
-      contractDefault:
-        "legacy allowlist fields may still be stored but are NOT hard gates",
+      trustModel: enforceLegacyCaps
+        ? "operator-trust product default; this process has AGENT_WALLET_ENFORCE_LEGACY_CAPS=true " +
+          "(opt-in hard denies for stored legacy fields — not a custody-policy product default)"
+        : "operator-trust (v0.1.38+): funding the agent is authorization; " +
+          "no hard spend-cap or deny-by-default allowlist safety backstop",
+      contractDefault: enforceLegacyCaps
+        ? "this process enforces stored contractAllowlist (empty list fails closed for contract interactions); product default remains display-only"
+        : "legacy allowlist fields may still be stored but are NOT hard gates",
       tokenAllowlistSemantics: TOKEN_ALLOWLIST_SEMANTICS,
-      tokenNotional:
-        "advisory decode for reviewSummary only — not a hard deny path; " +
-        "priority patterns still decoded for operator visibility",
+      tokenNotional: enforceLegacyCaps
+        ? "inspectTokenNotional drives erc20NotionalCaps when decode is reliable, and requireDecodableCalldata when it is not; product default remains advisory"
+        : "advisory decode for reviewSummary only — not a hard deny path; " +
+          "priority patterns still decoded for operator visibility",
       agentIntelligence:
         "reviewSummary includes agentGuidance, decodeKnowledge, movementExplanations, safetyHints; " +
         "inspect_tx_intent decodes calldata without wallet (local only, advisory)",
@@ -1601,8 +1635,9 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
         "after RPC accept before barrier: may leave pending (check explorer by from/nonce; no exactly-once). " +
         "after barrier before settle: non-retryable broadcasting+txHash; spend may undercount until " +
         "settle_interrupted_broadcast. after executed: durable. not distributed exactly-once",
-      eoaNativeTransfers:
-        "allowed when wallet enabled and not killed (operator-trust)",
+      eoaNativeTransfers: enforceLegacyCaps
+        ? "native EOA transfers denied when allowNativeTransfers=false on this process (opt-in enforce)"
+        : "allowed when wallet enabled and not killed (operator-trust)",
       killSwitch:
         "optional emergency: sets killed=true, enabled=false (under wallet lock)",
       confirmRequired:
@@ -1621,7 +1656,7 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
         "token movements, safetyHints (PulseChain gas / value vs gas / total available), " +
         "checksApplied, decisionTrace, confirmRationale, policyBackstop (operator-trust note), nextStep, " +
         "simulation.gasEstimate (units) + optional simulation.estimatedFeePlsApprox (approx PLS fee; non-blocking), " +
-        "remainingDailyIsDisplayOnly / legacyCapsDisplayOnly (maxPls* not hard gates)",
+        "remainingDailyIsDisplayOnly / legacyCapsDisplayOnly (display-only unless AGENT_WALLET_ENFORCE_LEGACY_CAPS)",
     },
   };
 }
