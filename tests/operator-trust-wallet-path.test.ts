@@ -43,6 +43,7 @@ function testConfig(): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: true,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 1,
     maxPlsDaily: 5,
     httpTransportPort: undefined,

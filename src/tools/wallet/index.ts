@@ -5,8 +5,9 @@
  * - Private keys are AES-256-GCM encrypted at rest and NEVER returned in
  *   tool responses, logs, or error messages.
  * - All write/signing tools require AGENT_WALLET_ENABLED=true.
- * - Operator-trust: funding the agent is authorization. Hard spend caps and
- *   deny-by-default allowlists are NOT safety backstops.
+ * - Operator-trust (product default): funding the agent is authorization.
+ *   Hard spend caps and deny-by-default allowlists are NOT safety backstops
+ *   unless AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1 (opt-in on this process).
  * - Optional kill_switch / enabled=false remain emergency operator controls.
  * - Transactions are simulated (estimateGas / eth_call) before broadcast.
  * - Confirm is dual-path: confirm=true arg (legacy/scripts) OR MRTR
@@ -261,9 +262,10 @@ export function registerWalletTools(
     name: "agent_wallet_check_policy",
     description:
       "Dry-run wallet write check for a native PLS amount (no send, no signing). " +
-      "Operator-trust: hard caps/allowlists are not gates; kill/disabled still block " +
-      "when walletId is supplied. Returns allow/deny, reasons, and reviewSummary. " +
-      "Prefer propose_agent_tx for real destinations.",
+      "Kill/disabled still block when walletId is supplied. Stored maxPls*/allowlists " +
+      "are display-only unless this process set AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1. " +
+      "Returns allow/deny, reasons, reviewSummary, and whether this process is " +
+      "enforcing or display-only. Prefer propose_agent_tx for real destinations.",
     category: "wallet",
     inputSchema: {
       walletId: walletIdSchema
@@ -324,6 +326,7 @@ export function registerWalletTools(
       }
       const toPlaceholder =
         "0x0000000000000000000000000000000000000001" as const;
+      const enforceLegacyCaps = cfg.agentWalletEnforceLegacyCaps === true;
       const check = evaluatePolicy({
         policy: {
           enabled,
@@ -345,6 +348,7 @@ export function registerWalletTools(
         valuePls: amountPls,
         data: "0x",
         destinationIsContract: false,
+        enforceLegacyCaps,
       });
       const reviewSummary = buildTxReviewSummary({
         to: toPlaceholder,
@@ -366,12 +370,21 @@ export function registerWalletTools(
           remainingDaily: check.remainingDaily,
           maxPlsPerTx: maxPer,
           maxPlsDaily: maxDaily,
+          legacyCapsDisplayOnly: check.legacyCapsDisplayOnly,
+          legacyCapsEnforced: enforceLegacyCaps,
+          legacyCapsMode: enforceLegacyCaps ? "enforcing" : "display-only",
           tokenNotional: check.tokenNotional,
           reviewSummary,
-          note:
-            "Dry-run uses a placeholder destination. Pass walletId to include " +
-            "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
-            "use propose_agent_tx and read reviewSummary before execute.",
+          note: enforceLegacyCaps
+            ? "This process is ENFORCING stored legacy caps (AGENT_WALLET_ENFORCE_LEGACY_CAPS). " +
+              "Product default remains display-only / operator-trust when the env is unset. " +
+              "Dry-run uses a placeholder destination. Pass walletId to include " +
+              "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
+              "use propose_agent_tx and read reviewSummary before execute."
+            : "This process is display-only for stored legacy caps (operator-trust default). " +
+              "Dry-run uses a placeholder destination. Pass walletId to include " +
+              "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
+              "use propose_agent_tx and read reviewSummary before execute.",
         }),
       );
     },

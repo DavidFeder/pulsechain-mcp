@@ -31,6 +31,7 @@ Do not use `console.log` / print-then-paste key generation with agents. Lose the
 - **Funding the agent is authorization.**
 - Private keys stay **AES-256-GCM** encrypted at rest; tools never return them.
 - No product spend-cap defaults. `MAX_PLS_*` / allowlists / token-notional are **display / advisory** if present — not hard custody locks. Real controls: **small balances**, **master key**, **unique dir**, **kill_switch**.
+- `AGENT_WALLET_ENFORCE_LEGACY_CAPS` is **off by default** (unset/`false`/`0`/empty). `true`/`1` is **opt-in** hard denies for those stored fields on **this process** — not a custody-policy product default.
 - `confirm=true` / MRTR is **host UX only** — not a cryptographic security product.
 - Prefer: create wallet → verify address → fund (value + PulseChain gas) → inspect → propose → review → execute.
 

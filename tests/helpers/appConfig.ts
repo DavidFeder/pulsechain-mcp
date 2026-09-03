@@ -22,6 +22,8 @@ export function testAppConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: overrides.agentWalletMasterKey,
     agentWalletDir: overrides.agentWalletDir ?? "./data/wallets-test",
     agentWalletMultiprocStrict: overrides.agentWalletMultiprocStrict ?? false,
+    agentWalletEnforceLegacyCaps:
+      overrides.agentWalletEnforceLegacyCaps ?? false,
     maxPlsPerTx: overrides.maxPlsPerTx ?? 100,
     maxPlsDaily: overrides.maxPlsDaily ?? 1000,
     httpTransportPort: overrides.httpTransportPort,

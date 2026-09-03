@@ -282,6 +282,53 @@ describe("loadConfig", () => {
     expect(cfg.agentWalletDir).toBe("./data/wallets");
   });
 
+  it("AGENT_WALLET_ENFORCE_LEGACY_CAPS: unset/false/0/empty → false; true/1 → true", () => {
+    expect(
+      loadConfig({ AGENT_WALLET_ENABLED: "false" })
+        .agentWalletEnforceLegacyCaps,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "",
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "false",
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "0",
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "true",
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(true);
+    expect(
+      loadConfig({
+        AGENT_WALLET_ENABLED: "true",
+        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "1",
+      }).agentWalletEnforceLegacyCaps,
+    ).toBe(true);
+  });
+
   it("AGENT_WALLET_MULTIPROC_STRICT: wallets-on unset/empty → true; explicit false/0 → false; research-only unset → false", () => {
     expect(
       loadConfig({ AGENT_WALLET_ENABLED: "false" }).agentWalletMultiprocStrict,

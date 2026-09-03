@@ -36,6 +36,7 @@ const smokeConfig: AppConfig = {
   agentWalletMasterKey: undefined,
   agentWalletDir: "./data/wallets-smoke",
   agentWalletMultiprocStrict: false,
+  agentWalletEnforceLegacyCaps: false,
   maxPlsPerTx: 100,
   maxPlsDaily: 1000,
   httpTransportPort: undefined,

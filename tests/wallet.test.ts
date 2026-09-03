@@ -74,6 +74,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempWalletDir(),
     agentWalletMultiprocStrict: false,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: 10,
     maxPlsDaily: 100,
     httpTransportPort: undefined,

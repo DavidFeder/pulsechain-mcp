@@ -57,6 +57,7 @@ function labConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempWalletDir(),
     agentWalletMultiprocStrict: true,
+    agentWalletEnforceLegacyCaps: false,
     maxPlsPerTx: LEGACY_MAX_PLS_PER_TX,
     maxPlsDaily: LEGACY_MAX_PLS_DAILY,
     httpTransportPort: undefined,
