@@ -121,12 +121,34 @@ function withWalletSecurity(description: string): string {
 function snapshotForWallet(
   cfg: AppConfig,
   walletId: string | undefined,
+  opts?: { required?: boolean },
 ): string {
-  if (!walletId) return "none";
+  if (!walletId) {
+    if (opts?.required) {
+      throw new PolicyError(
+        "Confirmation cannot bind a policy snapshot without a wallet id.",
+      );
+    }
+    return "none";
+  }
   try {
     const record = loadWalletRecord(cfg.agentWalletDir, walletId);
-    return policySnapshotId(record.policy);
-  } catch {
+    const snap = policySnapshotId(record.policy);
+    if (opts?.required && (snap === "none" || !snap)) {
+      throw new PolicyError(
+        `Wallet ${walletId} has no usable policy snapshot; refusing to skip confirmation policy checks.`,
+      );
+    }
+    return snap;
+  } catch (err) {
+    if (opts?.required) {
+      if (err instanceof PolicyError) throw err;
+      throw new PolicyError(
+        `Cannot load policy snapshot for wallet ${walletId}; confirmation cannot skip policy-change checks. ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
     return "none";
   }
 }
@@ -644,7 +666,9 @@ export function registerWalletTools(
         args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
         walletId: peek.walletId,
-        policySnapshotId: "none",
+        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
+          required: true,
+        }),
       });
       if (gate !== true) return gate;
 
@@ -683,7 +707,9 @@ export function registerWalletTools(
         args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
         walletId: peek.walletId,
-        policySnapshotId: "none",
+        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
+          required: true,
+        }),
       });
       if (gate !== true) return gate;
 
@@ -726,7 +752,9 @@ export function registerWalletTools(
         args: { ...args, ...proposalExecutionIntentArgs(peek) },
         ctx,
         walletId: peek.walletId,
-        policySnapshotId: "none",
+        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
+          required: true,
+        }),
       });
       if (gate !== true) return gate;
 

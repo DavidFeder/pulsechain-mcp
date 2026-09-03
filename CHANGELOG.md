@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `execute_agent_tx`, `sign_and_send`, and `settle_interrupted_broadcast` pass a real `policySnapshotId` (same `snapshotForWallet` helper as other wallet writes) so an MRTR confirm challenge re-prompts if kill, disable, or other policy JSON changes between challenge and resume; a missing wallet record fails closed instead of snapshot `"none"`
 - Persist `chainId` and `network` on `TxProposal` at propose time; refuse execute (and `transfer_pls`) when the sealed chain is missing or does not match live config, and bind chain in confirm intent so MRTR cannot reuse a proposal after a mainnet ↔ testnet env flip
 - Report the configured PulseChain id (369 mainnet / 943 testnet) on chain tools, unsigned prepare payloads, health, and `pulsechain://chain/config` instead of always stamping 369; testnet with default mainnet explorer/subgraph surfaces `networkMismatch`; Piteas/Switch/PulseSwap quotes stay on aggregator chain 369 and warn when the server is on testnet
 

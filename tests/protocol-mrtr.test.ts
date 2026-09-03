@@ -2,7 +2,11 @@
  * Unit tests for dual-protocol wallet confirm (confirm=true + MRTR InputRequiredResult).
  * Mocks round-trips; no live RPC / no real private key material in assertions.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isInputRequiredResult,
   type InputRequiredResult,
@@ -27,6 +31,20 @@ import { PolicyError } from "../src/utils/errors.js";
 import { stripSecrets } from "../src/utils/safety.js";
 import { isInputRequiredResult as defineGuard } from "@modelcontextprotocol/server";
 import { DEFAULT_POLICY } from "../src/wallet/types.js";
+import type { AppConfig } from "../src/types.js";
+import * as rpc from "../src/data/rpc.js";
+import { resetToolRegistry } from "../src/tools/define.js";
+import { registerWalletTools } from "../src/tools/wallet/index.js";
+import { resetWalletLocksForTests } from "../src/wallet/lock.js";
+import { resetWalletDirOwnershipForTests } from "../src/wallet/owner.js";
+import {
+  createAgentWallet,
+  killSwitch,
+  proposeAgentTx,
+  setAgentPolicy,
+  setTestBroadcast,
+} from "../src/wallet/service.js";
+import { loadWalletRecord, persistBroadcastBarrier } from "../src/wallet/store.js";
 
 const PRIVATE_KEY_HEX_RE = /0x[a-fA-F0-9]{64}/;
 
@@ -445,6 +463,77 @@ describe("resolveConfirm dual path", () => {
     expect(reDecoded.intentHash).toBe(computeIntentHash(tool, args));
   });
 
+  it("MRTR resume re-challenges execute_agent_tx when policy snapshot changed after mint", async () => {
+    const tool = "execute_agent_tx";
+    const walletId = "aw_" + "44".repeat(16);
+    const args = { proposalId: "prop_" + "ab".repeat(12) };
+    const snapBefore = policySnapshotId(DEFAULT_POLICY(10, 100));
+    const snapAfter = policySnapshotId(DEFAULT_POLICY(1, 10));
+    expect(snapBefore).not.toBe(snapAfter);
+
+    const first = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args,
+      ctx: modernCtx(),
+      walletId,
+      policySnapshotId: snapBefore,
+    });
+    if (first.confirmed) throw new Error("expected challenge");
+
+    const second = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args,
+      ctx: modernCtx({
+        inputResponses: acceptConfirmResponses(true),
+        requestState: first.inputRequired.requestState,
+      }),
+      walletId,
+      policySnapshotId: snapAfter,
+    });
+    expect(second.confirmed).toBe(false);
+    if (second.confirmed) throw new Error("expected re-challenge");
+    expect(isInputRequiredResult(second.inputRequired)).toBe(true);
+    const reDecoded = await getConfirmStateCodec().verify(
+      second.inputRequired.requestState!,
+      {} as never,
+    );
+    expect(reDecoded.policySnapshotId).toBe(snapAfter);
+    expect(reDecoded.tool).toBe(tool);
+  });
+
+  it("MRTR resume proceeds execute_agent_tx when policy snapshot is unchanged", async () => {
+    const tool = "execute_agent_tx";
+    const walletId = "aw_" + "44".repeat(16);
+    const args = { proposalId: "prop_" + "ab".repeat(12) };
+    const snap = policySnapshotId(DEFAULT_POLICY(10, 100));
+
+    const first = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args,
+      ctx: modernCtx(),
+      walletId,
+      policySnapshotId: snap,
+    });
+    if (first.confirmed) throw new Error("expected challenge");
+
+    const second = await resolveConfirm({
+      tool,
+      message: "Execute?",
+      args,
+      ctx: modernCtx({
+        inputResponses: acceptConfirmResponses(true),
+        requestState: first.inputRequired.requestState,
+      }),
+      walletId,
+      policySnapshotId: snap,
+    });
+    expect(second.confirmed).toBe(true);
+    if (second.confirmed) expect(second.via).toBe("mrtr");
+  });
+
   it("requireConfirmOrInput returns InputRequiredResult for MRTR first round", async () => {
     const out = await requireConfirmOrInput({
       tool: "create_agent_wallet",
@@ -519,5 +608,336 @@ describe("requestState security invariants", () => {
     const text = JSON.stringify(scrubbed);
     expect(text).not.toMatch(PRIVATE_KEY_HEX_RE);
     expect(text.toLowerCase()).not.toContain("privatekey");
+  });
+});
+
+const FAKE_TX_HASH = ("0x" + "ab".repeat(32)) as `0x${string}`;
+const snapshotTempDirs: string[] = [];
+
+type CapturedToolHandler = (
+  args?: Record<string, unknown>,
+  mcpCtx?: unknown,
+) => Promise<unknown>;
+
+function snapshotTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  const dir = mkdtempSync(join(tmpdir(), "aw-snap-"));
+  snapshotTempDirs.push(dir);
+  return {
+    rpcUrl: "https://rpc.pulsechain.com",
+    rpcUrls: ["https://rpc.pulsechain.com"],
+    network: "mainnet",
+    explorerApi: "https://api.scan.pulsechain.com/api",
+    pulseXSubgraphV1: "https://example.com/v1",
+    pulseXSubgraphV2: "https://example.com/v2",
+    agentWalletEnabled: true,
+    agentWalletMasterKey: randomBytes(32).toString("hex"),
+    agentWalletDir: dir,
+    agentWalletMultiprocStrict: false,
+    maxPlsPerTx: 10,
+    maxPlsDaily: 100,
+    httpTransportPort: undefined,
+    logLevel: "error",
+    httpTimeoutMs: 5000,
+    ...overrides,
+  };
+}
+
+function mockRpcEoa() {
+  vi.spyOn(rpc, "getPublicClient").mockReturnValue({
+    getBytecode: async () => undefined,
+  } as never);
+  vi.spyOn(rpc, "estimateGas").mockResolvedValue({ gasEstimate: "21000" });
+  vi.spyOn(rpc, "ethCall").mockResolvedValue({ data: "0x" });
+  vi.spyOn(rpc, "getFeeData").mockResolvedValue({
+    gasPriceWei: "100000000000000",
+    maxFeePerGas: "100000000000000",
+    maxPriorityFeePerGas: "1000000000",
+  });
+}
+
+function captureWalletHandlers(
+  cfg: AppConfig,
+): Map<string, CapturedToolHandler> {
+  const handlers = new Map<string, CapturedToolHandler>();
+  const server = {
+    registerTool: (name: string, ...rest: unknown[]) => {
+      const cb = rest[rest.length - 1];
+      if (typeof cb === "function") {
+        handlers.set(name, cb as CapturedToolHandler);
+      }
+    },
+  };
+  resetToolRegistry();
+  registerWalletTools(server as never, cfg);
+  return handlers;
+}
+
+function mrtrMcpCtx(overrides?: {
+  inputResponses?: Record<string, unknown>;
+  requestState?: string;
+}) {
+  return {
+    mcpReq: {
+      envelope: {},
+      inputResponses: overrides?.inputResponses,
+      requestState: overrides?.requestState,
+    },
+  };
+}
+
+function expectInputRequired(value: unknown): InputRequiredResult {
+  expect(isInputRequiredResult(value)).toBe(true);
+  return value as InputRequiredResult;
+}
+
+function toolErrorText(value: unknown): string {
+  const res = value as {
+    isError?: boolean;
+    content?: Array<{ text?: string }>;
+  };
+  expect(res.isError).toBe(true);
+  return res.content?.[0]?.text ?? JSON.stringify(value);
+}
+
+describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
+  afterEach(() => {
+    setTestBroadcast(null);
+    resetWalletLocksForTests();
+    resetWalletDirOwnershipForTests();
+    resetToolRegistry();
+    vi.restoreAllMocks();
+    while (snapshotTempDirs.length) {
+      const d = snapshotTempDirs.pop();
+      if (d) rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  async function pendingProposal(cfg: AppConfig) {
+    mockRpcEoa();
+    const wallet = await createAgentWallet(cfg);
+    const proposal = await proposeAgentTx(cfg, {
+      walletId: wallet.id,
+      to: "0x0000000000000000000000000000000000000001",
+      valuePls: 1,
+      data: "0x",
+    });
+    return { wallet, proposal };
+  }
+
+  it("create_agent_wallet still mints policySnapshotId none", async () => {
+    const cfg = snapshotTestConfig();
+    const handlers = captureWalletHandlers(cfg);
+    const first = expectInputRequired(
+      await handlers.get("create_agent_wallet")!({}, mrtrMcpCtx()),
+    );
+    const decoded = await getConfirmStateCodec().verify(
+      first.requestState!,
+      {} as never,
+    );
+    expect(decoded.tool).toBe("create_agent_wallet");
+    expect(decoded.policySnapshotId).toBe("none");
+    expect(decoded.walletId).toBeUndefined();
+  });
+
+  it("execute_agent_tx MRTR challenge seals the current wallet policy snapshot", async () => {
+    const cfg = snapshotTestConfig();
+    const { wallet, proposal } = await pendingProposal(cfg);
+    const snap = policySnapshotId(
+      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
+    );
+    expect(snap).not.toBe("none");
+
+    const handlers = captureWalletHandlers(cfg);
+    const first = expectInputRequired(
+      await handlers.get("execute_agent_tx")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+    const decoded = await getConfirmStateCodec().verify(
+      first.requestState!,
+      {} as never,
+    );
+    expect(decoded.tool).toBe("execute_agent_tx");
+    expect(decoded.walletId).toBe(wallet.id);
+    expect(decoded.policySnapshotId).toBe(snap);
+  });
+
+  it("execute_agent_tx MRTR resume re-challenges when policy snapshot changed after mint", async () => {
+    const cfg = snapshotTestConfig();
+    const { wallet, proposal } = await pendingProposal(cfg);
+    const snapBefore = policySnapshotId(
+      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
+    );
+    const handlers = captureWalletHandlers(cfg);
+
+    const first = expectInputRequired(
+      await handlers.get("execute_agent_tx")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+
+    const killed = await killSwitch(cfg, wallet.id);
+    const snapAfter = policySnapshotId(killed.policy);
+    expect(snapAfter).not.toBe(snapBefore);
+
+    const second = expectInputRequired(
+      await handlers.get("execute_agent_tx")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx({
+          inputResponses: acceptConfirmResponses(true),
+          requestState: first.requestState,
+        }),
+      ),
+    );
+    const reDecoded = await getConfirmStateCodec().verify(
+      second.requestState!,
+      {} as never,
+    );
+    expect(reDecoded.policySnapshotId).toBe(snapAfter);
+    expect(reDecoded.tool).toBe("execute_agent_tx");
+  });
+
+  it("execute_agent_tx MRTR resume proceeds when policy snapshot is unchanged", async () => {
+    const cfg = snapshotTestConfig();
+    const { proposal } = await pendingProposal(cfg);
+    const handlers = captureWalletHandlers(cfg);
+    setTestBroadcast(async () => FAKE_TX_HASH);
+
+    const first = expectInputRequired(
+      await handlers.get("execute_agent_tx")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+
+    const second = await handlers.get("execute_agent_tx")!(
+      { proposalId: proposal.id },
+      mrtrMcpCtx({
+        inputResponses: acceptConfirmResponses(true),
+        requestState: first.requestState,
+      }),
+    );
+    expect(isInputRequiredResult(second)).toBe(false);
+    const res = second as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; data?: { txHash?: string } };
+    };
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(res.structuredContent?.data?.txHash).toBe(FAKE_TX_HASH);
+  });
+
+  it("settle_interrupted_broadcast MRTR resume re-challenges when policy snapshot changed after mint", async () => {
+    const cfg = snapshotTestConfig();
+    const { wallet, proposal } = await pendingProposal(cfg);
+    persistBroadcastBarrier(
+      cfg.agentWalletDir,
+      proposal,
+      FAKE_TX_HASH,
+    );
+    const snapBefore = policySnapshotId(
+      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
+    );
+    const handlers = captureWalletHandlers(cfg);
+
+    const first = expectInputRequired(
+      await handlers.get("settle_interrupted_broadcast")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+    const minted = await getConfirmStateCodec().verify(
+      first.requestState!,
+      {} as never,
+    );
+    expect(minted.policySnapshotId).toBe(snapBefore);
+
+    const updated = await setAgentPolicy(cfg, wallet.id, { maxPlsPerTx: 1 });
+    const snapAfter = policySnapshotId(updated.policy);
+    expect(snapAfter).not.toBe(snapBefore);
+
+    const second = expectInputRequired(
+      await handlers.get("settle_interrupted_broadcast")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx({
+          inputResponses: acceptConfirmResponses(true),
+          requestState: first.requestState,
+        }),
+      ),
+    );
+    const reDecoded = await getConfirmStateCodec().verify(
+      second.requestState!,
+      {} as never,
+    );
+    expect(reDecoded.policySnapshotId).toBe(snapAfter);
+    expect(reDecoded.tool).toBe("settle_interrupted_broadcast");
+  });
+
+  it("settle_interrupted_broadcast MRTR resume proceeds when policy snapshot is unchanged", async () => {
+    const cfg = snapshotTestConfig();
+    const { proposal } = await pendingProposal(cfg);
+    persistBroadcastBarrier(cfg.agentWalletDir, proposal, FAKE_TX_HASH);
+    const handlers = captureWalletHandlers(cfg);
+
+    const first = expectInputRequired(
+      await handlers.get("settle_interrupted_broadcast")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+
+    const second = await handlers.get("settle_interrupted_broadcast")!(
+      { proposalId: proposal.id },
+      mrtrMcpCtx({
+        inputResponses: acceptConfirmResponses(true),
+        requestState: first.requestState,
+      }),
+    );
+    expect(isInputRequiredResult(second)).toBe(false);
+    const res = second as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; data?: { status?: string } };
+    };
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(res.structuredContent?.data?.status).toBe("executed");
+  });
+
+  it("sign_and_send MRTR challenge seals the current wallet policy snapshot", async () => {
+    const cfg = snapshotTestConfig();
+    const { wallet, proposal } = await pendingProposal(cfg);
+    const handlers = captureWalletHandlers(cfg);
+    const first = expectInputRequired(
+      await handlers.get("sign_and_send")!(
+        { proposalId: proposal.id },
+        mrtrMcpCtx(),
+      ),
+    );
+    const decoded = await getConfirmStateCodec().verify(
+      first.requestState!,
+      {} as never,
+    );
+    expect(decoded.tool).toBe("sign_and_send");
+    expect(decoded.policySnapshotId).toBe(
+      policySnapshotId(loadWalletRecord(cfg.agentWalletDir, wallet.id).policy),
+    );
+  });
+
+  it("execute_agent_tx fails closed when the wallet record cannot be loaded", async () => {
+    const cfg = snapshotTestConfig();
+    const { wallet, proposal } = await pendingProposal(cfg);
+    unlinkSync(join(cfg.agentWalletDir, `${wallet.id}.json`));
+    const handlers = captureWalletHandlers(cfg);
+
+    const first = await handlers.get("execute_agent_tx")!(
+      { proposalId: proposal.id },
+      mrtrMcpCtx(),
+    );
+    expect(isInputRequiredResult(first)).toBe(false);
+    const text = toolErrorText(first);
+    expect(text).toMatch(/policy snapshot|Wallet not found/i);
+    expect(text).not.toMatch(/"policySnapshotId":\s*"none"/);
   });
 });
