@@ -86,6 +86,24 @@ describe("operator-trust wallet path (shipped)", () => {
     expect(server).not.toMatch(/policy-gated agent wallets/i);
   });
 
+  it("createServer instructions differ for wallets on vs research-only", async () => {
+    const { mcpServerInstructions } = await import("../src/server.js");
+    const walletsOn = mcpServerInstructions(true);
+    const researchOnly = mcpServerInstructions(false);
+
+    expect(walletsOn).toMatch(/operator-trust agent wallets/i);
+    expect(walletsOn).toMatch(/funding authorizes/i);
+    expect(walletsOn).toMatch(/confirm=true \/ MRTR is host UX only/i);
+
+    expect(researchOnly).toMatch(/analytics and chain reads/i);
+    expect(researchOnly).toMatch(/Write and signing tools refuse/i);
+    expect(researchOnly).toMatch(/pulsechain:\/\/guidance\/ro-research/);
+    expect(researchOnly).toMatch(/does not sign or broadcast/i);
+    expect(researchOnly).not.toMatch(/funding authorizes/i);
+    expect(researchOnly).not.toMatch(/Wallet writes require/i);
+    expect(walletsOn).not.toBe(researchOnly);
+  });
+
   it("evaluatePolicy marks legacy caps display-only and still allows over-cap", () => {
     const amountPls = 50_000;
     const valueWei = parsePlsToWei(amountPls);
