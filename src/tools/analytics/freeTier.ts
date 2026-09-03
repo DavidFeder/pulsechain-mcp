@@ -950,10 +950,9 @@ export function registerFreeTierAnalyticsTools(
         if (price === 0) flags.push("zero_price");
 
         // Quick ABI scan
-        let suspicious: string[] = [];
         try {
           const abi = await getContractAbi(cfg, t.id);
-          suspicious = scanSuspiciousPatterns(abi);
+          const suspicious = scanSuspiciousPatterns(abi);
           flags.push(...suspicious.map((s) => `abi:${s}`));
         } catch {
           flags.push("abi_unavailable");

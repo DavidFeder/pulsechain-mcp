@@ -448,7 +448,7 @@ describe("isTransportFailure + withRpcFailover alignment", () => {
     initMultiRpcState({ urls, timeoutMs: 5_000, cooldownMs: 60_000 });
     let calls = 0;
     await expect(
-      withRpcFailover(urls, async (url) => {
+      withRpcFailover(urls, async (_url) => {
         calls += 1;
         const err = new Error("execution reverted") as Error & { code?: number };
         err.code = 3;

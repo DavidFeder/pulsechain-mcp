@@ -172,7 +172,7 @@ export function evaluatePolicy(input: PolicyEvalInput): PolicyCheckResult {
   const projectedWei = spentWei + valueWei;
   // Legacy cap fields are not enforced; remainingDaily reports headroom vs stored
   // maxPlsDaily for display only (can be 0 when over the stored number).
-  let remainingWei = 0n;
+  let remainingWei: bigint;
   try {
     const maxDailyWei = capPlsToWei(input.policy.maxPlsDaily);
     remainingWei =

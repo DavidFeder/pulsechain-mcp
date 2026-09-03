@@ -138,7 +138,7 @@ export function buildSupplyFields(
   decimals: number | null,
 ): ContractSupplyFields {
   let circulatingSupplyEstimate: ContractSupplyFields["circulatingSupplyEstimate"] = null;
-  let circulatingSupplyMethod: string | null = null;
+  let circulatingSupplyMethod: string;
   if (base.contractTotalSupplyRaw && excludedSupplyEstimate?.raw) {
     const contractRaw = parseStrictRawBigInt(base.contractTotalSupplyRaw);
     const excludedRaw = parseStrictRawBigInt(excludedSupplyEstimate.raw);
