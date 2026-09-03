@@ -97,6 +97,7 @@ describe("operator-trust wallet path (shipped)", () => {
 
     expect(researchOnly).toMatch(/analytics and chain reads/i);
     expect(researchOnly).toMatch(/Write and signing tools refuse/i);
+    expect(researchOnly).toMatch(/are not listed/i);
     expect(researchOnly).toMatch(/pulsechain:\/\/guidance\/ro-research/);
     expect(researchOnly).toMatch(/does not sign or broadcast/i);
     expect(researchOnly).not.toMatch(/funding authorizes/i);

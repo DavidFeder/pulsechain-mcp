@@ -29,6 +29,7 @@ import { USDC_FROM_ETH_ADDRESS, WPLS_ADDRESS } from "../src/constants.js";
 import { getRegisteredTools, resetToolRegistry } from "../src/tools/define.js";
 import { registerAllTools } from "../src/tools/registry.js";
 import type { AppConfig } from "../src/types.js";
+import { REGISTERED_TOOL_COUNT_RESEARCH_ONLY } from "./helpers/toolInventory.js";
 
 const baseConfig: Pick<AppConfig, "httpTimeoutMs"> = { httpTimeoutMs: 5_000 };
 
@@ -611,7 +612,7 @@ describe("Switch tool registration", () => {
     expect(meta.find((m) => m.name === "switch_prepare_swap")?.description).toMatch(
       /piteas|SWITCH_API_KEY|request-api-key/i,
     );
-    // 92 prior + switch_quote + switch_prepare_swap
-    expect(meta.length).toBe(96);
+    // Research-only inventory (writes omitted)
+    expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
   });
 });

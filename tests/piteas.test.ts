@@ -23,6 +23,7 @@ import { USDC_FROM_ETH_ADDRESS, WPLS_ADDRESS } from "../src/constants.js";
 import { getRegisteredTools, resetToolRegistry } from "../src/tools/define.js";
 import { registerAllTools } from "../src/tools/registry.js";
 import type { AppConfig } from "../src/types.js";
+import { REGISTERED_TOOL_COUNT_RESEARCH_ONLY } from "./helpers/toolInventory.js";
 
 const baseConfig: Pick<AppConfig, "httpTimeoutMs"> = { httpTimeoutMs: 5_000 };
 
@@ -457,6 +458,6 @@ describe("Piteas tool registration", () => {
     expect(meta.find((m) => m.name === "piteas_quote")?.description).toMatch(
       /best-price|oracle|Preferred aggregator/i,
     );
-    expect(meta.length).toBe(96);
+    expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
   });
 });

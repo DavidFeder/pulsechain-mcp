@@ -17,6 +17,13 @@ import {
   DEFAULT_RPC_URLS,
 } from "../src/constants.js";
 import type { AppConfig } from "../src/types.js";
+import {
+  REGISTERED_TOOL_COUNT_RESEARCH_ONLY,
+  REGISTERED_TOOL_COUNT_WALLETS_ON,
+  WALLET_READ_TOOL_NAMES,
+  WALLET_TOOL_NAMES,
+  WALLET_WRITE_TOOL_NAMES,
+} from "./helpers/toolInventory.js";
 
 const smokeConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -80,35 +87,7 @@ const CHAIN_CANONICAL = [
   "prepare_swap",
 ] as const;
 
-/** Verification inventory — agent wallet tools */
-const WALLET_TOOLS = [
-  "agent_wallet_status",
-  "agent_wallet_check_policy",
-  "inspect_tx_intent",
-  "get_agent_wallet_info",
-  "list_agent_wallets",
-  "create_agent_wallet",
-  "set_agent_policy",
-  "propose_agent_tx",
-  "execute_agent_tx",
-  "sign_and_send",
-  "settle_interrupted_broadcast",
-  "transfer_pls",
-  "kill_switch",
-  "revoke",
-] as const;
-
-const WALLET_WRITE_TOOLS = [
-  "create_agent_wallet",
-  "set_agent_policy",
-  "propose_agent_tx",
-  "execute_agent_tx",
-  "sign_and_send",
-  "settle_interrupted_broadcast",
-  "transfer_pls",
-  "kill_switch",
-  "revoke",
-] as const;
+const walletsOnConfig: AppConfig = { ...smokeConfig, agentWalletEnabled: true };
 
 /** Required MCP resource URIs */
 const REQUIRED_RESOURCES = [
@@ -167,15 +146,45 @@ afterEach(() => {
 });
 
 describe("smoke: tool registration (no live network)", () => {
-  it("registerAllTools registers full verification inventory", () => {
+  it("research-only omits write tools from tools/list and keeps wallet reads", () => {
     const { names, server } = mockServer();
     resetToolRegistry();
     registerAllTools(server as never, smokeConfig);
 
     const meta = getRegisteredTools();
-    // 96 tools: 94 prior + phiat_dashboard + piteas_accumulation_plan
-    expect(meta.length).toBe(96);
-    expect(names.length).toBe(96);
+    expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(87);
+    expect(names.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
+    expect(names.length).toBe(meta.length);
+
+    const byName = new Set(meta.map((t) => t.name));
+
+    expect(byName.has("pulsechain_health")).toBe(true);
+    expect(byName.has("pulsechain_status")).toBe(true);
+    expect(byName.has("get_rpc_health")).toBe(true);
+    expect(byName.has("get_token_price")).toBe(true);
+    expect(byName.has("phiat_dashboard")).toBe(true);
+    expect(byName.has("piteas_accumulation_plan")).toBe(true);
+
+    for (const n of WALLET_READ_TOOL_NAMES) expect(byName.has(n)).toBe(true);
+    for (const n of WALLET_WRITE_TOOL_NAMES) expect(byName.has(n)).toBe(false);
+
+    const byCat = (c: string) => meta.filter((t) => t.category === c);
+    expect(byCat("health").length).toBe(3);
+    expect(byCat("chain").length).toBe(27);
+    expect(byCat("wallet").length).toBe(WALLET_READ_TOOL_NAMES.length);
+    expect(meta.filter((t) => t.write)).toEqual([]);
+    expect(new Set(meta.map((t) => t.name)).size).toBe(meta.length);
+  });
+
+  it("registerAllTools registers full verification inventory when wallets are on", () => {
+    const { names, server } = mockServer();
+    resetToolRegistry();
+    registerAllTools(server as never, walletsOnConfig);
+
+    const meta = getRegisteredTools();
+    expect(meta.length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON);
+    expect(names.length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON);
     expect(names.length).toBe(meta.length);
 
     const byName = new Set(meta.map((t) => t.name));
@@ -190,7 +199,7 @@ describe("smoke: tool registration (no live network)", () => {
     expect(byName.has("phiat_dashboard")).toBe(true);
     expect(byName.has("piteas_accumulation_plan")).toBe(true);
     for (const n of CHAIN_CANONICAL) expect(byName.has(n)).toBe(true);
-    for (const n of WALLET_TOOLS) expect(byName.has(n)).toBe(true);
+    for (const n of WALLET_TOOL_NAMES) expect(byName.has(n)).toBe(true);
 
     // DexScreener (v0.1.25)
     for (const n of [
@@ -236,7 +245,7 @@ describe("smoke: tool registration (no live network)", () => {
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
     expect(byCat("chain").length).toBe(27);
-    expect(byCat("wallet").length).toBe(14);
+    expect(byCat("wallet").length).toBe(WALLET_TOOL_NAMES.length);
     const analytics = byCat("analytics");
     // free + advanced + PulseX + DexScreener + Tier A (11) + Tier B
     // PulseX: 8 low-level + 3 Tier B factory/day/lp = 11 starting with pulsex_
@@ -244,7 +253,8 @@ describe("smoke: tool registration (no live network)", () => {
     expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5);
     expect(FREE_ANALYTICS).toHaveLength(11);
     expect(ADVANCED_ANALYTICS).toHaveLength(9);
-    expect(WALLET_TOOLS).toHaveLength(14);
+    expect(WALLET_TOOL_NAMES).toHaveLength(14);
+    expect(WALLET_WRITE_TOOL_NAMES).toHaveLength(9);
     const pulsexSubgraph = analytics.filter((t) =>
       t.name.startsWith("pulsex_"),
     );
@@ -271,8 +281,8 @@ describe("smoke: tool registration (no live network)", () => {
 
     // Write tools flagged + gated
     const writeTools = meta.filter((t) => t.write);
-    expect(writeTools.length).toBeGreaterThanOrEqual(WALLET_WRITE_TOOLS.length);
-    for (const n of WALLET_WRITE_TOOLS) {
+    expect(writeTools.length).toBe(WALLET_WRITE_TOOL_NAMES.length);
+    for (const n of WALLET_WRITE_TOOL_NAMES) {
       expect(writeTools.some((t) => t.name === n)).toBe(true);
     }
 
@@ -291,7 +301,7 @@ describe("smoke: tool registration (no live network)", () => {
     expect(server).toBeTruthy();
 
     const tools = getRegisteredTools();
-    expect(tools.length).toBe(96);
+    expect(tools.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(tools.some((t) => t.name === "get_rpc_health")).toBe(true);
     const names = tools.map((t) => t.name).sort();
     expect(names).toContain("pulsechain_health");
@@ -303,6 +313,9 @@ describe("smoke: tool registration (no live network)", () => {
     expect(names).toContain("dexscreener_token_pairs");
     expect(names).toContain("phiat_dashboard");
     expect(names).toContain("piteas_accumulation_plan");
+    for (const n of WALLET_WRITE_TOOL_NAMES) {
+      expect(names).not.toContain(n);
+    }
     // No duplicate names
     expect(new Set(names).size).toBe(names.length);
   });
@@ -321,14 +334,14 @@ describe("smoke: tool registration (no live network)", () => {
     const { registerTool } = await import("../src/tools/define.js");
     resetToolRegistry();
 
-    registerTool(server as never, smokeConfig, {
+    registerTool(server as never, walletsOnConfig, {
       name: "get_token_price",
       description: "read",
       category: "analytics",
       inputSchema: {},
       handler: async () => ({}),
     });
-    registerTool(server as never, smokeConfig, {
+    registerTool(server as never, walletsOnConfig, {
       name: "transfer_pls",
       description: "write",
       category: "wallet",
@@ -336,7 +349,7 @@ describe("smoke: tool registration (no live network)", () => {
       inputSchema: {},
       handler: async () => ({}),
     });
-    registerTool(server as never, smokeConfig, {
+    registerTool(server as never, walletsOnConfig, {
       name: "prepare_swap",
       description: "unsigned prepare",
       category: "chain",
@@ -373,8 +386,8 @@ describe("smoke: tool registration (no live network)", () => {
       },
     };
     resetToolRegistry();
-    registerAllTools(server as never, smokeConfig);
-    expect(getRegisteredTools().length).toBe(96);
+    registerAllTools(server as never, walletsOnConfig);
+    expect(getRegisteredTools().length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON);
 
     const readOnly = {
       readOnlyHint: true,
@@ -399,7 +412,7 @@ describe("smoke: tool registration (no live network)", () => {
     ] as const) {
       expect(configs.get(name)?.annotations, name).toEqual(readOnly);
     }
-    for (const name of WALLET_WRITE_TOOLS) {
+    for (const name of WALLET_WRITE_TOOL_NAMES) {
       expect(configs.get(name)?.annotations, name).toEqual(writeAnns);
     }
   });
@@ -467,6 +480,7 @@ describe("smoke: tool registration (no live network)", () => {
     const wallets = await instructionsFromInitialize(walletCfg);
     expect(ro).toMatch(/analytics and chain reads/i);
     expect(ro).toMatch(/Write and signing tools refuse/i);
+    expect(ro).toMatch(/are not listed/i);
     expect(ro).toMatch(/pulsechain:\/\/guidance\/ro-research/);
     expect(ro).toMatch(/does not sign or broadcast/i);
     expect(wallets).toMatch(/operator-trust agent wallets/i);
@@ -512,35 +526,66 @@ describe("smoke: tool registration (no live network)", () => {
       agentWalletEnabled: false,
     });
 
-    for (const writeName of [
-      "execute_agent_tx",
-      "transfer_pls",
-      "create_agent_wallet",
-      "kill_switch",
-      "sign_and_send",
-    ] as const) {
-      const execute = handlers.get(writeName);
-      expect(execute, writeName).toBeTypeOf("function");
-      const res = await execute!({
-        proposalId: "prop_" + "ab".repeat(12),
-        walletId: "aw_" + "ab".repeat(16),
-        confirm: true,
-        to: "0x0000000000000000000000000000000000000001",
-        amountPls: 1,
-      });
-      expect(res.isError, writeName).toBe(true);
-      const body = JSON.parse(res.content[0]!.text) as {
-        ok: boolean;
-        error?: string;
-        code?: string;
-      };
-      expect(body.ok).toBe(false);
-      expect(body.code).toBe("POLICY_ERROR");
-      expect(body.error).toMatch(/AGENT_WALLET_ENABLED=false|disabled/i);
-      // No secret material in error path
-      expect(res.content[0]!.text).not.toMatch(/0x[a-fA-F0-9]{64}/);
-      expect(res.content[0]!.text).not.toMatch(/"privateKey"\s*:/i);
+    const listed = getRegisteredTools().map((t) => t.name);
+    expect(listed).toHaveLength(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
+    for (const writeName of WALLET_WRITE_TOOL_NAMES) {
+      expect(listed, writeName).not.toContain(writeName);
+      expect(handlers.has(writeName), writeName).toBe(false);
     }
+    for (const readName of WALLET_READ_TOOL_NAMES) {
+      expect(listed).toContain(readName);
+    }
+    expect(listed).toContain("pulsechain_health");
+    expect(listed).toContain("get_token_price");
+    expect(listed).toContain("phiat_dashboard");
+
+    const { registerTool } = await import("../src/tools/define.js");
+    registerTool(server as never, {
+      ...smokeConfig,
+      agentWalletEnabled: false,
+    }, {
+      name: "dummy_write_skipped",
+      description: "should not advertise",
+      category: "wallet",
+      write: true,
+      inputSchema: {},
+      handler: async () => {
+        throw new Error("should not register");
+      },
+    });
+    expect(handlers.has("dummy_write_skipped")).toBe(false);
+    expect(getRegisteredTools().map((t) => t.name)).not.toContain(
+      "dummy_write_skipped",
+    );
+
+    // Defense in depth: if a write tool is registered anyway, invoke still
+    // returns POLICY_ERROR. Register while enabled, then flip the shared config.
+    const cfg: AppConfig = { ...smokeConfig, agentWalletEnabled: true };
+    registerTool(server as never, cfg, {
+      name: "dummy_write_tool",
+      description: "test write",
+      category: "wallet",
+      write: true,
+      inputSchema: {},
+      handler: async () => {
+        throw new Error("should not reach handler");
+      },
+    });
+    cfg.agentWalletEnabled = false;
+    const execute = handlers.get("dummy_write_tool");
+    expect(execute).toBeTypeOf("function");
+    const res = await execute!({});
+    expect(res.isError).toBe(true);
+    const body = JSON.parse(res.content[0]!.text) as {
+      ok: boolean;
+      error?: string;
+      code?: string;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("POLICY_ERROR");
+    expect(body.error).toMatch(/AGENT_WALLET_ENABLED=false|disabled/i);
+    expect(res.content[0]!.text).not.toMatch(/0x[a-fA-F0-9]{64}/);
+    expect(res.content[0]!.text).not.toMatch(/"privateKey"\s*:/i);
   });
 
   it("registerTool strips secrets from handler success and error payloads", async () => {

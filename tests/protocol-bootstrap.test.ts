@@ -15,6 +15,12 @@ import { PROTOCOL_MODE, SERVER_NAME, SERVER_VERSION } from "../src/constants.js"
 import { resetToolRegistry } from "../src/tools/define.js";
 import { readClientRequestMeta } from "../src/utils/requestMeta.js";
 import type { AppConfig } from "../src/types.js";
+import {
+  REGISTERED_TOOL_COUNT_RESEARCH_ONLY,
+  REGISTERED_TOOL_COUNT_WALLETS_ON,
+  WALLET_READ_TOOL_NAMES,
+  WALLET_WRITE_TOOL_NAMES,
+} from "./helpers/toolInventory.js";
 
 const smokeConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -160,7 +166,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     });
   });
 
-  it("lists all 96 tools and 5 resources on modern path with serverInfo stamp", async () => {
+  it("research-only tools/list omits writes and stamps serverInfo", async () => {
     const handler = createMcpHandler(() => createServer(smokeConfig), {
       legacy: "stateless",
     });
@@ -171,7 +177,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
       tools: Array<{ name: string; annotations?: Record<string, unknown> }>;
       _meta?: Record<string, unknown>;
     };
-    expect(toolsResult.tools.length).toBe(96);
+    expect(toolsResult.tools.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(toolsResult._meta?.[SERVER_INFO_META_KEY]).toEqual({
       name: SERVER_NAME,
       version: SERVER_VERSION,
@@ -181,7 +187,61 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     expect(names.has("pulsechain_health")).toBe(true);
     expect(names.has("phiat_dashboard")).toBe(true);
     expect(names.has("get_token_price")).toBe(true);
-    expect(names.has("agent_wallet_status")).toBe(true);
+    for (const n of WALLET_READ_TOOL_NAMES) {
+      expect(names.has(n)).toBe(true);
+    }
+    for (const n of WALLET_WRITE_TOOL_NAMES) {
+      expect(names.has(n)).toBe(false);
+    }
+
+    const byName = new Map(toolsResult.tools.map((t) => [t.name, t]));
+    expect(byName.get("get_token_price")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    });
+    expect(byName.get("prepare_swap")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
+    expect(byName.get("transfer_pls")).toBeUndefined();
+
+    const resourcesRes = await mcpRpc(handler, "resources/list");
+    expect(resourcesRes.status).toBe(200);
+    const resourcesResult = resourcesRes.body.result as {
+      resources: Array<{ uri: string }>;
+    };
+    const uris = resourcesResult.resources.map((r) => r.uri).sort();
+    expect(uris).toEqual(
+      [
+        "pulsechain://chain/config",
+        "pulsechain://contracts/popular",
+        "pulsechain://guidance/ro-research",
+        "pulsechain://network",
+        "pulsechain://rpc/status",
+        "pulsechain://tokens/core",
+      ].sort(),
+    );
+  });
+
+  it("wallets-on tools/list is 96 and annotates writes vs unsigned prepare", async () => {
+    const walletsOn: AppConfig = { ...smokeConfig, agentWalletEnabled: true };
+    const handler = createMcpHandler(() => createServer(walletsOn), {
+      legacy: "stateless",
+    });
+
+    const toolsRes = await mcpRpc(handler, "tools/list");
+    expect(toolsRes.status).toBe(200);
+    const toolsResult = toolsRes.body.result as {
+      tools: Array<{ name: string; annotations?: Record<string, unknown> }>;
+      _meta?: Record<string, unknown>;
+    };
+    expect(toolsResult.tools.length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON);
+    expect(toolsResult._meta?.[SERVER_INFO_META_KEY]).toEqual({
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+    });
 
     const byName = new Map(toolsResult.tools.map((t) => [t.name, t]));
     expect(byName.get("get_token_price")?.annotations).toMatchObject({
@@ -200,23 +260,9 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
       readOnlyHint: true,
       destructiveHint: false,
     });
-
-    const resourcesRes = await mcpRpc(handler, "resources/list");
-    expect(resourcesRes.status).toBe(200);
-    const resourcesResult = resourcesRes.body.result as {
-      resources: Array<{ uri: string }>;
-    };
-    const uris = resourcesResult.resources.map((r) => r.uri).sort();
-    expect(uris).toEqual(
-      [
-        "pulsechain://chain/config",
-        "pulsechain://contracts/popular",
-        "pulsechain://guidance/ro-research",
-        "pulsechain://network",
-        "pulsechain://rpc/status",
-        "pulsechain://tokens/core",
-      ].sort(),
-    );
+    for (const n of WALLET_WRITE_TOOL_NAMES) {
+      expect(byName.has(n), n).toBe(true);
+    }
   });
 
   it("serves legacy initialize (2025-11-25 dual path) without modern envelope", async () => {

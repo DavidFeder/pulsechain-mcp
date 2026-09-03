@@ -40,6 +40,7 @@ import {
 import type { AppConfig } from "../src/types.js";
 import { getRegisteredTools, resetToolRegistry } from "../src/tools/define.js";
 import { registerAllTools } from "../src/tools/registry.js";
+import { REGISTERED_TOOL_COUNT_RESEARCH_ONLY } from "./helpers/toolInventory.js";
 
 const baseConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -791,7 +792,7 @@ describe("Tier A tool registration", () => {
       expect(t?.category).toBe("analytics");
       expect(t?.write).toBe(false);
     }
-    // Prior inventory + standalone Piteas accumulation planner
-    expect(meta.length).toBe(96);
+    // Research-only inventory (writes omitted)
+    expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
   });
 });

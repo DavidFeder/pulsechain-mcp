@@ -18,7 +18,7 @@ export function mcpServerInstructions(agentWalletEnabled: boolean): string {
   if (!agentWalletEnabled) {
     return (
       "PulseChain MCP: analytics and chain reads. " +
-      "Write and signing tools refuse (AGENT_WALLET_ENABLED=false). " +
+      "Write and signing tools refuse (AGENT_WALLET_ENABLED=false) and are not listed. " +
       "Prefer pulsechain://guidance/ro-research. " +
       `Protocol mode ${PROTOCOL_MODE}. This process does not sign or broadcast.`
     );

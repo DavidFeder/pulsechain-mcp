@@ -104,6 +104,13 @@ export function registerTool(
   const { name, inputSchema, handler, category } = options;
   const write = options.write === true;
 
+  // Research-only: do not advertise write/signing tools in tools/list (or the
+  // local registry used by tests). The invoke-time POLICY_ERROR below remains
+  // defense in depth if a write tool is somehow registered anyway.
+  if (write && !config.agentWalletEnabled) {
+    return;
+  }
+
   let description = options.description;
   if (write) {
     description = `${description}\n\n⚠️ ${WRITE_TOOL_WARNING}`;
