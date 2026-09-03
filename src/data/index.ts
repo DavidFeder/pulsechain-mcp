@@ -82,8 +82,10 @@ export {
   swapInvolvesToken,
   filterSwapsByToken,
   selectTokenSwapPairIds,
+  eligibleTokenSwapPairIds,
   mergeTokenFilteredSwaps,
   MAX_TOKEN_SWAP_PAIR_QUERIES,
+  swapPageFlags,
   SWAPS_BY_PAIRS_QUERY,
   META_QUERY,
   BUNDLE_QUERY,
@@ -101,6 +103,7 @@ export {
   LP_BURNS_GLOBAL_QUERY,
   type SubgraphPair,
   type SubgraphSwap,
+  type SwapPageCoverage,
   type PulseXSoftResult,
   type LpEventRow,
 } from "./subgraph.js";
@@ -138,6 +141,9 @@ export {
   getTransactionStatus,
   getTransactionReceiptStatus,
   getLogs,
+  explorerLogsWindow,
+  EXPLORER_LOGS_NOT_FULL_HISTORY,
+  DEFAULT_GETLOGS_OFFSET,
   getBlockReward,
   getEthSupply,
   getTokenOverviewSoft,
@@ -150,6 +156,7 @@ export {
   type TokenOverviewData,
   type ContractAbiData,
   type AddressActivityData,
+  type ExplorerLogWindow,
 } from "./explorer.js";
 
 export {

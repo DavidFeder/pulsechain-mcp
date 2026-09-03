@@ -10,6 +10,8 @@ import {
 import {
   fetchLargeSwaps,
   fetchWalletSwaps,
+  fetchSwapsAdvanced,
+  MAX_TOKEN_SWAP_PAIR_QUERIES,
   SWAPS_MIN_USD_QUERY,
 } from "../src/data/subgraph.js";
 import {
@@ -299,6 +301,8 @@ describe("subgraph advanced fetchers (mocked)", () => {
     expect(result.swaps).toHaveLength(2);
     expect(result.swaps[0]?.id).toBe("s2"); // newest first
     expect(result.method).toContain("sender or to");
+    expect(result.incomplete).toBe(false);
+    expect(result.coverage).toEqual({ skip: 0, first: 10, deep: false });
   });
 
   it("fetchWalletSwaps deep skip is passed to subgraph instead of emptying the page", async () => {
@@ -316,11 +320,126 @@ describe("subgraph advanced fetchers (mocked)", () => {
     });
     expect(result.swaps).toHaveLength(1);
     expect(result.method).toMatch(/deep skip/i);
+    expect(result.incomplete).toBe(true);
+    expect(result.coverage).toEqual({ skip: 100, first: 25, deep: true });
     const body = JSON.parse(
       (fetchMock.mock.calls[0]?.[1] as { body?: string })?.body ?? "{}",
     );
     expect(body.variables.skip).toBe(100);
     expect(body.variables.first).toBe(25);
+  });
+
+  it("fetchSwapsAdvanced token path sets incomplete when pair cap hits", async () => {
+    const token = ADDR_A.toLowerCase();
+    const wpls = ADDR_B.toLowerCase();
+    const pairRows = Array.from({ length: MAX_TOKEN_SWAP_PAIR_QUERIES + 1 }, (_, i) => ({
+      id: `0x${String(i + 1).padStart(40, "a")}`,
+      token0: { id: token, symbol: "TOK", derivedUSD: "1" },
+      token1: { id: wpls, symbol: "WPLS", derivedUSD: "1" },
+      reserve0: "1000",
+      reserve1: "1000",
+      reserveUSD: "2000",
+      volumeUSD: String(1_000_000 - i),
+      totalTransactions: "10",
+      token0Price: "1",
+      token1Price: "1",
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = typeof init?.body === "string" ? init.body : "";
+        if (body.includes("PairsToken0")) {
+          return gqlResponse({ pairs: pairRows });
+        }
+        if (body.includes("PairsToken1")) {
+          return gqlResponse({ pairs: [] });
+        }
+        return gqlResponse({
+          swaps: [
+            {
+              id: "s-cap",
+              timestamp: "1",
+              amountUSD: "10",
+              pair: {
+                id: pairRows[0]!.id,
+                token0: { id: token, symbol: "TOK" },
+                token1: { id: wpls, symbol: "WPLS" },
+              },
+            },
+          ],
+        });
+      }),
+    );
+
+    const result = await fetchSwapsAdvanced(baseConfig, {
+      token: ADDR_A,
+      first: 10,
+      skip: 0,
+    });
+    expect(result.incomplete).toBe(true);
+    expect(result.coverage.deep).toBe(false);
+    expect(result.coverage.pairCapHit).toBe(true);
+    expect(result.coverage.skip).toBe(0);
+    expect(result.coverage.first).toBe(10);
+    expect(result.filter.pairsUsed).toHaveLength(MAX_TOKEN_SWAP_PAIR_QUERIES);
+  });
+
+  it("fetchSwapsAdvanced token path is complete when pair fan-out is under the cap", async () => {
+    const token = ADDR_A.toLowerCase();
+    const wpls = ADDR_B.toLowerCase();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = typeof init?.body === "string" ? init.body : "";
+        if (body.includes("PairsToken0") || body.includes("PairsToken1")) {
+          return gqlResponse({
+            pairs: body.includes("PairsToken0")
+              ? [
+                  {
+                    id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    token0: { id: token, symbol: "TOK", derivedUSD: "1" },
+                    token1: { id: wpls, symbol: "WPLS", derivedUSD: "1" },
+                    reserve0: "1000",
+                    reserve1: "1000",
+                    reserveUSD: "2000",
+                    volumeUSD: "100",
+                    totalTransactions: "10",
+                    token0Price: "1",
+                    token1Price: "1",
+                  },
+                ]
+              : [],
+          });
+        }
+        return gqlResponse({
+          swaps: [
+            {
+              id: "s-ok",
+              timestamp: "1",
+              amountUSD: "10",
+              pair: {
+                id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                token0: { id: token, symbol: "TOK" },
+                token1: { id: wpls, symbol: "WPLS" },
+              },
+            },
+          ],
+        });
+      }),
+    );
+
+    const result = await fetchSwapsAdvanced(baseConfig, {
+      token: ADDR_A,
+      first: 10,
+    });
+    expect(result.incomplete).toBe(false);
+    expect(result.coverage).toMatchObject({
+      skip: 0,
+      first: 10,
+      deep: false,
+      pairCapHit: false,
+    });
   });
 });
 
@@ -375,5 +494,77 @@ describe("explorer advanced helpers (mocked)", () => {
     const result = await getTokenHoldersModule(baseConfig, ADDR_C, 1, 50);
     expect(Array.isArray(result)).toBe(true);
     expect((result as unknown[]).length).toBe(2);
+  });
+});
+
+describe("get_wallet_swaps tool surfaces incomplete flags", () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    const { resetToolRegistry } = await import("../src/tools/define.js");
+    resetToolRegistry();
+  });
+
+  function gqlResponse(data: unknown) {
+    const payload = JSON.stringify({ data });
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => "application/json" },
+      text: async () => payload,
+      json: async () => ({ data }),
+    };
+  }
+
+  it("ok() data includes incomplete=false for a shallow page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        gqlResponse({
+          asSender: [{ id: "s1", timestamp: "1", sender: ADDR_A, to: ADDR_B }],
+          asTo: [],
+        }),
+      ),
+    );
+    const { resetToolRegistry } = await import("../src/tools/define.js");
+    const { registerAdvancedAnalyticsTools } = await import(
+      "../src/tools/analytics/advanced.js"
+    );
+    resetToolRegistry();
+    const handlers = new Map<
+      string,
+      (args?: Record<string, unknown>) => Promise<{
+        content: Array<{ type: string; text: string }>;
+      }>
+    >();
+    const server = {
+      registerTool: (name: string, ...rest: unknown[]) => {
+        const cb = rest[rest.length - 1];
+        if (typeof cb === "function") {
+          handlers.set(
+            name,
+            cb as (args?: Record<string, unknown>) => Promise<{
+              content: Array<{ type: string; text: string }>;
+            }>,
+          );
+        }
+      },
+    };
+    registerAdvancedAnalyticsTools(server as never, baseConfig);
+    const res = await handlers.get("get_wallet_swaps")!({
+      address: ADDR_A,
+      first: 10,
+    });
+    const body = JSON.parse(res.content[0]!.text) as {
+      ok: boolean;
+      data?: {
+        incomplete?: boolean;
+        coverage?: Record<string, unknown>;
+        method?: string;
+      };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.data?.incomplete).toBe(false);
+    expect(body.data?.coverage).toEqual({ skip: 0, first: 10, deep: false });
+    expect(body.data?.method).toContain("sender or to");
   });
 });

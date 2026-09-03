@@ -408,6 +408,8 @@ export function registerAdvancedAnalyticsTools(
       "Recent PulseX swaps with optional pair, token, or minUsd filters. " +
       "Uses public graph.pulsechain.com PulseX subgraph. Token filter resolves " +
       "top pairs (capped) then strict-filters swaps; partial results if some pair queries fail. " +
+      "Deep skip or pair-capped token pages set incomplete=true with a coverage object " +
+      "(not full history). " +
       "Catalogued pair sides get display_symbol / token_origin (never invented for unknowns). " +
       "Filter by token **address** for identity-sensitive work.",
     category: "analytics",
@@ -434,6 +436,8 @@ export function registerAdvancedAnalyticsTools(
           swaps: [],
           filter: result.filter,
           filter_error: result.filterError,
+          incomplete: result.incomplete,
+          coverage: result.coverage,
           method:
             "PulseX subgraph swaps; token filter is strict (pair must include token)",
           note: result.filterError,
@@ -444,6 +448,8 @@ export function registerAdvancedAnalyticsTools(
         count: swaps.length,
         swaps,
         filter: result.filter,
+        incomplete: result.incomplete,
+        coverage: result.coverage,
         method:
           "PulseX subgraph swaps with optional pair/token/minUsd; token filter post-validated",
         label_note:
@@ -571,6 +577,7 @@ export function registerAdvancedAnalyticsTools(
     description:
       "PulseX swap history for a wallet from the public subgraph. " +
       "Methodology: swaps where sender == wallet OR to == wallet, merged & sorted by timestamp desc. " +
+      "Deep pages (skip+first>100) set incomplete=true; the merged page is approximate. " +
       "Router-mediated swaps may attribute sender as the router — coverage is best-effort.",
     category: "analytics",
     inputSchema: {
@@ -591,6 +598,8 @@ export function registerAdvancedAnalyticsTools(
         count: data.swaps.length,
         swaps: data.swaps,
         method: data.method,
+        incomplete: data.incomplete,
+        coverage: data.coverage,
         confidence: "medium",
         caveat:
           "UniswapV2-style subgraph indexes sender/to; many UI swaps set sender to router.",

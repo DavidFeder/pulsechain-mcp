@@ -757,6 +757,69 @@ describe("BlockScout soft-fail helpers (shipped)", () => {
       expect(result.source).toBe("blockscout");
     }
   });
+
+  it("getLogsSoft sets truncated when returned logs hit offset", async () => {
+    const offset = 3;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          status: "1",
+          message: "OK",
+          result: Array.from({ length: offset }, (_, i) => ({
+            transactionHash: `0x${i}`,
+          })),
+        }),
+      })),
+    );
+    const result = await getLogsSoft(baseConfig, {
+      address: WPLS_ADDRESS,
+      fromBlock: 10,
+      toBlock: 20,
+      page: 1,
+      offset,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.logs).toHaveLength(offset);
+      expect(result.data.truncated).toBe(true);
+      expect(result.data.window).toEqual({
+        fromBlock: 10,
+        toBlock: 20,
+        offset,
+        page: 1,
+      });
+      expect(result.data.note).toMatch(/not full history/i);
+    }
+  });
+
+  it("getLogsSoft sets truncated false when under offset", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          status: "1",
+          message: "OK",
+          result: [{ transactionHash: "0x1" }],
+        }),
+      })),
+    );
+    const result = await getLogsSoft(baseConfig, {
+      address: WPLS_ADDRESS,
+      offset: 50,
+      page: 2,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.truncated).toBe(false);
+      expect(result.data.window.offset).toBe(50);
+      expect(result.data.window.page).toBe(2);
+      expect(result.data.window.fromBlock).toBe(0);
+      expect(result.data.window.toBlock).toBe("latest");
+    }
+  });
 });
 
 // ── Tool registration ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { buildExplorerUrl, explorerGet } from "../src/data/explorer.js";
+import { buildExplorerUrl, explorerGet, explorerLogsWindow } from "../src/data/explorer.js";
 import type { AppConfig } from "../src/types.js";
 import { ExplorerError } from "../src/utils/errors.js";
 
@@ -243,5 +243,20 @@ describe("getContractCreation / getTokenInfo surface ExplorerError for soft-fail
     await expect(
       getTokenInfo(baseConfig, "0xA1077a294dDE1B09bB078844df40758a5D0f9a27"),
     ).rejects.toBeInstanceOf(ExplorerError);
+  });
+});
+
+describe("explorerLogsWindow", () => {
+  it("marks truncated when length hits offset", () => {
+    const logs = [{ id: 1 }, { id: 2 }];
+    expect(explorerLogsWindow(logs, { offset: 2, fromBlock: 0, toBlock: "latest", page: 1 })).toEqual({
+      truncated: true,
+      window: { fromBlock: 0, toBlock: "latest", offset: 2, page: 1 },
+    });
+  });
+
+  it("is not truncated when under offset or non-array", () => {
+    expect(explorerLogsWindow([{ id: 1 }], { offset: 10 }).truncated).toBe(false);
+    expect(explorerLogsWindow({ result: [{ id: 1 }] }, { offset: 1 }).truncated).toBe(false);
   });
 });

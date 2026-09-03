@@ -978,7 +978,12 @@ export async function fetchWalletSwaps(
     skip?: number;
     version?: SubgraphVersion;
   } = {},
-): Promise<{ swaps: SubgraphSwap[]; method: string }> {
+): Promise<{
+  swaps: SubgraphSwap[];
+  method: string;
+  incomplete: boolean;
+  coverage: SwapPageCoverage;
+}> {
   const wallet = assertAddress(walletAddress).toLowerCase();
   const client = getPulseXClient(config, options.version ?? "v2");
   const first = Math.min(options.first ?? 25, 100);
@@ -989,6 +994,7 @@ export async function fetchWalletSwaps(
   const deep = skip + first > 100;
   const fetchCount = deep ? first : Math.min(skip + first, 100);
   const gqlSkip = deep ? skip : 0;
+  const page = swapPageFlags({ skip, first, deep });
 
   const data = await requestSafe<{
     asSender: SubgraphSwap[];
@@ -1011,6 +1017,8 @@ export async function fetchWalletSwaps(
     method: deep
       ? "subgraph swaps where sender or to equals wallet (deep skip uses per-feed skip; merged page is approximate)"
       : "subgraph swaps where sender or to equals wallet",
+    incomplete: page.incomplete,
+    coverage: page.coverage,
   };
 }
 
@@ -1467,23 +1475,56 @@ export function filterSwapsByToken(
  */
 export const MAX_TOKEN_SWAP_PAIR_QUERIES = 6;
 
+/** Machine-readable swap-page coverage (not a pagination protocol). */
+export interface SwapPageCoverage {
+  skip: number;
+  first: number;
+  deep: boolean;
+  pairCapHit?: boolean;
+}
+
 /**
- * Pure: pick verified pair ids for token-filtered swap discovery.
- * Prefers high volume among pairs with positive sanitized liquidity so dead
- * high-reserve pollution does not starve the major trading pools.
+ * Flags for capped / approximate subgraph swap pages.
+ * `incomplete` is true when the merged page is deep (`skip + first > 100`)
+ * or token-filtered pair fan-out hit {@link MAX_TOKEN_SWAP_PAIR_QUERIES}.
  */
-export function selectTokenSwapPairIds(
-  pairs: Array<{
-    id: string;
-    volumeUSD?: string | number;
-    reserveUSD?: string | number;
-    reserve0?: string | number;
-    reserve1?: string | number;
-    token0?: { id?: string; derivedUSD?: string | number };
-    token1?: { id?: string; derivedUSD?: string | number };
-  }>,
+export function swapPageFlags(input: {
+  skip: number;
+  first: number;
+  deep: boolean;
+  pairCapHit?: boolean;
+}): { incomplete: boolean; coverage: SwapPageCoverage } {
+  const coverage: SwapPageCoverage = {
+    skip: input.skip,
+    first: input.first,
+    deep: input.deep,
+  };
+  if (input.pairCapHit !== undefined) {
+    coverage.pairCapHit = input.pairCapHit;
+  }
+  return {
+    incomplete: input.deep || input.pairCapHit === true,
+    coverage,
+  };
+}
+
+type TokenSwapPairInput = {
+  id: string;
+  volumeUSD?: string | number;
+  reserveUSD?: string | number;
+  reserve0?: string | number;
+  reserve1?: string | number;
+  token0?: { id?: string; derivedUSD?: string | number };
+  token1?: { id?: string; derivedUSD?: string | number };
+};
+
+/**
+ * Eligible verified pair ids for token-filtered swap discovery, uncapped.
+ * Prefer this when detecting {@link MAX_TOKEN_SWAP_PAIR_QUERIES} fan-out.
+ */
+export function eligibleTokenSwapPairIds(
+  pairs: TokenSwapPairInput[],
   tokenAddress: string,
-  maxPairs = MAX_TOKEN_SWAP_PAIR_QUERIES,
 ): string[] {
   const token = tokenAddress.toLowerCase();
   const verified = pairs.filter(
@@ -1499,8 +1540,23 @@ export function selectTokenSwapPairIds(
     }))
     .filter((p) => p.liq > 0 || p.vol > 0)
     .sort((a, b) => b.vol - a.vol || b.liq - a.liq)
-    .map((p) => p.id)
-    .slice(0, Math.max(1, maxPairs));
+    .map((p) => p.id);
+}
+
+/**
+ * Pure: pick verified pair ids for token-filtered swap discovery.
+ * Prefers high volume among pairs with positive sanitized liquidity so dead
+ * high-reserve pollution does not starve the major trading pools.
+ */
+export function selectTokenSwapPairIds(
+  pairs: TokenSwapPairInput[],
+  tokenAddress: string,
+  maxPairs = MAX_TOKEN_SWAP_PAIR_QUERIES,
+): string[] {
+  return eligibleTokenSwapPairIds(pairs, tokenAddress).slice(
+    0,
+    Math.max(1, maxPairs),
+  );
 }
 
 /**
@@ -1562,6 +1618,8 @@ export async function fetchSwapsAdvanced(
   filter: Record<string, unknown>;
   /** Set when a token filter was requested but could not be guaranteed. */
   filterError?: string;
+  incomplete: boolean;
+  coverage: SwapPageCoverage;
 }> {
   const first = Math.min(options.first ?? 20, 100);
   const skip = options.skip ?? 0;
@@ -1570,6 +1628,7 @@ export async function fetchSwapsAdvanced(
   const tokenFilter = options.token
     ? assertAddress(options.token).toLowerCase()
     : undefined;
+  const exactPage = swapPageFlags({ skip, first, deep: false });
 
   // Token filter takes priority over bare minUsd (previously minUsd short-circuited
   // and silently ignored token — returning unrelated large swaps).
@@ -1581,11 +1640,11 @@ export async function fetchSwapsAdvanced(
       Math.max(MAX_TOKEN_SWAP_PAIR_QUERIES + 6, 12),
       version,
     );
-    const pairIds = selectTokenSwapPairIds(
-      pairs,
-      tokenFilter,
-      MAX_TOKEN_SWAP_PAIR_QUERIES,
-    );
+    const eligiblePairIds = eligibleTokenSwapPairIds(pairs, tokenFilter);
+    const pairCapHit = eligiblePairIds.length > MAX_TOKEN_SWAP_PAIR_QUERIES;
+    const pairIds = eligiblePairIds.slice(0, MAX_TOKEN_SWAP_PAIR_QUERIES);
+    const deep = skip + first > 100;
+    const page = swapPageFlags({ skip, first, deep, pairCapHit });
 
     if (pairIds.length === 0) {
       return {
@@ -1593,10 +1652,11 @@ export async function fetchSwapsAdvanced(
         filter: { token: tokenFilter, pairsUsed: [], minUsd: options.minUsd },
         filterError:
           "No PulseX pairs found for this token; token filter cannot return swaps",
+        incomplete: page.incomplete,
+        coverage: page.coverage,
       };
     }
 
-    const deep = skip + first > 100;
     const batchFirst = deep
       ? first
       : Math.min(Math.max((first + skip) * 2, first + skip + 10), 100);
@@ -1644,6 +1704,8 @@ export async function fetchSwapsAdvanced(
           batch: true,
           maxPairs: MAX_TOKEN_SWAP_PAIR_QUERIES,
         },
+        incomplete: page.incomplete,
+        coverage: page.coverage,
       };
     }
 
@@ -1701,6 +1763,8 @@ export async function fetchSwapsAdvanced(
         },
         filterError:
           "Token-filtered swap queries failed (batch + per-pair); try again or use pair= for a known pool",
+        incomplete: page.incomplete,
+        coverage: page.coverage,
       };
     }
 
@@ -1727,6 +1791,8 @@ export async function fetchSwapsAdvanced(
               note: "Batch pair_in failed; used per-pair fallback",
             }),
       },
+      incomplete: page.incomplete,
+      coverage: page.coverage,
     };
   }
 
@@ -1743,6 +1809,8 @@ export async function fetchSwapsAdvanced(
     return {
       swaps: data.swaps ?? [],
       filter: { minUsd: options.minUsd },
+      incomplete: exactPage.incomplete,
+      coverage: exactPage.coverage,
     };
   }
 
@@ -1758,7 +1826,12 @@ export async function fetchSwapsAdvanced(
       const min = options.minUsd;
       swaps = swaps.filter((s) => Number(s.amountUSD ?? 0) >= min);
     }
-    return { swaps, filter: { pair, minUsd: options.minUsd } };
+    return {
+      swaps,
+      filter: { pair, minUsd: options.minUsd },
+      incomplete: exactPage.incomplete,
+      coverage: exactPage.coverage,
+    };
   }
 
   const data = await requestSafe<{ swaps: SubgraphSwap[] }>(
@@ -1766,5 +1839,10 @@ export async function fetchSwapsAdvanced(
     SWAPS_GLOBAL_QUERY,
     { first, skip },
   );
-  return { swaps: data.swaps ?? [], filter: {} };
+  return {
+    swaps: data.swaps ?? [],
+    filter: {},
+    incomplete: exactPage.incomplete,
+    coverage: exactPage.coverage,
+  };
 }

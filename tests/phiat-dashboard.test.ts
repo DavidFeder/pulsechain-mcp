@@ -231,6 +231,8 @@ function mockedDeps(overrides: Partial<PhiatDashboardDeps> = {}): PhiatDashboard
         },
       ],
       filter: { token: TOKEN },
+      incomplete: false,
+      coverage: { skip: 0, first: 20, deep: false, pairCapHit: false },
     })),
     getDexScreenerTokenPairs: vi.fn(async () => ({
       ok: true,
@@ -471,6 +473,14 @@ describe("phiat_dashboard", () => {
     expect((activity.recentTransfers as Array<Record<string, unknown>>)[0]?.method).toBe(
       "erc20_transfer_log",
     );
+    expect(activity.truncated).toBe(false);
+    expect(activity.window).toEqual({
+      fromBlock: 0,
+      toBlock: "latest",
+      offset: 5,
+      page: 1,
+    });
+    expect(String(activity.note)).toMatch(/not full/i);
     expect((safety.rawHeuristics as Record<string, unknown>).suspiciousPatterns).toContain(
       "mutable_tax",
     );
@@ -973,6 +983,40 @@ describe("phiat_dashboard", () => {
     });
   });
 
+  it("marks PHIAT transfer activity truncated when getLogs rows hit the cap", async () => {
+    const transferRow = {
+      transactionHash: "0x" + "12".repeat(32),
+      blockNumber: "123",
+      timeStamp: "1700000200",
+      address: TOKEN,
+      topics: [TRANSFER_EVENT_TOPIC0, topicAddress(TREASURY), topicAddress(STAKING)],
+      data: "0x0de0b6b3a7640000",
+    };
+    const deps = mockedDeps({
+      explorerGet: vi.fn(async () => ({
+        status: "1",
+        message: "OK",
+        result: [transferRow, { ...transferRow, blockNumber: "124" }],
+      })),
+    });
+
+    const dashboard = await buildPhiatDashboard(
+      baseConfig,
+      { tokenAddress: TOKEN, recentSwapLimit: 2 },
+      deps,
+    );
+    const activity = section(dashboard, "activity");
+    expect((activity.recentTransfers as unknown[]).length).toBe(2);
+    expect(activity.truncated).toBe(true);
+    expect(activity.window).toEqual({
+      fromBlock: 0,
+      toBlock: "latest",
+      offset: 2,
+      page: 1,
+    });
+    expect(String(activity.note)).toMatch(/not full/i);
+  });
+
   it("marks market data as critically unreliable below ten thousand dollars of liquidity", async () => {
     const deps = mockedDeps({
       fetchPairsForToken: vi.fn(async () => [
@@ -1182,6 +1226,14 @@ describe("phiat_dashboard", () => {
     expect(response.isError).toBeFalsy();
     expect(body.ok).toBe(true);
     expect(body.data?.token).toBeTruthy();
+    const activity = body.data?.activity as Record<string, unknown> | undefined;
+    expect(activity?.truncated).toBe(true);
+    expect(activity?.window).toEqual({
+      fromBlock: 0,
+      toBlock: "latest",
+      offset: 1,
+      page: 1,
+    });
   });
 
   it("does not include prepare, wallet, transaction, or disk-write dashboard paths", () => {
