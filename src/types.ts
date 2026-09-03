@@ -149,4 +149,17 @@ export interface HealthStatus {
   pulseXSubgraphV2Configured: boolean;
   agentWalletEnabled: boolean;
   httpTransportEnabled: boolean;
+  /**
+   * Present only when `network === "testnet"` and explorer and/or PulseX
+   * subgraph URLs still use the shipped mainnet defaults.
+   */
+  networkMismatch?: NetworkMismatchInfo;
+}
+
+/** Loud testnet-vs-mainnet-default explorer/subgraph mismatch (omit when absent). */
+export interface NetworkMismatchInfo {
+  warning: string;
+  explorerApiIsMainnetDefault: boolean;
+  pulseXSubgraphV1IsMainnetDefault: boolean;
+  pulseXSubgraphV2IsMainnetDefault: boolean;
 }

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Write-tool warning mentions `confirm=true` and modern MRTR `InputRequiredResult` elicitation (host UX only, not a cryptographic lock)
 - `createServer` instructions branch on `agentWalletEnabled` (research-only vs operator-trust wallets)
 
+### Fixed
+
+- Report the configured PulseChain id (369 mainnet / 943 testnet) on chain tools, unsigned prepare payloads, health, and `pulsechain://chain/config` instead of always stamping 369; testnet with default mainnet explorer/subgraph surfaces `networkMismatch`; Piteas/Switch/PulseSwap quotes stay on aggregator chain 369 and warn when the server is on testnet
+
 ## [1.0.5] - 2026-08-28
 
 **Correctness patch** on the 1.0.4 tree (PR #2). Operator-trust wallet model, dual-era MCP (`2026-07-28` + `2025-11-25`), and research-first agent install are unchanged. Version surfaces **1.0.5**.

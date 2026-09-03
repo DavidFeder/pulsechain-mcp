@@ -32,6 +32,7 @@ import {
   type SwitchQuoteData,
 } from "../../data/switch.js";
 import { tokenLabelFields } from "../../constants.js";
+import { mainnetOnlyAggregatorWarnings } from "../../data/rpc.js";
 import type { AppConfig } from "../../types.js";
 import { ok } from "../../utils/result.js";
 import { registerTool } from "../define.js";
@@ -270,7 +271,7 @@ export function registerTierATools(
         mode: (args.mode as "standard" | "advanced" | undefined) ?? "standard",
         userAddress: args.userAddress as string | undefined,
       });
-      return ok(result);
+      return ok(result, mainnetOnlyAggregatorWarnings(cfg));
     },
   });
 
@@ -322,7 +323,7 @@ export function registerTierATools(
         allowedSlippage: (args.allowedSlippage as number | undefined) ?? 0.5,
         account: args.account as string | undefined,
       });
-      return ok(result);
+      return ok(result, mainnetOnlyAggregatorWarnings(cfg));
     },
   });
 
@@ -347,7 +348,7 @@ export function registerTierATools(
         .optional()
         .describe("Optional recipient override for review fields only (does not rewrite calldata)"),
     },
-    handler: async (args) => {
+    handler: async (args, cfg) => {
       const raw = args.quote as unknown;
       let data: PiteasQuoteData | null = null;
       if (raw && typeof raw === "object") {
@@ -360,19 +361,22 @@ export function registerTierATools(
         }
       }
       if (!data) {
-        return ok({
-          ok: false,
-          source: "piteas",
-          advisory: true,
-          broadcast: false,
-          reason:
-            "quote must be a successful piteas_quote data object (or { ok:true, data }) with methodParameters",
-        });
+        return ok(
+          {
+            ok: false,
+            source: "piteas",
+            advisory: true,
+            broadcast: false,
+            reason:
+              "quote must be a successful piteas_quote data object (or { ok:true, data }) with methodParameters",
+          },
+          mainnetOnlyAggregatorWarnings(cfg),
+        );
       }
       const prepared = preparePiteasSwap(data, {
         account: args.account as string | undefined,
       });
-      return ok(prepared);
+      return ok(prepared, mainnetOnlyAggregatorWarnings(cfg));
     },
   });
 
@@ -451,7 +455,7 @@ export function registerTierATools(
         receiver: args.receiver as string | undefined,
         feeOnOutput: args.feeOnOutput as boolean | undefined,
       });
-      return ok(result);
+      return ok(result, mainnetOnlyAggregatorWarnings(cfg));
     },
   });
 
@@ -482,7 +486,7 @@ export function registerTierATools(
         .optional()
         .describe("When true, use txFeeOnOutput if present on the quote"),
     },
-    handler: async (args) => {
+    handler: async (args, cfg) => {
       const raw = args.quote as unknown;
       let data: SwitchQuoteData | null = null;
       if (raw && typeof raw === "object") {
@@ -494,20 +498,23 @@ export function registerTierATools(
         }
       }
       if (!data) {
-        return ok({
-          ok: false,
-          source: "switch",
-          advisory: true,
-          broadcast: false,
-          reason:
-            "quote must be a successful switch_quote data object (or { ok:true, data }) with upstream tx fields",
-        });
+        return ok(
+          {
+            ok: false,
+            source: "switch",
+            advisory: true,
+            broadcast: false,
+            reason:
+              "quote must be a successful switch_quote data object (or { ok:true, data }) with upstream tx fields",
+          },
+          mainnetOnlyAggregatorWarnings(cfg),
+        );
       }
       const prepared = prepareSwitchSwap(data, {
         account: args.account as string | undefined,
         feeOnOutput: args.feeOnOutput as boolean | undefined,
       });
-      return ok(prepared);
+      return ok(prepared, mainnetOnlyAggregatorWarnings(cfg));
     },
   });
 }

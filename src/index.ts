@@ -15,7 +15,11 @@ import {
   describeTransportMode,
   formatFatalStartupHint,
 } from "./clientCompat.js";
-import { getActiveRpcUrl, getRpcHealthSummary } from "./data/rpc.js";
+import {
+  chainIdForConfig,
+  getActiveRpcUrl,
+  getRpcHealthSummary,
+} from "./data/rpc.js";
 import type { AppConfig } from "./types.js";
 
 /**
@@ -79,7 +83,7 @@ async function startHttp(config: AppConfig, port: number): Promise<void> {
           server: SERVER_NAME,
           version: SERVER_VERSION,
           network: config.network,
-          chainId: config.network === "testnet" ? 943 : 369,
+          chainId: chainIdForConfig(config),
           rpcUrl: config.rpcUrl,
           activeRpcUrl: getActiveRpcUrl() ?? rpc.activeRpcUrl,
           rpcCount: config.rpcUrls.length,

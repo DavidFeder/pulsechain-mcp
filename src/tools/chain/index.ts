@@ -5,8 +5,8 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
-import { PULSECHAIN_CHAIN_ID } from "../../constants.js";
 import {
+  chainIdForConfig,
   estimateGas,
   ethCall,
   getBlock,
@@ -405,7 +405,7 @@ export function registerChainTools(
     inputSchema: {},
     handler: async (_args, cfg) =>
       ok({
-        chainId: PULSECHAIN_CHAIN_ID,
+        chainId: chainIdForConfig(cfg),
         rpcUrl: cfg.rpcUrl,
       }),
   });
