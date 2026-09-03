@@ -13,6 +13,7 @@ import {
   getConfirmStateCodec,
   policySnapshotId,
   proposalExecutionIntentArgs,
+  assertSameExecutionIntent,
   requireConfirmOrInput,
   resetConfirmCodecForTests,
   resetMrtrSecretForTests,
@@ -207,6 +208,38 @@ describe("resolveConfirm dual path", () => {
       }),
     );
     expect(honest).not.toBe(tampered);
+  });
+
+  it("proposalExecutionIntentArgs includes chainId and bind fails when it changes", () => {
+    const base = {
+      id: "prop_" + "ab".repeat(12),
+      walletId: "aw_" + "cd".repeat(16),
+      from: "0x1111111111111111111111111111111111111111",
+      to: "0x2222222222222222222222222222222222222222",
+      valueWei: "1",
+      data: "0x",
+      chainId: 369,
+      network: "mainnet" as const,
+    };
+    const args = proposalExecutionIntentArgs(base);
+    expect(args.chainId).toBe(369);
+    expect(args.network).toBe("mainnet");
+    const honest = computeIntentHash(
+      "execute_agent_tx",
+      proposalExecutionIntentArgs(base),
+    );
+    const flipped = computeIntentHash(
+      "execute_agent_tx",
+      proposalExecutionIntentArgs({ ...base, chainId: 943, network: "testnet" }),
+    );
+    expect(honest).not.toBe(flipped);
+    expect(() =>
+      assertSameExecutionIntent(base, {
+        ...base,
+        chainId: 943,
+        network: "testnet",
+      }),
+    ).toThrow(/Proposal changed after confirmation/i);
   });
 
   it("MRTR resume with inputResponses.confirm + echoed requestState proceeds", async () => {

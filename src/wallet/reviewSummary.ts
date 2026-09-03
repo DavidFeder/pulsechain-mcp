@@ -148,6 +148,13 @@ export interface TxReviewSummary {
   };
   proposalId?: string;
   walletId?: string;
+  /**
+   * Chain sealed on the proposal at propose time (369 mainnet / 943 testnet).
+   * Missing on legacy on-disk proposals — execute refuses those.
+   */
+  chainId?: number;
+  /** Network name sealed at propose time when present. */
+  network?: "mainnet" | "testnet";
 }
 
 /** Honest label for remainingDaily / maxPls* under operator-trust. */
@@ -562,8 +569,22 @@ export interface BuildTxReviewSummaryInput {
   simulation?: SimulationResult;
   proposalId?: string;
   walletId?: string;
+  /** Sealed chain at propose time (shown so operators can tell 369 vs 943). */
+  chainId?: number;
+  network?: "mainnet" | "testnet";
   /** Where this summary is attached (affects nextStep wording) */
   context?: "propose" | "check" | "execute" | "transfer";
+}
+
+/** Operator-visible sealed chain (369 vs 943) for headlines and confirm prompts. */
+export function formatSealedChainLabel(
+  chainId?: number,
+  network?: string,
+): string {
+  if (typeof chainId === "number" && Number.isInteger(chainId)) {
+    return network ? `${chainId} (${network})` : String(chainId);
+  }
+  return "unsealed — re-propose before execute";
 }
 
 /**
@@ -598,16 +619,26 @@ export function buildTxReviewSummary(
           .map((m) => `${m.role} ${m.amountRaw} raw @ ${shortAddr(m.token)}`)
           .join("; ") + (movements.length > 3 || omitted > 0 ? "…" : "");
 
+  const chainLabel =
+    typeof input.chainId === "number" && Number.isInteger(input.chainId)
+      ? formatSealedChainLabel(input.chainId, input.network)
+      : input.proposalId
+        ? formatSealedChainLabel(undefined, input.network)
+        : undefined;
+  const chainSuffix = chainLabel ? ` · chain ${chainLabel}` : "";
+
   const headline =
     decision === "allow"
       ? `ALLOWED: ${valuePls} PLS → ${shortAddr(input.to)}` +
         (check.isContractInteraction
           ? ` (contract/calldata; ${check.tokenNotional?.pattern ?? "interaction"})`
           : " (native EOA transfer)") +
-        (movements.length ? `; tokens: ${movementHint}` : "")
+        (movements.length ? `; tokens: ${movementHint}` : "") +
+        chainSuffix
       : `DENIED: ${valuePls} PLS → ${shortAddr(input.to)} — ${
           check.reasons[0] ?? "policy rejected"
-        }`;
+        }` +
+        chainSuffix;
 
   const decisionTrace =
     decision === "deny" ? check.reasons.map(categorizeDenyReason) : [];
@@ -709,6 +740,8 @@ export function buildTxReviewSummary(
       : undefined,
     proposalId: input.proposalId,
     walletId: input.walletId,
+    chainId: input.chainId,
+    network: input.network,
   };
 }
 
@@ -727,6 +760,8 @@ export function buildProposalReviewSummary(
     simulation: proposal.simulation,
     proposalId: proposal.id,
     walletId: proposal.walletId,
+    chainId: proposal.chainId,
+    network: proposal.network,
     context,
   });
 }
@@ -736,11 +771,18 @@ export function buildProposalReviewSummary(
  * Prefer attaching full reviewSummary in the tool result after confirm.
  */
 export function formatConfirmPrompt(summary: TxReviewSummary): string {
+  const chainLabel =
+    typeof summary.chainId === "number" && Number.isInteger(summary.chainId)
+      ? formatSealedChainLabel(summary.chainId, summary.network)
+      : summary.proposalId
+        ? formatSealedChainLabel(undefined, summary.network)
+        : undefined;
   const lines = [
     summary.headline,
     `Decision: ${summary.decision.toUpperCase()}`,
     `AgentGuidance: ${summary.agentGuidance}`,
     `To: ${summary.destination} (${summary.destinationKind})`,
+    ...(chainLabel ? [`Chain: ${chainLabel}`] : []),
     `Native value: ${summary.nativeValuePls} PLS (${summary.nativeValueWei} wei) — value only, not gas`,
     `Decode: ${summary.decodeKnowledge.status}/${summary.decodeKnowledge.pattern}`,
   ];

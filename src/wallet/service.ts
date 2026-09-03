@@ -16,6 +16,7 @@ import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import type { AppConfig } from "../types.js";
 import {
   chainForConfig,
+  chainIdForConfig,
   estimateGas,
   ethCall,
   getNativeBalance,
@@ -189,12 +190,62 @@ const NON_RETRYABLE_RECOVERY_HINT =
   "local spend may be incomplete — call settle_interrupted_broadcast (confirm=true) " +
   "to finish spend merge + executed without a second send.";
 
+function reproposeChainHint(config: Pick<AppConfig, "network">): string {
+  const liveChainId = chainIdForConfig(config);
+  return (
+    `Re-propose on the current network (chainId ${liveChainId}, ${config.network}); ` +
+    "the existing proposal will not be retargeted."
+  );
+}
+
+/**
+ * Refuse broadcast when the proposal's sealed chain is missing (legacy
+ * on-disk JSON) or does not match live config. Never assumes mainnet 369.
+ */
+export function assertProposalChainMatchesLive(
+  proposal: TxProposal,
+  config: Pick<AppConfig, "network">,
+): void {
+  const liveChainId = chainIdForConfig(config);
+  const liveNetwork = config.network;
+  const sealed = proposal.chainId;
+
+  if (typeof sealed !== "number" || !Number.isInteger(sealed)) {
+    throw new PolicyError(
+      `Proposal ${proposal.id} has no sealed chainId (legacy on-disk proposal). ` +
+        reproposeChainHint(config),
+    );
+  }
+
+  if (sealed !== liveChainId) {
+    throw new PolicyError(
+      `Proposal ${proposal.id} is sealed for chainId ${sealed}` +
+        (proposal.network ? ` (${proposal.network})` : "") +
+        ` but this process is configured for chainId ${liveChainId} (${liveNetwork}). ` +
+        reproposeChainHint(config),
+    );
+  }
+
+  if (proposal.network !== undefined && proposal.network !== liveNetwork) {
+    throw new PolicyError(
+      `Proposal ${proposal.id} is sealed for network ${proposal.network} ` +
+        `but this process is configured for ${liveNetwork} (chainId ${liveChainId}). ` +
+        reproposeChainHint(config),
+    );
+  }
+}
+
 /**
  * Fail closed if proposal is not safely re-executable (broadcast path).
  * Any status other than pending, or any existing txHash, blocks re-broadcast.
  * Recovery of interrupted local settlement is settleInterruptedBroadcast only.
+ * Sealed chain must match live config — env flip mainnet ↔ testnet cannot
+ * broadcast the same proposal on the other chain.
  */
-export function assertProposalExecutable(proposal: TxProposal): void {
+export function assertProposalExecutable(
+  proposal: TxProposal,
+  config: Pick<AppConfig, "network">,
+): void {
   if (proposal.txHash) {
     throw new PolicyError(
       `Proposal already broadcast (txHash=${proposal.txHash}); not retryable: ${proposal.id}. ` +
@@ -225,6 +276,7 @@ export function assertProposalExecutable(proposal: TxProposal): void {
       `Proposal status ${proposal.status} is not executable: ${proposal.id}`,
     );
   }
+  assertProposalChainMatchesLive(proposal, config);
 }
 
 /**
@@ -665,6 +717,7 @@ export async function proposeAgentTx(
   }
 
   const now = Date.now();
+  const chainId = chainIdForConfig(config);
   const proposal: TxProposal = {
     id: generateProposalId(),
     walletId: record.id,
@@ -673,6 +726,8 @@ export async function proposeAgentTx(
     valueWei: valueWei.toString(),
     valuePls,
     data,
+    chainId,
+    network: config.network,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
     simulation,
@@ -781,7 +836,7 @@ async function executeAgentTxLocked(
     throw new PolicyError(`Proposal expired: ${proposalId}`);
   }
 
-  assertProposalExecutable(proposal);
+  assertProposalExecutable(proposal, config);
 
   let record = loadWalletRecord(config.agentWalletDir, proposal.walletId);
   record.dailySpend = normalizeDailySpend(record.dailySpend);
@@ -1227,6 +1282,8 @@ export async function transferPls(
           valueWei: proposal.valueWei,
           valuePls: proposal.valuePls,
           data: proposal.data,
+          chainId: proposal.chainId,
+          network: proposal.network,
           createdAt: proposal.createdAt,
           expiresAt: proposal.expiresAt,
           simulation: result.simulation,
