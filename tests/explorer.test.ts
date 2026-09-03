@@ -1,7 +1,14 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { buildExplorerUrl, explorerGet, explorerLogsWindow } from "../src/data/explorer.js";
+import {
+  buildExplorerUrl,
+  explorerGet,
+  explorerLogsWindow,
+  explorerV2Get,
+  getLogsSoft,
+} from "../src/data/explorer.js";
 import type { AppConfig } from "../src/types.js";
-import { ExplorerError } from "../src/utils/errors.js";
+import { ExplorerError, TimeoutError } from "../src/utils/errors.js";
+import { HTTP_429_MAX_ATTEMPTS, HTTP_429_RETRY_AFTER_CAP_MS } from "../src/utils/httpFetch.js";
 
 const baseConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -47,8 +54,26 @@ describe("buildExplorerUrl", () => {
   });
 });
 
+function hangUntilAbort(
+  _input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    const abort = () => {
+      const err = new Error("The operation was aborted");
+      err.name = "AbortError";
+      reject(err);
+    };
+    if (!signal) return;
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
 describe("explorerGet", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -182,14 +207,12 @@ describe("explorerGet", () => {
 
   it("throws ExplorerError with status on HTTP 400/500 (callers soft-fail)", async () => {
     for (const status of [400, 500]) {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async () => ({
-          ok: false,
-          status,
-          json: async () => ({}),
-        })),
-      );
+      const fetchMock = vi.fn(async () => ({
+        ok: false,
+        status,
+        json: async () => ({}),
+      }));
+      vi.stubGlobal("fetch", fetchMock);
       try {
         await explorerGet(baseConfig, {
           module: "contract",
@@ -203,6 +226,192 @@ describe("explorerGet", () => {
         );
         expect((err as ExplorerError).status).toBe(status);
       }
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("retries HTTP 429 then succeeds", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ "retry-after": "0" }),
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: async () => ({
+          status: "1",
+          message: "OK",
+          result: { symbol: "WPLS" },
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await explorerGet(baseConfig, {
+      module: "token",
+      action: "getToken",
+    });
+    expect(result).toEqual({ symbol: "WPLS" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps Retry-After sleep on 429", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ "retry-after": "120" }),
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: "1",
+          message: "OK",
+          result: "123",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const p = explorerGet(baseConfig, {
+      module: "account",
+      action: "balance",
+    });
+    await vi.advanceTimersByTimeAsync(HTTP_429_RETRY_AFTER_CAP_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(p).resolves.toBe("123");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("exhausted 429 throws ExplorerError with status", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers(),
+      json: async () => ({}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await explorerGet(baseConfig, { module: "stats", action: "ethsupply" });
+      expect.unreachable("should throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ExplorerError);
+      expect((err as ExplorerError).status).toBe(429);
+      expect((err as ExplorerError).message).toMatch(/HTTP 429/);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(HTTP_429_MAX_ATTEMPTS);
+  });
+
+  it("maps abort/timeout to TimeoutError (not 429)", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(hangUntilAbort));
+    const p = explorerGet(
+      { ...baseConfig, httpTimeoutMs: 5_000 },
+      { module: "stats", action: "ethsupply" },
+    );
+    const settled = p.then(
+      () => "resolved",
+      (err: unknown) => err,
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(TimeoutError);
+    expect((err as Error).message).toMatch(/explorer API/);
+    expect((err as Error).message).not.toMatch(/429/);
+  });
+});
+
+describe("explorerV2Get 429 + timeout", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("retries 429 then returns JSON", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({ "retry-after": "0" }),
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ address: "0xabc", symbol: "WPLS" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await explorerV2Get(baseConfig, "/tokens/0xabc");
+    expect(result).toEqual({ address: "0xabc", symbol: "WPLS" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("exhausted 429 throws ExplorerError with status", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await explorerV2Get(baseConfig, "/tokens/0xabc");
+      expect.unreachable("should throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ExplorerError);
+      expect((err as ExplorerError).status).toBe(429);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(HTTP_429_MAX_ATTEMPTS);
+  });
+
+  it("maps abort/timeout to TimeoutError for explorer API v2", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(hangUntilAbort));
+    const p = explorerV2Get(
+      { ...baseConfig, httpTimeoutMs: 5_000 },
+      "/tokens/0xabc",
+    );
+    const settled = p.then(
+      () => "resolved",
+      (err: unknown) => err,
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(TimeoutError);
+    expect((err as Error).message).toMatch(/explorer API v2/);
+  });
+});
+
+describe("getLogsSoft exhausted 429", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("soft-fails with the ExplorerError 429 status in reason", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({}),
+      })),
+    );
+    const result = await getLogsSoft(baseConfig, {
+      address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/429/);
     }
   });
 });

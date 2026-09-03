@@ -1,5 +1,6 @@
 import type { AppConfig } from "../types.js";
 import { ExplorerError, TimeoutError } from "../utils/errors.js";
+import { httpFetch, isAbortError } from "../utils/httpFetch.js";
 import { assertAddress, assertTxHash } from "../utils/safety.js";
 
 export interface ExplorerResponse<T = unknown> {
@@ -40,14 +41,12 @@ export async function explorerGet<T = unknown>(
   const timeoutMs = options.timeoutMs ?? config.httpTimeoutMs;
   const url = buildExplorerUrl(config.explorerApi, params);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { accept: "application/json" },
-    });
+    const res = await httpFetch(
+      url,
+      { headers: { accept: "application/json" } },
+      { timeoutMs, retry429: "get" },
+    );
 
     if (!res.ok) {
       throw new ExplorerError(`HTTP ${res.status} for ${url}`, res.status);
@@ -78,14 +77,13 @@ export async function explorerGet<T = unknown>(
     return body.result;
   } catch (err) {
     if (err instanceof ExplorerError) throw err;
-    if (err instanceof Error && err.name === "AbortError") {
+    if (err instanceof TimeoutError) throw err;
+    if (isAbortError(err)) {
       throw new TimeoutError("explorer API", timeoutMs);
     }
     throw new ExplorerError(
       err instanceof Error ? err.message : "Explorer request failed",
     );
-  } finally {
-    clearTimeout(timer);
   }
 }
 
@@ -454,14 +452,12 @@ export async function explorerV2Get<T = unknown>(
     url.searchParams.set(key, String(value));
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: { accept: "application/json" },
-    });
+    const res = await httpFetch(
+      url.toString(),
+      { headers: { accept: "application/json" } },
+      { timeoutMs, retry429: "get" },
+    );
     if (!res.ok) {
       throw new ExplorerError(
         `HTTP ${res.status} for BlockScout v2 ${path}`,
@@ -471,14 +467,13 @@ export async function explorerV2Get<T = unknown>(
     return (await res.json()) as T;
   } catch (err) {
     if (err instanceof ExplorerError) throw err;
-    if (err instanceof Error && err.name === "AbortError") {
+    if (err instanceof TimeoutError) throw err;
+    if (isAbortError(err)) {
       throw new TimeoutError("explorer API v2", timeoutMs);
     }
     throw new ExplorerError(
       err instanceof Error ? err.message : "Explorer v2 request failed",
     );
-  } finally {
-    clearTimeout(timer);
   }
 }
 

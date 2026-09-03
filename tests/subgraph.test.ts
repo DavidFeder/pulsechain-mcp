@@ -9,6 +9,7 @@ import {
   TimeoutError,
   mapUnknownError,
 } from "../src/utils/errors.js";
+import { HTTP_429_MAX_ATTEMPTS } from "../src/utils/httpFetch.js";
 
 const baseConfig: AppConfig = {
   rpcUrl: "https://rpc.pulsechain.com",
@@ -28,7 +29,45 @@ const baseConfig: AppConfig = {
   httpTimeoutMs: 5_000,
 };
 
+function hangUntilAbort(
+  _input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    const abort = () => {
+      const err = new Error("The operation was aborted");
+      err.name = "AbortError";
+      reject(err);
+    };
+    if (!signal) return;
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
+function gqlResponse(
+  status: number,
+  payload: unknown,
+  extraHeaders: Record<string, string> = {},
+) {
+  const text =
+    typeof payload === "string" ? payload : JSON.stringify(payload);
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({
+      "content-type": "application/json",
+      ...extraHeaders,
+    }),
+    json: async () =>
+      typeof payload === "string" ? JSON.parse(payload) : payload,
+    text: async () => text,
+  };
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -189,6 +228,63 @@ describe("subgraph requestSafe error mapping (mocked fetch)", () => {
     const res = await fetchBundle(baseConfig, "v2");
     expect(res.bundle?.plsPrice).toBe("0.00005");
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("retries HTTP 429 on GraphQL POST then succeeds", async () => {
+    const payload = {
+      data: { bundle: { id: "1", plsPrice: "0.00009" } },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        gqlResponse(429, { message: "Too Many Requests" }, { "retry-after": "0" }),
+      )
+      .mockResolvedValueOnce(gqlResponse(200, payload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchBundle } = await import("../src/data/subgraph.js");
+    const res = await fetchBundle(baseConfig, "v2");
+    expect(res.bundle?.plsPrice).toBe("0.00009");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[1]?.method ?? "POST").toUpperCase()).toBe(
+      "POST",
+    );
+  });
+
+  it("exhausted 429 maps through mapUnknownError / SubgraphError", async () => {
+    const fetchMock = vi.fn(async () =>
+      gqlResponse(429, { message: "Too Many Requests" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchBundle } = await import("../src/data/subgraph.js");
+    try {
+      await fetchBundle(baseConfig, "v2");
+      expect.unreachable("should throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      const mapped = err instanceof Error ? err : new Error(String(err));
+      // graphql-request ClientError message includes "GraphQL Error (Code: 429)"
+      expect(mapped).toBeInstanceOf(SubgraphError);
+      expect(mapped.message).toMatch(/429/);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(HTTP_429_MAX_ATTEMPTS);
+  });
+
+  it("maps abort/timeout to TimeoutError for PulseX subgraph", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(hangUntilAbort));
+    const { fetchBundle } = await import("../src/data/subgraph.js");
+    const p = fetchBundle(baseConfig, "v2");
+    const settled = p.then(
+      () => "resolved",
+      (err: unknown) => err,
+    );
+    await vi.advanceTimersByTimeAsync(baseConfig.httpTimeoutMs);
+    const err = await settled;
+    expect(err).toBeInstanceOf(TimeoutError);
+    expect((err as Error).message).toMatch(/PulseX subgraph/);
+    expect((err as Error).message).not.toMatch(/429/);
   });
 });
 
