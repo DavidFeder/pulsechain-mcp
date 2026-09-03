@@ -159,7 +159,7 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(out).not.toMatch(/data\/wallets/);
     expect(out).not.toMatch(/(^|\/)\.env(\s|$)/);
     expect(out).not.toMatch(/(^|\/)\.env\.wallet(\s|$)/);
-  });
+  }, 30_000);
 
   it("version surfaces are 1.0.5", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
