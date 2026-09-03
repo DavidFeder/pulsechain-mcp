@@ -174,7 +174,8 @@ export function computeIntentHash(
 /**
  * Bind execute/settle confirmation to proposal *contents*, not just the id.
  * Callers must reload the proposal on resume so a rewritten JSON fails the
- * intentHash check.
+ * intentHash check. Sealed chainId/network are included when present so an
+ * env flip mainnet ↔ testnet cannot reuse the same confirmation.
  */
 export function proposalExecutionIntentArgs(proposal: {
   id: string;
@@ -183,8 +184,10 @@ export function proposalExecutionIntentArgs(proposal: {
   to: string;
   valueWei: string;
   data?: string;
+  chainId?: number;
+  network?: string;
 }): Record<string, unknown> {
-  return {
+  const args: Record<string, unknown> = {
     proposalId: proposal.id,
     walletId: proposal.walletId,
     from: proposal.from.toLowerCase(),
@@ -192,6 +195,28 @@ export function proposalExecutionIntentArgs(proposal: {
     valueWei: proposal.valueWei,
     data: (proposal.data ?? "0x").toLowerCase(),
   };
+  if (proposal.chainId !== undefined) args.chainId = proposal.chainId;
+  if (proposal.network !== undefined) args.network = proposal.network;
+  return args;
+}
+
+/**
+ * Fail if proposal contents (including sealed chain) changed after the
+ * confirmation challenge. Compares canonical intent args so new sealed
+ * fields cannot be omitted from the check.
+ */
+export function assertSameExecutionIntent(
+  before: Parameters<typeof proposalExecutionIntentArgs>[0],
+  after: Parameters<typeof proposalExecutionIntentArgs>[0],
+): void {
+  if (
+    stableStringify(proposalExecutionIntentArgs(before)) !==
+    stableStringify(proposalExecutionIntentArgs(after))
+  ) {
+    throw new PolicyError(
+      "Proposal changed after confirmation; re-issue the tool call.",
+    );
+  }
 }
 
 function confirmationDeclinedMessage(tool: string): string {

@@ -375,20 +375,25 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
         allowlistExpired: false,
       },
       status: "pending" as const,
+      chainId: 369,
+      network: "mainnet" as const,
     };
-    expect(() => assertProposalExecutable(base)).not.toThrow();
+    expect(() => assertProposalExecutable(base, { network: "mainnet" })).not.toThrow();
     expect(() =>
-      assertProposalExecutable({ ...base, status: "executed" }),
+      assertProposalExecutable({ ...base, status: "executed" }, { network: "mainnet" }),
     ).toThrow(/already executed/i);
     expect(() =>
-      assertProposalExecutable({ ...base, status: "broadcasting" }),
+      assertProposalExecutable({ ...base, status: "broadcasting" }, { network: "mainnet" }),
     ).toThrow(/in-flight|broadcasting|not retryable/i);
     expect(() =>
-      assertProposalExecutable({
-        ...base,
-        status: "pending",
-        txHash: FAKE_HASH,
-      }),
+      assertProposalExecutable(
+        {
+          ...base,
+          status: "pending",
+          txHash: FAKE_HASH,
+        },
+        { network: "mainnet" },
+      ),
     ).toThrow(/already broadcast|not retryable/i);
   });
 
@@ -628,7 +633,7 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
     expect(loaded.txHash).toBe(FAKE_HASH);
     expect(loaded.broadcastAcceptedAt).toMatch(/^\d{4}-/);
     expect(isProposalNonRetryableForSend(loaded)).toBe(true);
-    expect(() => assertProposalExecutable(loaded)).toThrow(
+    expect(() => assertProposalExecutable(loaded, { network: "mainnet" })).toThrow(
       /already broadcast|settle_interrupted|not retryable/i,
     );
   });

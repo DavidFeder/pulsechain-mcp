@@ -45,6 +45,7 @@ import {
 import {
   policySnapshotId,
   proposalExecutionIntentArgs,
+  assertSameExecutionIntent,
   readVerifiedConfirmState,
   requireConfirmOrInput,
 } from "../../utils/confirm.js";
@@ -127,26 +128,6 @@ function snapshotForWallet(
     return policySnapshotId(record.policy);
   } catch {
     return "none";
-  }
-}
-
-function assertSameExecutionIntent(
-  before: Parameters<typeof proposalExecutionIntentArgs>[0],
-  after: Parameters<typeof proposalExecutionIntentArgs>[0],
-): void {
-  const a = proposalExecutionIntentArgs(before);
-  const b = proposalExecutionIntentArgs(after);
-  if (
-    a.proposalId !== b.proposalId ||
-    a.walletId !== b.walletId ||
-    a.from !== b.from ||
-    a.to !== b.to ||
-    a.valueWei !== b.valueWei ||
-    a.data !== b.data
-  ) {
-    throw new PolicyError(
-      "Proposal changed after confirmation; re-issue the tool call.",
-    );
   }
 }
 

@@ -247,6 +247,19 @@ export interface TxProposal {
   valueWei: string;
   valuePls: number;
   data: `0x${string}`;
+  /**
+   * Chain id sealed at propose time (PulseChain mainnet 369 / testnet 943).
+   * Execute refuses if this is missing (legacy on-disk proposals) or does
+   * not match live `chainIdForConfig(config)`. Optional only for load of
+   * pre-seal JSON — new proposals always persist it.
+   */
+  chainId?: number;
+  /**
+   * Network name sealed at propose time (`config.network`). Part of confirm
+   * intent; execute also refuses when present and mismatched. Missing on
+   * legacy proposals.
+   */
+  network?: "mainnet" | "testnet";
   createdAt: string;
   expiresAt: string;
   simulation: SimulationResult;
