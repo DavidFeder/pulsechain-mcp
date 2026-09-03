@@ -16,7 +16,6 @@ import {
   PWBTC_TOKEN,
   MULTICALL3_ADDRESS,
   POPULAR_CONTRACTS,
-  PULSECHAIN_CHAIN_ID,
   PULSECHAIN_NATIVE_DECIMALS,
   PULSECHAIN_NATIVE_SYMBOL,
   PULSEX_CONTRACTS,
@@ -25,7 +24,11 @@ import {
   SERVER_VERSION,
   TOKEN_ORIGIN_GUIDANCE,
 } from "../constants.js";
-import { getRpcStatusSnapshot } from "../data/rpc.js";
+import {
+  chainIdForConfig,
+  getRpcStatusSnapshot,
+  networkMismatchForConfig,
+} from "../data/rpc.js";
 import type { AppConfig } from "../types.js";
 
 /**
@@ -75,9 +78,10 @@ export function registerResources(server: McpServer, config: AppConfig): void {
       mimeType: "application/json",
     },
     async (uri) => {
+      const networkMismatch = networkMismatchForConfig(config);
       const body = {
         name: "PulseChain",
-        chainId: PULSECHAIN_CHAIN_ID,
+        chainId: chainIdForConfig(config),
         native: {
           symbol: PULSECHAIN_NATIVE_SYMBOL,
           decimals: PULSECHAIN_NATIVE_DECIMALS,
@@ -96,6 +100,7 @@ export function registerResources(server: McpServer, config: AppConfig): void {
         },
         active: {
           network: config.network,
+          chainId: chainIdForConfig(config),
           rpcUrl: config.rpcUrl,
           rpcUrls: config.rpcUrls,
           explorerApi: config.explorerApi,
@@ -107,6 +112,7 @@ export function registerResources(server: McpServer, config: AppConfig): void {
           // Deliberately omit AGENT_WALLET_MASTER_KEY and wallet dir contents
         },
         server: { name: SERVER_NAME, version: SERVER_VERSION },
+        ...(networkMismatch ? { networkMismatch } : {}),
       };
       return {
         contents: [
@@ -130,9 +136,10 @@ export function registerResources(server: McpServer, config: AppConfig): void {
       mimeType: "application/json",
     },
     async (uri) => {
+      const networkMismatch = networkMismatchForConfig(config);
       const body = {
         name: "PulseChain",
-        chainId: PULSECHAIN_CHAIN_ID,
+        chainId: chainIdForConfig(config),
         nativeSymbol: PULSECHAIN_NATIVE_SYMBOL,
         network: config.network,
         rpcUrl: config.rpcUrl,
@@ -144,6 +151,7 @@ export function registerResources(server: McpServer, config: AppConfig): void {
         },
         agentWalletEnabled: config.agentWalletEnabled,
         server: { name: SERVER_NAME, version: SERVER_VERSION },
+        ...(networkMismatch ? { networkMismatch } : {}),
       };
       return {
         contents: [

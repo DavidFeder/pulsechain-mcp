@@ -8,7 +8,12 @@ import {
   type Transport,
 } from "viem";
 import { pulsechain, pulsechainV4 } from "viem/chains";
-import type { AppConfig } from "../types.js";
+import {
+  DEFAULT_EXPLORER_API,
+  DEFAULT_PULSEX_SUBGRAPH_V1,
+  DEFAULT_PULSEX_SUBGRAPH_V2,
+} from "../constants.js";
+import type { AppConfig, NetworkMismatchInfo } from "../types.js";
 import { RpcError, mapUnknownError } from "../utils/errors.js";
 import { assertAddress, assertTxHash } from "../utils/safety.js";
 import {
@@ -34,6 +39,57 @@ function clientCacheKey(config: AppConfig): string {
 /** viem chain for this config — used by both public reads and wallet signing. */
 export function chainForConfig(config: Pick<AppConfig, "network">) {
   return config.network === "testnet" ? pulsechainV4 : pulsechain;
+}
+
+/** Numeric chain id for this config (mainnet 369 / testnet 943). */
+export function chainIdForConfig(config: Pick<AppConfig, "network">): number {
+  return chainForConfig(config).id;
+}
+
+export const TESTNET_MAINNET_DEFAULTS_WARNING =
+  "PULSECHAIN_NETWORK=testnet (chain 943) but explorer and/or PulseX subgraph URLs still use the mainnet defaults (scan.pulsechain.com / graph.pulsechain.com). This server does not invent unofficial testnet subgraph hosts — set PULSECHAIN_EXPLORER_API and PULSEX_SUBGRAPH_V1/V2 if you have official testnet endpoints.";
+
+/**
+ * When testnet still points explorer/subgraph at shipped mainnet defaults.
+ * Returns `undefined` on mainnet and on testnet with all three URLs overridden.
+ */
+export function networkMismatchForConfig(
+  config: Pick<
+    AppConfig,
+    "network" | "explorerApi" | "pulseXSubgraphV1" | "pulseXSubgraphV2"
+  >,
+): NetworkMismatchInfo | undefined {
+  if (config.network !== "testnet") return undefined;
+  const explorerApiIsMainnetDefault = config.explorerApi === DEFAULT_EXPLORER_API;
+  const pulseXSubgraphV1IsMainnetDefault =
+    config.pulseXSubgraphV1 === DEFAULT_PULSEX_SUBGRAPH_V1;
+  const pulseXSubgraphV2IsMainnetDefault =
+    config.pulseXSubgraphV2 === DEFAULT_PULSEX_SUBGRAPH_V2;
+  if (
+    !explorerApiIsMainnetDefault &&
+    !pulseXSubgraphV1IsMainnetDefault &&
+    !pulseXSubgraphV2IsMainnetDefault
+  ) {
+    return undefined;
+  }
+  return {
+    warning: TESTNET_MAINNET_DEFAULTS_WARNING,
+    explorerApiIsMainnetDefault,
+    pulseXSubgraphV1IsMainnetDefault,
+    pulseXSubgraphV2IsMainnetDefault,
+  };
+}
+
+export const MAINNET_ONLY_AGGREGATOR_WARNING =
+  "Piteas / Switch / PulseSwap quotes are PulseChain mainnet-only (chain 369) and are not valid for this server's testnet (943). Reported chainId is the aggregator's chain, not the configured network.";
+
+/** Tool-result warnings when a mainnet-only aggregator is used on testnet. */
+export function mainnetOnlyAggregatorWarnings(
+  config: Pick<AppConfig, "network">,
+): string[] | undefined {
+  return config.network === "testnet"
+    ? [MAINNET_ONLY_AGGREGATOR_WARNING]
+    : undefined;
 }
 
 function ensureClient(config: AppConfig): void {

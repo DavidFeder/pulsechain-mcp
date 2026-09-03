@@ -216,6 +216,7 @@ describe("normalizePiteasQuote + preparePiteasSwap (shipped)", () => {
     expect(n.data.valuePls).not.toBe(n.data.valueWei);
     expect(parsePlsToWei(n.data.valuePls!).toString()).toBe(n.data.valueWei);
     expect(n.data.quoteReady).toBe(true);
+    expect(n.data.chainId).toBe(369);
     expect(n.data.route?.pathCount).toBe(2);
     expect(n.data.decodeNote).toMatch(/unknown/i);
     expect(n.data.note).toMatch(/not a guaranteed best-price/i);

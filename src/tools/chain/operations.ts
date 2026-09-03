@@ -16,7 +16,6 @@ import {
 } from "viem";
 import {
   CORE_TOKENS,
-  PULSECHAIN_CHAIN_ID,
   PULSECHAIN_NATIVE_DECIMALS,
   PULSECHAIN_NATIVE_SYMBOL,
   PULSEX_CONTRACTS,
@@ -28,6 +27,7 @@ import {
 } from "../../constants.js";
 import {
   batchErc20Balances,
+  chainIdForConfig,
   getAccountTxList,
   getErc20Metadata,
   getFeeData,
@@ -197,7 +197,7 @@ export async function opGetBalance(config: AppConfig, address: string) {
     ...data,
     symbol: PULSECHAIN_NATIVE_SYMBOL,
     decimals: PULSECHAIN_NATIVE_DECIMALS,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
   };
 }
 
@@ -224,7 +224,7 @@ export async function opGetTokenBalance(
     decimals: meta.decimals,
     balanceRaw,
     balanceFormatted: formatUnits(BigInt(balanceRaw), meta.decimals),
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
     balanceOk,
     ...(balanceOk ? {} : { balanceError: bal?.balanceError ?? "balance_read_failed" }),
     ...(identity ?? {}),
@@ -288,7 +288,7 @@ export async function opGetPortfolio(
 
   return {
     owner: ownerAddr,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
     native: native
       ? {
           kind: "native" as const,
@@ -343,7 +343,7 @@ export async function opGetTransaction(config: AppConfig, hash: string) {
     transaction: tx,
     receipt,
     status,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
   };
 }
 
@@ -360,7 +360,7 @@ export async function opGetTransactionHistory(
     page,
     offset,
     transactions: txs,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
     source: "explorer",
   };
 }
@@ -369,7 +369,7 @@ export async function opGetGasPrice(config: AppConfig) {
   const fees = await getFeeData(config);
   return {
     ...fees,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
     gasPriceGwei: formatUnits(BigInt(fees.gasPriceWei), 9),
   };
 }
@@ -388,7 +388,7 @@ export async function opEstimateGas(
   return {
     ...result,
     feeData: fees,
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
   };
 }
 
@@ -400,7 +400,7 @@ export async function opGetBlock(
     blockNumber === undefined || blockNumber === "" || blockNumber === "latest"
       ? await rpcGetBlock(config, "latest")
       : await rpcGetBlock(config, BigInt(blockNumber));
-  return { ...block, chainId: PULSECHAIN_CHAIN_ID };
+  return { ...block, chainId: chainIdForConfig(config) };
 }
 
 // ---------------------------------------------------------------------------
@@ -504,7 +504,7 @@ export async function opReadContract(
       functionName: params.functionName,
       args,
       result: serializeViemResult(result),
-      chainId: PULSECHAIN_CHAIN_ID,
+      chainId: chainIdForConfig(config),
     };
   } catch (err) {
     throw new RpcError(
@@ -563,7 +563,7 @@ export async function opPrepareTransaction(
   const fees = await getFeeData(config).catch(() => null);
 
   const unsignedTx = {
-    chainId: PULSECHAIN_CHAIN_ID,
+    chainId: chainIdForConfig(config),
     to,
     data,
     value: value.toString(),
@@ -642,7 +642,7 @@ export async function opPulsexQuote(
       amountOut,
       tokenIn: path[0]!,
       tokenOut: path[path.length - 1]!,
-      chainId: PULSECHAIN_CHAIN_ID,
+      chainId: chainIdForConfig(config),
     };
   } catch (err) {
     throw new RpcError(
@@ -806,7 +806,7 @@ export async function opPrepareSwap(
     recipient,
     quote,
     unsignedTransaction: {
-      chainId: PULSECHAIN_CHAIN_ID,
+      chainId: chainIdForConfig(config),
       to: router,
       data,
       value: value.toString(),

@@ -166,7 +166,20 @@ describe("pulsex quote / prepare_swap (mocked public client)", () => {
     expect(quote.amounts).toEqual([amountIn.toString(), amountOut.toString()]);
     expect(quote.router.toLowerCase()).toBe(PULSEX_V2_ROUTER.toLowerCase());
     expect(quote.path).toHaveLength(2);
+    expect(quote.chainId).toBe(369);
     expect(readContract).toHaveBeenCalled();
+
+    const testnetQuote = await opPulsexQuote(
+      { ...baseConfig, network: "testnet" },
+      {
+        tokenIn: WPLS_ADDRESS,
+        tokenOut: HEX_ADDRESS,
+        amountIn: amountIn.toString(),
+        version: "v2",
+      },
+      mockClient as never,
+    );
+    expect(testnetQuote.chainId).toBe(943);
     const call = readContract.mock.calls[0]![0] as {
       functionName: string;
       address: string;
@@ -305,6 +318,29 @@ describe("balance helpers with mocked multicall/rpc", () => {
     expect(result.symbol).toBe("PLS");
     expect(result.balancePls).toBe("1");
     expect(result.chainId).toBe(369);
+  });
+
+  it("opGetBalance stamps testnet chainId 943", async () => {
+    vi.doMock("../src/data/index.js", async () => {
+      const actual = await vi.importActual<
+        typeof import("../src/data/index.js")
+      >("../src/data/index.js");
+      return {
+        ...actual,
+        getNativeBalance: async () => ({
+          address: "0x0000000000000000000000000000000000000001",
+          balanceWei: "1000000000000000000",
+          balancePls: "1",
+        }),
+      };
+    });
+
+    const { opGetBalance } = await import("../src/tools/chain/operations.js");
+    const result = await opGetBalance(
+      { ...baseConfig, network: "testnet" },
+      "0x0000000000000000000000000000000000000001",
+    );
+    expect(result.chainId).toBe(943);
   });
 
   it("opGetTokenBalance returns metadata + balance", async () => {
@@ -524,6 +560,36 @@ describe("prepare_transaction shape (mocked fee/gas)", () => {
     expect(prepared.warnings.some((w) => /unsigned|never signs/i.test(w))).toBe(
       true,
     );
+  });
+
+  it("opPrepareTransaction stamps testnet chainId 943 on unsigned tx", async () => {
+    vi.doMock("../src/data/index.js", async () => {
+      const actual = await vi.importActual<
+        typeof import("../src/data/index.js")
+      >("../src/data/index.js");
+      return {
+        ...actual,
+        estimateGas: async () => ({ gasEstimate: "21000" }),
+        getFeeData: async () => ({
+          gasPriceWei: "1500000000",
+          maxFeePerGas: "2000000000",
+          maxPriorityFeePerGas: "1000000000",
+        }),
+      };
+    });
+
+    const { opPrepareTransaction } = await import(
+      "../src/tools/chain/operations.js"
+    );
+
+    const prepared = await opPrepareTransaction(
+      { ...baseConfig, network: "testnet" },
+      {
+        to: "0x0000000000000000000000000000000000000001",
+        value: "1000000000000000000",
+      },
+    );
+    expect(prepared.unsignedTransaction.chainId).toBe(943);
   });
 
   it("accepts explicit gas and omits estimate path", async () => {

@@ -1,31 +1,26 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import {
-  PULSECHAIN_CHAIN_ID,
-  PULSECHAIN_TESTNET_CHAIN_ID,
   SERVER_NAME,
   SERVER_VERSION,
 } from "../constants.js";
 import {
+  chainIdForConfig,
   getActiveRpcUrl,
   getRpcStatusSnapshot,
+  networkMismatchForConfig,
   probeRpcEndpoints,
 } from "../data/rpc.js";
 import type { AppConfig, HealthStatus } from "../types.js";
 import { ok } from "../utils/result.js";
 import { registerTool } from "./define.js";
 
-function chainIdFor(cfg: AppConfig): number {
-  return cfg.network === "testnet"
-    ? PULSECHAIN_TESTNET_CHAIN_ID
-    : PULSECHAIN_CHAIN_ID;
-}
-
-function buildHealth(cfg: AppConfig): HealthStatus {
+export function buildHealth(cfg: AppConfig): HealthStatus {
+  const networkMismatch = networkMismatchForConfig(cfg);
   return {
     server: SERVER_NAME,
     version: SERVER_VERSION,
-    chainId: chainIdFor(cfg),
+    chainId: chainIdForConfig(cfg),
     network: cfg.network,
     rpcUrl: cfg.rpcUrl,
     rpcUrls: [...cfg.rpcUrls],
@@ -35,6 +30,7 @@ function buildHealth(cfg: AppConfig): HealthStatus {
     pulseXSubgraphV2Configured: Boolean(cfg.pulseXSubgraphV2),
     agentWalletEnabled: cfg.agentWalletEnabled,
     httpTransportEnabled: cfg.httpTransportPort !== undefined,
+    ...(networkMismatch ? { networkMismatch } : {}),
   };
 }
 

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { chainForConfig } from "../src/data/rpc.js";
+import { chainForConfig, chainIdForConfig } from "../src/data/rpc.js";
 import { SWAPS_BY_PAIRS_QUERY } from "../src/data/subgraph.js";
 import { PolicyError } from "../src/utils/errors.js";
 import { applyLabAutoloadIfEnabled } from "../src/labAutoload.js";
@@ -53,6 +53,8 @@ describe("review hardening", () => {
   it("chainForConfig matches RPC endpoint family", () => {
     expect(chainForConfig({ network: "mainnet" }).id).toBe(369);
     expect(chainForConfig({ network: "testnet" }).id).toBe(943);
+    expect(chainIdForConfig({ network: "mainnet" })).toBe(369);
+    expect(chainIdForConfig({ network: "testnet" })).toBe(943);
   });
 
   it("loadProposal rejects filename vs embedded id mismatch", async () => {

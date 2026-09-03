@@ -57,6 +57,8 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `HTTP_TRANSPORT_PORT` | empty | If set: HTTP-only (breaks stdio hosts) |
 | `LOG_LEVEL` | `info` | stderr only |
 
+When `PULSECHAIN_NETWORK=testnet`, explorer and PulseX subgraph still default to those mainnet hosts; `pulsechain_health` and `pulsechain://chain/config` report `networkMismatch` rather than inventing unofficial testnet subgraph URLs.
+
 ---
 
 ## Client hosts (stdio)
