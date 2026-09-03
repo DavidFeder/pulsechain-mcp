@@ -1,7 +1,7 @@
 import type { AppConfig } from "../types.js";
 import { ExplorerError, TimeoutError } from "../utils/errors.js";
 import { httpFetch, isAbortError } from "../utils/httpFetch.js";
-import { assertAddress, assertTxHash } from "../utils/safety.js";
+import { assertAddress } from "../utils/safety.js";
 
 export interface ExplorerResponse<T = unknown> {
   status: string;
@@ -90,18 +90,6 @@ export async function explorerGet<T = unknown>(
 // ---------------------------------------------------------------------------
 // Account
 // ---------------------------------------------------------------------------
-
-export async function getAccountBalance(
-  config: AppConfig,
-  address: string,
-): Promise<string> {
-  const addr = assertAddress(address);
-  return explorerGet<string>(config, {
-    module: "account",
-    action: "balance",
-    address: addr,
-  });
-}
 
 export async function getAccountTxList(
   config: AppConfig,
@@ -256,34 +244,6 @@ export async function getTokenSupply(
 }
 
 // ---------------------------------------------------------------------------
-// Transaction
-// ---------------------------------------------------------------------------
-
-export async function getTransactionStatus(
-  config: AppConfig,
-  txHash: string,
-): Promise<unknown> {
-  const hash = assertTxHash(txHash);
-  return explorerGet(config, {
-    module: "transaction",
-    action: "gettxinfo",
-    txhash: hash,
-  });
-}
-
-export async function getTransactionReceiptStatus(
-  config: AppConfig,
-  txHash: string,
-): Promise<unknown> {
-  const hash = assertTxHash(txHash);
-  return explorerGet(config, {
-    module: "transaction",
-    action: "gettxreceiptstatus",
-    txhash: hash,
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Logs
 // ---------------------------------------------------------------------------
 
@@ -346,29 +306,6 @@ export async function getLogs(
     topic0_1_opr: options.topic0_1_opr,
     page: options.page ?? DEFAULT_GETLOGS_PAGE,
     offset: options.offset ?? DEFAULT_GETLOGS_OFFSET,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Block / stats
-// ---------------------------------------------------------------------------
-
-export async function getBlockReward(
-  config: AppConfig,
-  blockNumber: number,
-): Promise<unknown> {
-  return explorerGet(config, {
-    module: "block",
-    action: "getblockreward",
-    blockno: blockNumber,
-  });
-}
-
-export async function getEthSupply(config: AppConfig): Promise<unknown> {
-  // On PulseChain this is PLS supply via same endpoint name
-  return explorerGet(config, {
-    module: "stats",
-    action: "ethsupply",
   });
 }
 

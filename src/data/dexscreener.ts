@@ -373,12 +373,6 @@ export function buildDexScreenerBoostsLatestUrl(
   return `${base.replace(/\/$/, "")}/token-boosts/latest/v1`;
 }
 
-export function buildDexScreenerBoostsTopUrl(
-  base: string = DEXSCREENER_API_BASE,
-): string {
-  return `${base.replace(/\/$/, "")}/token-boosts/top/v1`;
-}
-
 export function buildDexScreenerProfilesLatestUrl(
   base: string = DEXSCREENER_API_BASE,
 ): string {

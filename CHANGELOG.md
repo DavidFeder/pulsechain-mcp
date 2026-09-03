@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- npm pack includes `docs/` (BOOTSTRAP and the rest of the agent/operator set) and `examples/` so README/BOOTSTRAP links are not dead in a published tarball. `bin` stays `dist/index.js`. Secrets, `data/wallets`, coverage, and `node_modules` stay out of the package
 - Opt-in `AGENT_WALLET_ENFORCE_LEGACY_CAPS` (`true`/`1`) makes stored legacy wallet fields hard denies in `evaluatePolicy` (native `maxPlsPerTx`/`maxPlsDaily`, allowlists/`allowlistExpiresAt`, `tokenSpendCaps`/`tokenDailyCaps`, `erc20NotionalCaps` when decode is reliable, `requireDecodableCalldata`, `allowNativeTransfers`). Unset/`false`/`0`/empty keeps operator-trust (display-only; existing over-cap tests still `allowed=true`). Product default is unchanged — not a custody-policy product. Status, `agent_wallet_check_policy`, and `reviewSummary` say whether this process is enforcing or display-only
 - AES-256-GCM private-key blobs bind wallet id + address as AAD (`aadVersion: 1`; UTF-8 `${walletId}:${address.toLowerCase()}`). Transplanted ciphertext fails closed at decrypt (same `ConfigError` as a bad master key). Legacy blobs with no `aadVersion` still decrypt with no AAD; existing wallet files are not rewritten on load
 - CI hygiene: ESLint 10 flat config (`eslint.config.js`) with typescript-eslint recommended and `npm run lint`; GitHub Actions matrix Node 20 and 22 for typecheck + test (lint once on Node 20); targeted Vitest v8 coverage on `src/wallet/**`, `src/utils/confirm.ts`, and `src/tools/analytics/helpers.ts` with a modest floor of 80% statements/lines, 75% branches, 90% functions; optional `docker build -t pulsechain-mcp:ci .` job (packaging still gated by `tests/docker-packaging.test.ts`)
@@ -23,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Write-tool warning mentions `confirm=true` and modern MRTR `InputRequiredResult` elicitation (host UX only, not a cryptographic lock)
 - `createServer` instructions branch on `agentWalletEnabled` (research-only vs operator-trust wallets)
 - Wallets-on `AGENT_WALLET_MULTIPROC_STRICT` defaults to `true` when the env is unset or empty (`false`/`0` stays warn-only opt-out; research-only unset stays `false`). Wallets + `HTTP_TRANSPORT_PORT` require `AGENT_WALLET_MRTR_SECRET` (≥32 bytes UTF-8); stdio still allows the process-local HMAC fallback. Shared `AGENT_WALLET_DIR` is still not multi-writer-safe
+- `registerTool` callback is typed as SDK `AnyToolHandler<typeof schema>` instead of `as never`
+
+### Removed
+
+- Production-dead `assertWriteAllowed` (only tests called it). Wallet writes still use register-time `AGENT_WALLET_ENABLED` gating plus confirm/MRTR. `stripSecrets` and `WRITE_TOOL_WARNING` stay
+- Unused explorer helpers with no `src/` or `tests/` callers: `getBlockReward`, `getEthSupply`, `getAccountBalance`, `getTransactionStatus`, `getTransactionReceiptStatus`. Live backends such as `getAccountInternalTxs` stay
+- Unused DexScreener `buildDexScreenerBoostsTopUrl` and unused DefiLlama `buildDefiLlamaHistoricalChainTvlUrl`. Live backends such as `getDexScreenerProfilesLatest` stay
+- Unused explorer / DexScreener / DefiLlama barrel re-exports from `src/data/index.ts` (internal-only URL builders, `enrichTokenSide`, `defillamaGetJson`, `DEFAULT_GETLOGS_OFFSET`, and unused type re-exports)
 
 ### Fixed
 

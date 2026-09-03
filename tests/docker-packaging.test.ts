@@ -114,6 +114,53 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(deep).toMatch(/multi-writer|not a multi-writer|NOT multi-writer/i);
   });
 
+  it("npm package files include docs and examples; bin stays dist/index.js", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      files: string[];
+      bin: Record<string, string>;
+    };
+    expect(pkg.files).toEqual(
+      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples"]),
+    );
+    expect(pkg.files).not.toEqual(
+      expect.arrayContaining([
+        "node_modules",
+        "coverage",
+        "data",
+        "data/wallets",
+        ".env",
+        ".env.wallet",
+      ]),
+    );
+    expect(pkg.bin["pulsechain-mcp"]).toBe("dist/index.js");
+    expect(existsSync(join(root, "docs/BOOTSTRAP.md"))).toBe(true);
+    expect(existsSync(join(root, "examples/README.md"))).toBe(true);
+    expect(existsSync(join(root, "examples/cursor_mcp_config.json"))).toBe(true);
+  });
+
+  it("npm pack dry-run includes BOOTSTRAP and examples, excludes secrets and wallets", () => {
+    const r = spawnSync("npm", ["pack", "--dry-run"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 60_000,
+      windowsHide: true,
+    });
+    expect(r.status, r.stderr || r.stdout).toBe(0);
+    const out = `${r.stdout}\n${r.stderr}`;
+    expect(out).toMatch(/docs\/BOOTSTRAP\.md/);
+    expect(out).toMatch(/docs\/AGENT_GUIDANCE\.md/);
+    expect(out).toMatch(/docs\/SECURITY\.md/);
+    expect(out).toMatch(/docs\/OPERATOR\.md/);
+    expect(out).toMatch(/examples\/README\.md/);
+    expect(out).toMatch(/examples\/cursor_mcp_config\.json/);
+    expect(out).toMatch(/dist\/index\.js/);
+    expect(out).not.toMatch(/node_modules\//);
+    expect(out).not.toMatch(/(^|\/)coverage\//);
+    expect(out).not.toMatch(/data\/wallets/);
+    expect(out).not.toMatch(/(^|\/)\.env(\s|$)/);
+    expect(out).not.toMatch(/(^|\/)\.env\.wallet(\s|$)/);
+  }, 30_000);
+
   it("version surfaces are 1.0.5", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe("1.0.5");
