@@ -1,6 +1,7 @@
 import { GraphQLClient, gql } from "graphql-request";
 import type { AppConfig, SubgraphVersion } from "../types.js";
 import { SubgraphError, mapUnknownError } from "../utils/errors.js";
+import { httpFetch } from "../utils/httpFetch.js";
 import { assertAddress } from "../utils/safety.js";
 import { resolvePairLiquidityUsd } from "../tools/analytics/helpers.js";
 
@@ -10,19 +11,12 @@ export function createSubgraphClient(
 ): GraphQLClient {
   return new GraphQLClient(url, {
     headers: { "content-type": "application/json" },
-    // graphql-request uses fetch; we wrap requests with AbortSignal below
-    fetch: async (input, init) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        return await fetch(input, {
-          ...init,
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timer);
-      }
-    },
+    // graphql-request still receives a Response; 429 retries stay in httpFetch.
+    fetch: async (input, init) =>
+      httpFetch(input, init, {
+        timeoutMs,
+        retry429: "query-post",
+      }),
   });
 }
 
