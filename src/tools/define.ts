@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/server";
+import type { McpServer, ToolAnnotations } from "@modelcontextprotocol/server";
 import { isInputRequiredResult } from "@modelcontextprotocol/server";
 import type { AppConfig, ToolCategory, ToolResult } from "../types.js";
 import { logger } from "../logger.js";
@@ -49,6 +49,33 @@ export interface RegisteredToolMeta {
 }
 
 const registry: RegisteredToolMeta[] = [];
+
+/**
+ * MCP tool annotations from the SDK `ToolAnnotations` shape
+ * (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
+ * Derived from the existing `write` flag — not a per-tool API.
+ *
+ * Reads / quotes / unsigned prepare (`write !== true`): read-only, non-destructive,
+ * idempotent. Writes (wallet create/policy/propose/execute/transfer/kill/etc.):
+ * not read-only, destructive, not idempotent. All tools talk to the network
+ * (`openWorldHint: true`).
+ */
+function toolAnnotationsFromWrite(write: boolean): ToolAnnotations {
+  if (write) {
+    return {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    };
+  }
+  return {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  };
+}
 
 export function resetToolRegistry(): void {
   registry.length = 0;
@@ -132,6 +159,7 @@ export function registerTool(
     {
       description,
       inputSchema: schema,
+      annotations: toolAnnotationsFromWrite(write),
     },
     callback as never,
   );

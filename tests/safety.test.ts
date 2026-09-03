@@ -48,6 +48,15 @@ describe("safety", () => {
     expect(WRITE_TOOL_WARNING).toMatch(/WRITE OPERATION/);
   });
 
+  it("WRITE_TOOL_WARNING mentions confirm=true and modern MRTR InputRequired", () => {
+    expect(WRITE_TOOL_WARNING).toMatch(/confirm=true/);
+    expect(WRITE_TOOL_WARNING).toMatch(/MRTR/);
+    expect(WRITE_TOOL_WARNING).toMatch(/InputRequiredResult/);
+    expect(WRITE_TOOL_WARNING).toMatch(/omit confirm/i);
+    expect(WRITE_TOOL_WARNING).toMatch(/host UX/i);
+    expect(WRITE_TOOL_WARNING).toMatch(/not a cryptographic lock/i);
+  });
+
   it("never returns private key fields", () => {
     const cleaned = neverReturnPrivateKey({
       address: "0xabc",

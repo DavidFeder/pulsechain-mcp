@@ -307,6 +307,173 @@ describe("smoke: tool registration (no live network)", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
+  it("registerTool passes SDK annotations from the write flag", async () => {
+    const configs = new Map<string, { annotations?: Record<string, unknown> }>();
+    const server = {
+      registerTool: (
+        name: string,
+        config: { annotations?: Record<string, unknown> },
+      ) => {
+        configs.set(name, config);
+      },
+    };
+
+    const { registerTool } = await import("../src/tools/define.js");
+    resetToolRegistry();
+
+    registerTool(server as never, smokeConfig, {
+      name: "get_token_price",
+      description: "read",
+      category: "analytics",
+      inputSchema: {},
+      handler: async () => ({}),
+    });
+    registerTool(server as never, smokeConfig, {
+      name: "transfer_pls",
+      description: "write",
+      category: "wallet",
+      write: true,
+      inputSchema: {},
+      handler: async () => ({}),
+    });
+    registerTool(server as never, smokeConfig, {
+      name: "prepare_swap",
+      description: "unsigned prepare",
+      category: "chain",
+      write: false,
+      inputSchema: {},
+      handler: async () => ({}),
+    });
+
+    const readOnly = {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    };
+    const writeAnns = {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    };
+    expect(configs.get("get_token_price")?.annotations).toEqual(readOnly);
+    expect(configs.get("transfer_pls")?.annotations).toEqual(writeAnns);
+    expect(configs.get("prepare_swap")?.annotations).toEqual(readOnly);
+  });
+
+  it("registerAllTools annotates unsigned prepare as read-only vs wallet writes", () => {
+    const configs = new Map<string, { annotations?: Record<string, unknown> }>();
+    const server = {
+      registerTool: (
+        name: string,
+        config: { annotations?: Record<string, unknown> },
+      ) => {
+        configs.set(name, config);
+      },
+    };
+    resetToolRegistry();
+    registerAllTools(server as never, smokeConfig);
+    expect(getRegisteredTools().length).toBe(96);
+
+    const readOnly = {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    };
+    const writeAnns = {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    };
+
+    for (const name of [
+      "prepare_transaction",
+      "prepare_swap",
+      "piteas_prepare_swap",
+      "switch_prepare_swap",
+      "get_token_price",
+      "agent_wallet_status",
+    ] as const) {
+      expect(configs.get(name)?.annotations, name).toEqual(readOnly);
+    }
+    for (const name of WALLET_WRITE_TOOLS) {
+      expect(configs.get(name)?.annotations, name).toEqual(writeAnns);
+    }
+  });
+
+  it("createServer instructions branch on agentWalletEnabled", async () => {
+    const { createServer, mcpServerInstructions } = await import(
+      "../src/server.js"
+    );
+    const { createMcpHandler } = await import("@modelcontextprotocol/server");
+
+    const researchCfg: AppConfig = { ...smokeConfig, agentWalletEnabled: false };
+    const walletCfg: AppConfig = { ...smokeConfig, agentWalletEnabled: true };
+
+    const researchServer = createServer(researchCfg);
+    const walletServer = createServer(walletCfg);
+    expect(researchServer).toBeTruthy();
+    expect(walletServer).toBeTruthy();
+    expect(mcpServerInstructions(false)).not.toBe(mcpServerInstructions(true));
+    expect(mcpServerInstructions(false)).toMatch(
+      /pulsechain:\/\/guidance\/ro-research/,
+    );
+    expect(mcpServerInstructions(true)).toMatch(/funding authorizes/i);
+
+    async function instructionsFromInitialize(
+      cfg: AppConfig,
+    ): Promise<string> {
+      const handler = createMcpHandler(() => createServer(cfg), {
+        legacy: "stateless",
+      });
+      const res = await handler.fetch(
+        new Request("http://test.local/mcp", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+              protocolVersion: "2025-11-25",
+              capabilities: {},
+              clientInfo: { name: "smoke-instructions", version: "0.0.0" },
+            },
+          }),
+        }),
+      );
+      const text = await res.text();
+      let body: { result?: { instructions?: string } };
+      if (text.trimStart().startsWith("event:")) {
+        const dataLine = text.split("\n").find((l) => l.startsWith("data:"));
+        body = dataLine
+          ? (JSON.parse(dataLine.slice(5).trim()) as {
+              result?: { instructions?: string };
+            })
+          : {};
+      } else {
+        body = JSON.parse(text) as { result?: { instructions?: string } };
+      }
+      return body.result?.instructions ?? "";
+    }
+
+    const ro = await instructionsFromInitialize(researchCfg);
+    const wallets = await instructionsFromInitialize(walletCfg);
+    expect(ro).toMatch(/analytics and chain reads/i);
+    expect(ro).toMatch(/Write and signing tools refuse/i);
+    expect(ro).toMatch(/pulsechain:\/\/guidance\/ro-research/);
+    expect(ro).toMatch(/does not sign or broadcast/i);
+    expect(wallets).toMatch(/operator-trust agent wallets/i);
+    expect(wallets).toMatch(/funding authorizes/i);
+    expect(wallets).toMatch(/confirm=true \/ MRTR is host UX only/i);
+  });
+
   it("lists tool names via registry export (import-only smoke)", async () => {
     const { getRegisteredTools: getTools, resetToolRegistry: reset } =
       await import("../src/tools/define.js");

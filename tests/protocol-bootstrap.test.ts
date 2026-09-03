@@ -168,7 +168,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     const toolsRes = await mcpRpc(handler, "tools/list");
     expect(toolsRes.status).toBe(200);
     const toolsResult = toolsRes.body.result as {
-      tools: Array<{ name: string }>;
+      tools: Array<{ name: string; annotations?: Record<string, unknown> }>;
       _meta?: Record<string, unknown>;
     };
     expect(toolsResult.tools.length).toBe(96);
@@ -182,6 +182,24 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     expect(names.has("phiat_dashboard")).toBe(true);
     expect(names.has("get_token_price")).toBe(true);
     expect(names.has("agent_wallet_status")).toBe(true);
+
+    const byName = new Map(toolsResult.tools.map((t) => [t.name, t]));
+    expect(byName.get("get_token_price")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    });
+    expect(byName.get("transfer_pls")?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
+    expect(byName.get("prepare_swap")?.annotations).toMatchObject({
+      readOnlyHint: true,
+      destructiveHint: false,
+    });
 
     const resourcesRes = await mcpRpc(handler, "resources/list");
     expect(resourcesRes.status).toBe(200);

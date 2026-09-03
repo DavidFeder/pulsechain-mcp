@@ -10,6 +10,28 @@ import { registerResources } from "./resources/index.js";
 import { getConfirmStateCodec } from "./utils/confirm.js";
 
 /**
+ * Mode-aware `McpServer` instructions.
+ * Research-only: analytics + chain reads; writes refuse; prefer RO guidance.
+ * Wallets on: operator-trust agent wallets (funding authorizes; confirm/MRTR is host UX).
+ */
+export function mcpServerInstructions(agentWalletEnabled: boolean): string {
+  if (!agentWalletEnabled) {
+    return (
+      "PulseChain MCP: analytics and chain reads. " +
+      "Write and signing tools refuse (AGENT_WALLET_ENABLED=false). " +
+      "Prefer pulsechain://guidance/ro-research. " +
+      `Protocol mode ${PROTOCOL_MODE}. This process does not sign or broadcast.`
+    );
+  }
+  return (
+    "PulseChain MCP: public analytics, chain reads, and optional operator-trust agent wallets " +
+    "(funding authorizes when enabled; confirm=true / MRTR is host UX only). " +
+    `Protocol mode ${PROTOCOL_MODE}. Wallet writes require AGENT_WALLET_ENABLED and confirm ` +
+    `(confirm=true arg or modern MRTR InputRequiredResult elicitation).`
+  );
+}
+
+/**
  * Build a fresh McpServer for the given config (SDK v2 factory pattern).
  *
  * Stateless / dual-era rules:
@@ -32,11 +54,7 @@ export function createServer(config: AppConfig): McpServer {
       version: SERVER_VERSION,
     },
     {
-      instructions:
-        "PulseChain MCP: public analytics, chain reads, and optional operator-trust agent wallets " +
-        "(funding authorizes when enabled; confirm=true / MRTR is host UX only). " +
-        `Protocol mode ${PROTOCOL_MODE}. Wallet writes require AGENT_WALLET_ENABLED and confirm ` +
-        `(confirm=true arg or modern MRTR InputRequiredResult elicitation).`,
+      instructions: mcpServerInstructions(config.agentWalletEnabled),
       // Integrity-protect multi-round-trip requestState (wallet confirm flows).
       requestState: {
         verify: (state, ctx) => confirmCodec.verify(state, ctx),
