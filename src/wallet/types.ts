@@ -347,8 +347,9 @@ export const AGENT_WALLET_ENABLE_WARNING =
   "compromised. Private keys stay AES-256-GCM encrypted at rest and are never " +
   "returned in tool responses. Wallet locks are process-local only — do not share " +
   "AGENT_WALLET_DIR across multiple MCP processes (see docs/SECURITY.md). " +
-  "Optional AGENT_WALLET_MULTIPROC_STRICT=true refuses writes when a live foreign " +
-  "owner is detected (default is warn-only).";
+  "AGENT_WALLET_MULTIPROC_STRICT defaults to true when wallets are enabled " +
+  "(unset/empty). Explicit false or 0 is warn-only opt-out. Strict is not a " +
+  "distributed lock; shared AGENT_WALLET_DIR is still not multi-writer-safe.";
 
 /**
  * Legacy field semantics (storage/display only; not a hard gate as of v0.1.38).
@@ -367,9 +368,10 @@ export const MULTIPROC_POSTURE_SUMMARY =
   "Ownership marker detects another live PID; locks remain process-local only " +
   "(NOT a distributed lock — MULTIPROC_STRICT is not cross-process serialization). " +
   "Recommended model: one MCP process → one unique AGENT_WALLET_DIR. " +
-  "Default multiproc mode: warn-only (multiProcessRisk=true, writes STILL ALLOWED — easy to miss). " +
-  "Set AGENT_WALLET_MULTIPROC_STRICT=true to refuse wallet writes on live foreign-owner conflict " +
-  "(fail-closed posture only; still not multi-writer-safe if you keep sharing the dir).";
+  "Wallets-on default (env unset/empty): strict-fail-closed. " +
+  "Explicit AGENT_WALLET_MULTIPROC_STRICT=false or 0 is warn-only " +
+  "(multiProcessRisk=true, writes STILL ALLOWED — easy to miss). " +
+  "Strict still is not a distributed lock and still not multi-writer-safe if you keep sharing the dir.";
 
 /** Short recommended operating model for operators and status payloads. */
 export const MULTIPROC_RECOMMENDED_MODEL =
@@ -379,6 +381,7 @@ export const MULTIPROC_RECOMMENDED_MODEL =
  * Explicit warn-only vs strict meanings for status / operatorAtAGlance.
  */
 export const MULTIPROC_MODE_MEANINGS =
-  "warn-only: shared-dir risk is LOUD but writes still proceed (default). " +
-  "strict-fail-closed (AGENT_WALLET_MULTIPROC_STRICT=true): writes refused while a live foreign owner is detected. " +
+  "warn-only (explicit AGENT_WALLET_MULTIPROC_STRICT=false or 0): shared-dir risk is LOUD but writes still proceed. " +
+  "strict-fail-closed is the wallets-on default when the env is unset or empty " +
+  "(research-only unset stays false / warn-only). " +
   "Neither mode is a distributed lock; only unique dirs are multi-instance safe.";

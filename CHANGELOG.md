@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP tool registrations include SDK `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) derived from the existing `write` flag; unsigned prepare tools stay read-only
 - Write-tool warning mentions `confirm=true` and modern MRTR `InputRequiredResult` elicitation (host UX only, not a cryptographic lock)
 - `createServer` instructions branch on `agentWalletEnabled` (research-only vs operator-trust wallets)
+- Wallets-on `AGENT_WALLET_MULTIPROC_STRICT` defaults to `true` when the env is unset or empty (`false`/`0` stays warn-only opt-out; research-only unset stays `false`). Wallets + `HTTP_TRANSPORT_PORT` require `AGENT_WALLET_MRTR_SECRET` (≥32 bytes UTF-8); stdio still allows the process-local HMAC fallback. Shared `AGENT_WALLET_DIR` is still not multi-writer-safe
 
 ### Fixed
 

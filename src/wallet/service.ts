@@ -1420,7 +1420,7 @@ export function buildOperatorAtAGlance(params: {
     `Multiproc mode=${ownership.multiprocMode}: ` +
       (ownership.multiprocMode === "strict-fail-closed"
         ? "writes refused on live foreign owner (still not a distributed lock)"
-        : "warn-only default — risk is loud but writes proceed unless MULTIPROC_STRICT=true"),
+        : "warn-only (explicit false/0) — risk is loud but writes proceed; wallets-on default is STRICT=true"),
   );
   bullets.push(`Policy posture: ${policyPosture} — ${policyPostureNote}`);
   bullets.push(`Safe flow: ${SAFE_USAGE_PATTERN}`);
@@ -1451,7 +1451,7 @@ export function buildOperatorAtAGlance(params: {
   if (!enabled) {
     nextAction =
       "Research-only mode (AGENT_WALLET_ENABLED=false). To enable signing: set AGENT_WALLET_ENABLED=true, " +
-      "strong MASTER_KEY, unique AGENT_WALLET_DIR per process, MULTIPROC_STRICT=true recommended, " +
+      "strong MASTER_KEY, unique AGENT_WALLET_DIR per process, MULTIPROC_STRICT defaults true when wallets on (explicit false stays warn-only), " +
       "create_agent_wallet, fund only what you accept the agent may spend (operator-trust).";
   } else if (writesBlocked) {
     nextAction =
@@ -1460,8 +1460,8 @@ export function buildOperatorAtAGlance(params: {
   } else if (multiprocRisk) {
     nextAction =
       "STOP sharing this dir: use a unique AGENT_WALLET_DIR now. " +
-      "Warn-only still allows writes (easy foot-gun). Prefer AGENT_WALLET_MULTIPROC_STRICT=true " +
-      "(refuses writes on conflict; still not a distributed lock).";
+      "Warn-only (explicit AGENT_WALLET_MULTIPROC_STRICT=false or 0) still allows writes (easy foot-gun). " +
+      "Wallets-on default is STRICT=true; this process opted out. Strict is still not a distributed lock.";
   } else if (walletCount === 0) {
     nextAction =
       "create_agent_wallet → fund PLS (value + gas) → " +
@@ -1586,7 +1586,8 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
       multiProcessSharedDir: MULTIPROC_POSTURE_SUMMARY,
       multiprocRecommendedModel: MULTIPROC_RECOMMENDED_MODEL,
       multiprocModeMeanings: MULTIPROC_MODE_MEANINGS,
-      multiprocStrictDefault: false,
+      /** Wallets-on default when env is unset/empty. Research-only unset remains false. */
+      multiprocStrictDefault: true,
       multiprocStrictDoesNot:
         "does not implement a distributed lock; does not make shared AGENT_WALLET_DIR multi-writer-safe; " +
         "does not serialize writers across processes; " +
@@ -1611,7 +1612,8 @@ export function agentWalletSystemStatus(config: AppConfig): Record<string, unkno
         "Wallets are on by default (master key required). For research-only set AGENT_WALLET_ENABLED=false. " +
         "When enabled: fund only what you accept the agent may spend (operator-trust). " +
         `${MULTIPROC_RECOMMENDED_MODEL}; ` +
-        "set AGENT_WALLET_MULTIPROC_STRICT=true when multiple hosts might share a path. " +
+        "wallets-on default is AGENT_WALLET_MULTIPROC_STRICT=true (explicit false/0 stays warn-only); " +
+        "shared dir is still not multi-writer-safe. " +
         `Safe flow: ${SAFE_USAGE_PATTERN}. Protect MASTER_KEY; use kill_switch if compromised.`,
       safeFlow: SAFE_USAGE_PATTERN,
       reviewSummary:

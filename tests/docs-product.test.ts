@@ -186,6 +186,13 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(security).toMatch(/Funding the agent is authorization|operator-trust/i);
     expect(security).toMatch(/kill_switch/i);
     expect(security).toMatch(/AGENT_WALLET_DIR|Multiproc/i);
+    expect(security).toMatch(
+      /wallets-on default is `AGENT_WALLET_MULTIPROC_STRICT=true`|wallets-on default is AGENT_WALLET_MULTIPROC_STRICT=true/i,
+    );
+    expect(security).toMatch(/warn-only opt-out|explicit `false` or `0`/i);
+    expect(deep).toMatch(/AGENT_WALLET_MRTR_SECRET/);
+    expect(deep).toMatch(/HTTP_TRANSPORT_PORT/);
+    expect(deep).toMatch(/process-local random secret|stdio wallets-on/i);
     expect(security).toMatch(/AES-256-GCM|encrypted/i);
     expect(security).toMatch(/Keys never in chat|never commit|never print/i);
     expect(security).toMatch(/generate-wallet-env|start-wallet-mcp|\.env\.wallet/i);
@@ -364,6 +371,8 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(boot).toMatch(/npm run build/);
     expect(operator).toMatch(/## Docker \/ one-command setup/);
     expect(operator).toMatch(/## Multi-RPC/);
+    expect(operator).toMatch(/AGENT_WALLET_MRTR_SECRET/);
+    expect(operator).toMatch(/wallets-on: `true` if unset\/empty/);
     expect(operator).not.toMatch(/archive\/pulsechainstats-investigation/);
     expect(security).toMatch(/research-only|agent install default|Wallets on \(when user asks/i);
     expect(security).toMatch(/AGENT_WALLET_ENABLED=false|Research-only/i);
