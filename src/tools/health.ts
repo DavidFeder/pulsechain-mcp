@@ -14,6 +14,10 @@ import {
 import type { AppConfig, HealthStatus } from "../types.js";
 import { ok } from "../utils/result.js";
 import { registerTool } from "./define.js";
+import {
+  healthToolOutputSchema,
+  rpcHealthToolOutputSchema,
+} from "./outputSchemas.js";
 
 export function buildHealth(cfg: AppConfig): HealthStatus {
   const networkMismatch = networkMismatchForConfig(cfg);
@@ -48,6 +52,7 @@ export function registerHealthTools(
       "Report PulseChain MCP health: chain id, multi-RPC list and active endpoint, explorer/subgraph flags, agent wallet enabled. Never returns secrets.",
     category: "health",
     inputSchema: {},
+    outputSchema: healthToolOutputSchema,
     handler: async (_args, cfg) => {
       return ok(buildHealth(cfg));
     },
@@ -65,6 +70,7 @@ export function registerHealthTools(
         .default(false)
         .describe("Include subgraph hosts and per-RPC health details"),
     },
+    outputSchema: healthToolOutputSchema,
     handler: async (args, cfg) => {
       const verbose = Boolean(args.verbose);
       const base: HealthStatus & {
@@ -111,6 +117,7 @@ export function registerHealthTools(
           "If true, run one lightweight eth_blockNumber per endpoint (max 8, sequential) then return snapshot",
         ),
     },
+    outputSchema: rpcHealthToolOutputSchema,
     handler: async (args, cfg) => {
       const probe = Boolean(args.probe);
       if (probe) {

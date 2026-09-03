@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { McpServer, ToolAnnotations } from "@modelcontextprotocol/server";
+import type {
+  McpServer,
+  StandardSchemaWithJSON,
+  ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import { isInputRequiredResult } from "@modelcontextprotocol/server";
 import type { AppConfig, ToolCategory, ToolResult } from "../types.js";
 import { logger } from "../logger.js";
@@ -13,6 +17,17 @@ import {
 /** Loose schema shape compatible with MCP SDK ZodRawShapeCompat */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ToolInputSchema = Record<string, any>;
+
+/**
+ * Optional tool output schema (Zod / Standard Schema) passed through to
+ * SDK v2 `registerTool` as `outputSchema`. When set, the SDK advertises the
+ * derived JSON Schema on `tools/list` and validates `structuredContent`
+ * before the result leaves the server.
+ *
+ * SDK `validateToolOutput` already skips `InputRequiredResult` elicitation
+ * and `isError: true` results — do not invent a second envelope.
+ */
+export type ToolOutputSchema = StandardSchemaWithJSON;
 
 /**
  * Per-request MCP context for tool handlers (2026-07-28 envelope + MRTR fields).
@@ -30,6 +45,11 @@ export interface RegisterToolOptions {
   name: string;
   description: string;
   inputSchema: ToolInputSchema;
+  /**
+   * Optional Zod / Standard Schema for `structuredContent`. Unset for
+   * analytics/chain tools. Health + wallet pass the ToolResult envelope.
+   */
+  outputSchema?: ToolOutputSchema;
   handler: (
     args: Record<string, unknown>,
     config: AppConfig,
@@ -101,7 +121,7 @@ export function registerTool(
   config: AppConfig,
   options: RegisterToolOptions,
 ): void {
-  const { name, inputSchema, handler, category } = options;
+  const { name, inputSchema, handler, category, outputSchema } = options;
   const write = options.write === true;
 
   // Research-only: do not advertise write/signing tools in tools/list (or the
@@ -167,6 +187,7 @@ export function registerTool(
       description,
       inputSchema: schema,
       annotations: toolAnnotationsFromWrite(write),
+      ...(outputSchema ? { outputSchema } : {}),
     },
     callback as never,
   );

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Health and wallet tools declare MCP `outputSchema` for the existing ToolResult envelope (`ok` / `data?` / `error?` / `code?` / `warnings?`); analytics and chain tools stay unset. Health `data` matches `HealthStatus` / RPC health fields (including optional `networkMismatch`). Wallet `data` is a conservative object passthrough with no privateKey/mnemonic/ciphertext fields. SDK v2 already skips output validation for MRTR `InputRequiredResult` and `isError: true`.
+
 ### Changed
 
 - Legacy `pulsechain_*` chain scaffold tools stay registered (behavior unchanged) but descriptions lead with `DEPRECATED:` and point at canonical replacements (`get_*`, `pulsechain_health`, `blockscout_event_logs`); agents should prefer those names

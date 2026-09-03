@@ -49,7 +49,8 @@ import {
   readVerifiedConfirmState,
   requireConfirmOrInput,
 } from "../../utils/confirm.js";
-import { registerTool } from "../define.js";
+import { registerTool, type RegisterToolOptions } from "../define.js";
+import { walletToolOutputSchema } from "../outputSchemas.js";
 import { parsePlsToWei } from "../../wallet/value.js";
 
 /** Extra security banner for every wallet write tool description. */
@@ -118,6 +119,18 @@ function withWalletSecurity(description: string): string {
   return `${description}\n\n⚠️ ${WALLET_SECURITY_WARNING}`;
 }
 
+/** Wallet surface always advertises the ToolResult envelope (no secret fields). */
+function registerWalletTool(
+  server: McpServer,
+  config: AppConfig,
+  options: Omit<RegisterToolOptions, "outputSchema">,
+): void {
+  registerTool(server, config, {
+    ...options,
+    outputSchema: walletToolOutputSchema,
+  });
+}
+
 function snapshotForWallet(
   cfg: AppConfig,
   walletId: string | undefined,
@@ -181,7 +194,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // Status / diagnostics (no secrets; works when disabled)
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "agent_wallet_status",
     description:
       "Operator snapshot first: operatorAtAGlance (wallets on/off, multiproc risk, writes blocked, " +
@@ -199,7 +212,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // inspect_tx_intent — pure local decode for agents (no wallet required)
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "inspect_tx_intent",
     description:
       "Decode a transaction intent for agent safety judgment (no signing, no chain I/O). " +
@@ -244,7 +257,7 @@ export function registerWalletTools(
     },
   });
 
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "agent_wallet_check_policy",
     description:
       "Dry-run wallet write check for a native PLS amount (no send, no signing). " +
@@ -367,7 +380,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // create_agent_wallet
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "create_agent_wallet",
     description: withWalletSecurity(
       "Generate a new agent EOA (viem), encrypt the private key with " +
@@ -414,7 +427,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // get_agent_wallet_info / list
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "get_agent_wallet_info",
     description:
       "Return public agent wallet info: address, policy, balances summary, " +
@@ -435,7 +448,7 @@ export function registerWalletTools(
     },
   });
 
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "list_agent_wallets",
     description:
       "List all agent wallets (public fields only: id, address, policy, daily spend).",
@@ -450,7 +463,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // set_agent_policy
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "set_agent_policy",
     description: withWalletSecurity(
       "Update per-wallet policy record. Operator-trust (v0.1.38+): maxPls*, allowlists, " +
@@ -596,7 +609,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // propose_agent_tx
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "propose_agent_tx",
     description: withWalletSecurity(
       "Prepare an unsigned transaction proposal with simulation (estimateGas/eth_call) " +
@@ -642,7 +655,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // execute_agent_tx / sign_and_send
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "execute_agent_tx",
     description: withWalletSecurity(
       "Sign and broadcast a pending proposal. Re-checks kill/enabled and re-simulates before send. " +
@@ -682,7 +695,7 @@ export function registerWalletTools(
   });
 
   // Alias name for discoverability
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "sign_and_send",
     description: withWalletSecurity(
       "Alias of execute_agent_tx: sign + broadcast of a pending proposal. " +
@@ -724,7 +737,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // settle_interrupted_broadcast — local recovery only (no re-broadcast)
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "settle_interrupted_broadcast",
     description: withWalletSecurity(
       "Recover local state after chain accept when proposal is broadcasting+txHash " +
@@ -769,7 +782,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // transfer_pls
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "transfer_pls",
     description: withWalletSecurity(
       "Native PLS transfer: simulate first, then confirm with fee/review, then broadcast. " +
@@ -854,7 +867,7 @@ export function registerWalletTools(
   // -------------------------------------------------------------------------
   // revoke / kill_switch
   // -------------------------------------------------------------------------
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "kill_switch",
     description: withWalletSecurity(
       "EMERGENCY: Immediately disable wallet signing (enabled=false, killed=true). " +
@@ -891,7 +904,7 @@ export function registerWalletTools(
     },
   });
 
-  registerTool(server, config, {
+  registerWalletTool(server, config, {
     name: "revoke",
     description: withWalletSecurity(
       "Revoke agent wallet signing immediately (same as kill_switch). " +
