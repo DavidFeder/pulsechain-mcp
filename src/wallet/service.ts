@@ -419,7 +419,10 @@ export async function createAgentWallet(
   const privateKey = generatePrivateKey();
   const account = privateKeyToAccount(privateKey);
   const id = generateWalletId();
-  const encryptedKey = encryptPrivateKey(privateKey, masterKey);
+  const encryptedKey = encryptPrivateKey(privateKey, masterKey, {
+    walletId: id,
+    address: account.address,
+  });
 
   // Best-effort wipe of local reference (JS strings are immutable; key var shadowed)
   const record: AgentWalletRecord = {
@@ -929,7 +932,10 @@ async function executeAgentTxLocked(
 
   let privateKey: `0x${string}` | undefined;
   try {
-    privateKey = decryptPrivateKey(record.encryptedKey, masterKey);
+    privateKey = decryptPrivateKey(record.encryptedKey, masterKey, {
+      walletId: record.id,
+      address: record.address,
+    });
     const account = privateKeyToAccount(privateKey);
     if (account.address.toLowerCase() !== record.address.toLowerCase()) {
       throw new ConfigError(

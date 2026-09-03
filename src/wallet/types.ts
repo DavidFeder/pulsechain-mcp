@@ -16,6 +16,14 @@ export interface EncryptedBlob {
   kdf: "raw-hex" | "scrypt";
   /** Algorithm id for future-proofing */
   alg: "aes-256-gcm";
+  /**
+   * Private-key AAD binding version.
+   * - omitted: legacy blob; decrypt with no `setAAD` (pre-binding on-disk wallets)
+   * - `1`: AES-GCM AAD is UTF-8 `${walletId}:${address.toLowerCase()}`
+   *
+   * Cipher remains `aes-256-gcm` for both. Unknown versions fail closed at decrypt.
+   */
+  aadVersion?: 1;
 }
 
 /**
