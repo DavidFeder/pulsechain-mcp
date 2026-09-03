@@ -651,6 +651,21 @@ describe("registerChainTools exports interactive names", () => {
       "prepare_transaction",
       "pulsex_quote",
       "prepare_swap",
+      "pulsechain_chain_id",
+      "pulsechain_block_number",
+      "pulsechain_get_block",
+      "pulsechain_get_balance",
+      "pulsechain_get_transaction",
+      "pulsechain_get_receipt",
+      "pulsechain_estimate_gas",
+      "pulsechain_eth_call",
+      "pulsechain_gas_price",
+      "pulsechain_erc20_metadata",
+      "pulsechain_erc20_balances",
+      "pulsechain_account_txlist",
+      "pulsechain_token_transfers",
+      "pulsechain_token_info",
+      "pulsechain_get_logs",
     ];
     for (const name of expected) {
       expect(tools).toContain(name);
