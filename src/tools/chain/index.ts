@@ -26,6 +26,8 @@ import {
   getAccountTokenTransfers,
   getAccountTxList,
   getLogs,
+  explorerLogsWindow,
+  EXPLORER_LOGS_NOT_FULL_HISTORY,
   getTokenInfo,
   getTokenInfoV2,
 } from "../../data/explorer.js";
@@ -715,7 +717,8 @@ export function registerChainTools(
     name: "pulsechain_get_logs",
     description:
       "DEPRECATED: Prefer blockscout_event_logs. " +
-      "Query event logs via explorer API (address/topics/blocks).",
+      "Query event logs via explorer API (address/topics/blocks). " +
+      "When the returned row count hits offset, truncated=true with a window object; this is not full history.",
     category: "chain",
     inputSchema: {
       address: addressSchema.optional(),
@@ -726,15 +729,30 @@ export function registerChainTools(
       offset: z.number().int().min(1).max(1000).default(100),
     },
     handler: async (args, cfg) => {
+      const fromBlock = args.fromBlock as number | string | undefined;
+      const toBlock = args.toBlock as number | string | undefined;
+      const page = (args.page as number) ?? 1;
+      const offset = (args.offset as number) ?? 100;
       const data = await getLogs(cfg, {
         address: args.address as string | undefined,
-        fromBlock: args.fromBlock as number | string | undefined,
-        toBlock: args.toBlock as number | string | undefined,
+        fromBlock,
+        toBlock,
         topic0: args.topic0 as string | undefined,
-        page: (args.page as number) ?? 1,
-        offset: (args.offset as number) ?? 100,
+        page,
+        offset,
       });
-      return ok(data);
+      const { truncated, window } = explorerLogsWindow(data, {
+        fromBlock,
+        toBlock,
+        page,
+        offset,
+      });
+      return ok({
+        logs: data,
+        truncated,
+        window,
+        note: EXPLORER_LOGS_NOT_FULL_HISTORY,
+      });
     },
   });
 }

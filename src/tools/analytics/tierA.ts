@@ -146,7 +146,8 @@ export function registerTierATools(
     description:
       "Query event logs via BlockScout explorer API (address/topics/blocks) with " +
       "fail-soft envelope (source=blockscout). Prefer tight block ranges — wide " +
-      "scans may time out or soft-fail upstream.",
+      "scans may time out or soft-fail upstream. When the returned row count hits " +
+      "offset, truncated=true with a window object; this is not full history.",
     category: "analytics",
     inputSchema: {
       address: addressSchema.optional(),

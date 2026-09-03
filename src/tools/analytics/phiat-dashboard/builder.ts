@@ -89,18 +89,19 @@ import {
   mapDashboardPairs,
 } from "./marketData.js";
 import { unixSecondsToIso } from "./dates.js";
-import { mapRecentSwaps, mapRecentTransfers, selectLargeSwaps } from "./transfers.js";
+import {
+  mapRecentSwaps,
+  mapRecentTransfers,
+  selectLargeSwaps,
+  transferLogCoverage,
+  TRANSFER_LOGS_NOT_FULL_HISTORY,
+} from "./transfers.js";
 import {
   buildAgeSemantics,
   buildDeployerReputation,
   buildSafetyOutput,
   buildSafetyWarnings,
 } from "./safety.js";
-
-
-
-
-
 
 
 
@@ -557,7 +558,16 @@ export async function buildPhiatDashboard(
     tokenAddress,
     requestedWhaleThreshold,
   );
+  const transferFromBlock = 0;
+  const transferToBlock = "latest";
+  const transferPage = 1;
   const recentTransfers = mapRecentTransfers(transfersRes.data, recentSwapLimit);
+  const transferCoverage = transferLogCoverage(transfersRes.data, {
+    fromBlock: transferFromBlock,
+    toBlock: transferToBlock,
+    offset: recentSwapLimit,
+    page: transferPage,
+  });
   if (swapsRes.data?.filterError) {
     partialFailures.push({
       source: "pulsex_subgraph.recentSwaps.v2",
@@ -639,6 +649,9 @@ export async function buildPhiatDashboard(
       recentTransfers,
       recentTransfersMethod:
         "BlockScout logs/getLogs for ERC-20 Transfer(address,address,uint256) events by token contract address.",
+      truncated: transferCoverage.truncated,
+      window: transferCoverage.window,
+      note: TRANSFER_LOGS_NOT_FULL_HISTORY,
     },
     safety: {
       ...safety,

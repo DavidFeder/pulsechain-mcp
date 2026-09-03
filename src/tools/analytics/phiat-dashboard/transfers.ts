@@ -123,6 +123,38 @@ export function explorerRows(raw: unknown): unknown[] {
   return [];
 }
 
+export const TRANSFER_LOGS_NOT_FULL_HISTORY =
+  "Transfer rows are a capped explorer getLogs window, not full history.";
+
+export function transferLogCoverage(
+  raw: unknown,
+  options: {
+    fromBlock: number | string;
+    toBlock: number | string;
+    offset: number;
+    page: number;
+  },
+): {
+  truncated: boolean;
+  window: {
+    fromBlock: number | string;
+    toBlock: number | string;
+    offset: number;
+    page: number;
+  };
+} {
+  const rows = explorerRows(raw);
+  return {
+    truncated: rows.length >= options.offset,
+    window: {
+      fromBlock: options.fromBlock,
+      toBlock: options.toBlock,
+      offset: options.offset,
+      page: options.page,
+    },
+  };
+}
+
 export function hexToDecimalString(hex: string): string | null {
   if (!/^0x[a-fA-F0-9]*$/.test(hex)) return null;
   try {

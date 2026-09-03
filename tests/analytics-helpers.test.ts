@@ -35,6 +35,8 @@ import {
   MAX_TOKEN_SWAP_PAIR_QUERIES,
   mergeTokenFilteredSwaps,
   selectTokenSwapPairIds,
+  eligibleTokenSwapPairIds,
+  swapPageFlags,
   swapInvolvesToken as swapInvolvesTokenSubgraph,
 } from "../src/data/subgraph.js";
 import {
@@ -555,6 +557,37 @@ describe("token-filtered swap path (shipped helpers)", () => {
     ];
     expect(selectTokenSwapPairIds(mixed, plsx)).toEqual([pairB]);
     void many;
+  });
+
+  it("eligibleTokenSwapPairIds reports pairCapHit when more pairs exist than the fan-out cap", () => {
+    const unique = Array.from({ length: MAX_TOKEN_SWAP_PAIR_QUERIES + 2 }, (_, i) => ({
+      id: `0x${String(i + 1).padStart(40, "b")}`,
+      volumeUSD: String(1000 - i),
+      reserveUSD: "1000000",
+      token0: { id: plsx },
+      token1: { id: wpls },
+    }));
+    const eligible = eligibleTokenSwapPairIds(unique, plsx);
+    expect(eligible.length).toBeGreaterThan(MAX_TOKEN_SWAP_PAIR_QUERIES);
+    expect(selectTokenSwapPairIds(unique, plsx)).toHaveLength(
+      MAX_TOKEN_SWAP_PAIR_QUERIES,
+    );
+    expect(
+      swapPageFlags({
+        skip: 0,
+        first: 20,
+        deep: false,
+        pairCapHit: eligible.length > MAX_TOKEN_SWAP_PAIR_QUERIES,
+      }),
+    ).toEqual({
+      incomplete: true,
+      coverage: {
+        skip: 0,
+        first: 20,
+        deep: false,
+        pairCapHit: true,
+      },
+    });
   });
 
   it("mergeTokenFilteredSwaps keeps strict filter and pair-id fallback", () => {

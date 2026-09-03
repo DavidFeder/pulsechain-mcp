@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Swap and explorer pages expose machine-readable incompleteness: `get_wallet_swaps` / `get_recent_swaps` set `incomplete` plus a `coverage` object on deep or pair-capped subgraph pages; `blockscout_event_logs` / `pulsechain_get_logs` and PHIAT Transfer `getLogs` set `truncated` plus a `window` when the row cap is hit (not full history)
 - Health and wallet tools declare MCP `outputSchema` for the existing ToolResult envelope (`ok` / `data?` / `error?` / `code?` / `warnings?`); analytics and chain tools stay unset. Health `data` matches `HealthStatus` / RPC health fields (including optional `networkMismatch`). Wallet `data` is a conservative object passthrough with no privateKey/mnemonic/ciphertext fields. SDK v2 already skips output validation for MRTR `InputRequiredResult` and `isError: true`.
 
 ### Changed

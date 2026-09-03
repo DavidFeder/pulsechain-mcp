@@ -289,6 +289,41 @@ export async function getTransactionReceiptStatus(
 // Logs
 // ---------------------------------------------------------------------------
 
+export interface ExplorerLogWindow {
+  fromBlock: number | string;
+  toBlock: number | string;
+  offset: number;
+  page: number;
+}
+
+export const DEFAULT_GETLOGS_OFFSET = 100;
+export const DEFAULT_GETLOGS_PAGE = 1;
+export const EXPLORER_LOGS_NOT_FULL_HISTORY =
+  "This getLogs page is a capped explorer window, not full history.";
+
+/**
+ * Machine-readable truncation for explorer getLogs pages.
+ * `truncated` is true when the raw result is an array whose length hits offset.
+ */
+export function explorerLogsWindow(
+  logs: unknown,
+  options: {
+    fromBlock?: number | string;
+    toBlock?: number | string;
+    page?: number;
+    offset?: number;
+  } = {},
+): { truncated: boolean; window: ExplorerLogWindow } {
+  const offset = options.offset ?? DEFAULT_GETLOGS_OFFSET;
+  const page = options.page ?? DEFAULT_GETLOGS_PAGE;
+  const fromBlock = options.fromBlock ?? 0;
+  const toBlock = options.toBlock ?? "latest";
+  return {
+    truncated: Array.isArray(logs) && logs.length >= offset,
+    window: { fromBlock, toBlock, offset, page },
+  };
+}
+
 export async function getLogs(
   config: AppConfig,
   options: {
@@ -311,8 +346,8 @@ export async function getLogs(
     topic0: options.topic0,
     topic1: options.topic1,
     topic0_1_opr: options.topic0_1_opr,
-    page: options.page ?? 1,
-    offset: options.offset ?? 100,
+    page: options.page ?? DEFAULT_GETLOGS_PAGE,
+    offset: options.offset ?? DEFAULT_GETLOGS_OFFSET,
   });
 }
 
@@ -894,14 +929,44 @@ export async function getLogsSoft(
     page?: number;
     offset?: number;
   },
-): Promise<ExplorerSoftResult<{ logs: unknown[]; count: number }>> {
+): Promise<
+  ExplorerSoftResult<{
+    logs: unknown[];
+    count: number;
+    truncated: boolean;
+    window: ExplorerLogWindow;
+    note: string;
+  }>
+> {
+  const offset = options.offset ?? DEFAULT_GETLOGS_OFFSET;
+  const page = options.page ?? DEFAULT_GETLOGS_PAGE;
+  const fromBlock = options.fromBlock ?? 0;
+  const toBlock = options.toBlock ?? "latest";
   try {
-    const logs = await getLogs(config, options);
+    const logs = await getLogs(config, {
+      ...options,
+      offset,
+      page,
+      fromBlock,
+      toBlock,
+    });
     const arr = Array.isArray(logs) ? logs : [];
+    const { truncated, window } = explorerLogsWindow(logs, {
+      fromBlock,
+      toBlock,
+      page,
+      offset,
+    });
     return {
       ok: true,
       source: "blockscout",
-      data: { logs: arr, count: arr.length },
+      data: {
+        logs: arr,
+        count: arr.length,
+        truncated,
+        window,
+        note: EXPLORER_LOGS_NOT_FULL_HISTORY,
+      },
     };
   } catch (err) {
     return explorerSoftFail(errMsg(err), {
