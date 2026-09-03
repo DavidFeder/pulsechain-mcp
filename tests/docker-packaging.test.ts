@@ -114,6 +114,63 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(deep).toMatch(/multi-writer|not a multi-writer|NOT multi-writer/i);
   });
 
+  it("npm package files include docs and examples; bin stays dist/index.js", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      files: string[];
+      bin: Record<string, string>;
+    };
+    expect(pkg.files).toEqual(
+      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples"]),
+    );
+    expect(pkg.files).not.toEqual(
+      expect.arrayContaining([
+        "node_modules",
+        "coverage",
+        "data",
+        "data/wallets",
+        ".env",
+        ".env.wallet",
+      ]),
+    );
+    expect(pkg.bin["pulsechain-mcp"]).toBe("dist/index.js");
+    expect(existsSync(join(root, "docs/BOOTSTRAP.md"))).toBe(true);
+    expect(existsSync(join(root, "examples/README.md"))).toBe(true);
+    expect(existsSync(join(root, "examples/cursor_mcp_config.json"))).toBe(true);
+  });
+
+  it("npm pack dry-run includes BOOTSTRAP and examples, excludes secrets and wallets", () => {
+    const r = spawnSync("npm", ["pack", "--dry-run", "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 60_000,
+      windowsHide: true,
+    });
+    expect(r.status, r.stderr || r.stdout).toBe(0);
+    const raw = `${r.stdout}\n${r.stderr}`;
+    const jsonStart = raw.indexOf("[");
+    expect(jsonStart).toBeGreaterThanOrEqual(0);
+    const parsed = JSON.parse(raw.slice(jsonStart)) as Array<{
+      files?: Array<{ path?: string }>;
+      filename?: string;
+    }>;
+    const paths = (parsed[0]?.files ?? []).map((f) => f.path ?? "").filter(Boolean);
+    expect(paths.some((p) => p === "docs/BOOTSTRAP.md" || p.endsWith("/docs/BOOTSTRAP.md"))).toBe(
+      true,
+    );
+    expect(paths.some((p) => p.includes("docs/AGENT_GUIDANCE.md"))).toBe(true);
+    expect(paths.some((p) => p.includes("docs/SECURITY.md"))).toBe(true);
+    expect(paths.some((p) => p.includes("docs/OPERATOR.md"))).toBe(true);
+    expect(paths.some((p) => p.includes("examples/README.md"))).toBe(true);
+    expect(paths.some((p) => p.includes("examples/cursor_mcp_config.json"))).toBe(true);
+    expect(paths.some((p) => p === "dist/index.js" || p.endsWith("/dist/index.js"))).toBe(true);
+    expect(paths.some((p) => /node_modules/.test(p))).toBe(false);
+    expect(paths.some((p) => /coverage/.test(p))).toBe(false);
+    expect(paths.some((p) => /data\/wallets/.test(p))).toBe(false);
+    expect(paths.some((p) => /(^|\/)\.env(\.|$)/.test(p) && !p.includes(".example"))).toBe(
+      false,
+    );
+  });
+
   it("version surfaces are 1.0.5", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe("1.0.5");

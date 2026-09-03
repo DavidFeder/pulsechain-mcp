@@ -72,27 +72,6 @@ export const WRITE_TOOL_WARNING =
   "confirm=true / MRTR is host UX only — not a cryptographic lock. " +
   "Double-check recipient, amount, and gas before confirming.";
 
-/**
- * Gate write tools: wallet must be enabled and caller must pass confirm=true.
- */
-export function assertWriteAllowed(
-  agentWalletEnabled: boolean,
-  confirm: boolean | undefined,
-  toolName: string,
-): void {
-  if (!agentWalletEnabled) {
-    throw new PolicyError(
-      `Write tool "${toolName}" is disabled. Set AGENT_WALLET_ENABLED=true to enable ` +
-        `encrypted agent wallets (operator-trust when funded). Set AGENT_WALLET_ENABLED=false for research-only.`,
-    );
-  }
-  if (confirm !== true) {
-    throw new PolicyError(
-      `Write tool "${toolName}" requires confirm=true. ${WRITE_TOOL_WARNING}`,
-    );
-  }
-}
-
 /** Object keys that must never leave the process boundary. */
 const SECRET_KEY_NAMES = new Set([
   "privatekey",

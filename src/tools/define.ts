@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  AnyToolHandler,
   McpServer,
   StandardSchemaWithJSON,
   ToolAnnotations,
@@ -145,11 +146,7 @@ export function registerTool(
 
   // SDK tool callbacks are (args, ctx). We lift per-request _meta envelope so
   // handlers never need initialize-scoped getClientVersion/getClientCapabilities.
-  // Cast keeps us compatible across MCP SDK overload / ctx variants.
-  const callback = async (
-    args: Record<string, unknown> = {},
-    mcpCtx?: unknown,
-  ) => {
+  const callback: AnyToolHandler<typeof schema> = async (args, mcpCtx) => {
     try {
       if (write && !config.agentWalletEnabled) {
         return toMcpToolResponse(
@@ -167,7 +164,11 @@ export function registerTool(
           mcpCtx as { mcpReq?: { envelope?: Record<string, unknown> } },
         ),
       };
-      const result = await handler(args, config, toolCtx);
+      const result = await handler(
+        (args ?? {}) as Record<string, unknown>,
+        config,
+        toolCtx,
+      );
       // Pass through MRTR InputRequiredResult without JSON-wrapping.
       if (isInputRequiredResult(result)) {
         return result;
@@ -189,6 +190,6 @@ export function registerTool(
       annotations: toolAnnotationsFromWrite(write),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    callback as never,
+    callback,
   );
 }

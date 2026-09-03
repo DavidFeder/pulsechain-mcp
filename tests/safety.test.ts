@@ -4,7 +4,6 @@ import {
   assertPositiveAmount,
   assertTxHash,
   assertWithinLimit,
-  assertWriteAllowed,
   isAddress,
   neverReturnPrivateKey,
   redact,
@@ -41,14 +40,8 @@ describe("safety", () => {
     expect(redact(undefined)).toBe("");
   });
 
-  it("gates write tools with confirm and wallet flag", () => {
-    expect(() => assertWriteAllowed(false, true, "send")).toThrow(PolicyError);
-    expect(() => assertWriteAllowed(true, false, "send")).toThrow(PolicyError);
-    expect(() => assertWriteAllowed(true, true, "send")).not.toThrow();
-    expect(WRITE_TOOL_WARNING).toMatch(/WRITE OPERATION/);
-  });
-
   it("WRITE_TOOL_WARNING mentions confirm=true and modern MRTR InputRequired", () => {
+    expect(WRITE_TOOL_WARNING).toMatch(/WRITE OPERATION/);
     expect(WRITE_TOOL_WARNING).toMatch(/confirm=true/);
     expect(WRITE_TOOL_WARNING).toMatch(/MRTR/);
     expect(WRITE_TOOL_WARNING).toMatch(/InputRequiredResult/);

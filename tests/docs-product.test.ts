@@ -89,6 +89,20 @@ describe("human README front door (docs product)", () => {
     expect(read("docs/BOOTSTRAP.md")).toMatch(/Product vs agent|agent first-install/i);
   });
 
+  it("package.json files ship docs and examples that README/BOOTSTRAP require", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      files: string[];
+      bin: Record<string, string>;
+    };
+    expect(pkg.files).toEqual(
+      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples"]),
+    );
+    expect(pkg.files).not.toEqual(
+      expect.arrayContaining(["node_modules", "coverage", "data", "data/wallets"]),
+    );
+    expect(pkg.bin["pulsechain-mcp"]).toBe("dist/index.js");
+  });
+
   it("package description and keywords match public metadata", () => {
     const pkg = JSON.parse(read("package.json")) as {
       description: string;

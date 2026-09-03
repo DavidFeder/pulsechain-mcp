@@ -95,14 +95,6 @@ export function buildDefiLlamaProtocolsUrl(
   return `${base.replace(/\/$/, "")}/protocols`;
 }
 
-export function buildDefiLlamaHistoricalChainTvlUrl(
-  chain: string = DEFILLAMA_CHAIN_NAME,
-  base: string = DEFILLAMA_API_BASE,
-): string {
-  const c = encodeURIComponent(chain.trim() || DEFILLAMA_CHAIN_NAME);
-  return `${base.replace(/\/$/, "")}/v2/historicalChainTvl/${c}`;
-}
-
 // ---------------------------------------------------------------------------
 // Normalization (pure / unit-testable)
 // ---------------------------------------------------------------------------
