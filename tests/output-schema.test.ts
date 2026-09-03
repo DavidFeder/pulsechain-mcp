@@ -57,11 +57,13 @@ afterEach(() => {
   }
 });
 
-function modernEnvelope(): Record<string, unknown> {
+function modernEnvelope(
+  capabilities: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     [PROTOCOL_VERSION_META_KEY]: "2026-07-28",
     [CLIENT_INFO_META_KEY]: { name: "output-schema-test", version: "0.0.0" },
-    [CLIENT_CAPABILITIES_META_KEY]: {},
+    [CLIENT_CAPABILITIES_META_KEY]: capabilities,
   };
 }
 
@@ -69,6 +71,7 @@ async function mcpRpc(
   handler: { fetch: (req: Request) => Promise<Response> },
   method: string,
   params: Record<string, unknown> = {},
+  capabilities: Record<string, unknown> = {},
 ): Promise<Record<string, unknown>> {
   const res = await handler.fetch(
     new Request("http://test.local/mcp", {
@@ -78,13 +81,18 @@ async function mcpRpc(
         accept: "application/json, text/event-stream",
         "MCP-Protocol-Version": "2026-07-28",
         "Mcp-Method": method,
-        "Mcp-Name": method.includes("/") ? method.split("/").pop()! : method,
+        "Mcp-Name":
+          method === "tools/call" && typeof params.name === "string"
+            ? params.name
+            : method.includes("/")
+              ? method.split("/").pop()!
+              : method,
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,
         method,
-        params: { ...params, _meta: modernEnvelope() },
+        params: { ...params, _meta: modernEnvelope(capabilities) },
       }),
     }),
   );
@@ -96,9 +104,13 @@ async function mcpRpc(
       ? (JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>)
       : { raw: text };
   } else {
-    body = JSON.parse(text) as Record<string, unknown>;
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      body = { raw: text };
+    }
   }
-  expect(res.status).toBe(200);
+  expect(res.status, JSON.stringify(body)).toBe(200);
   return body;
 }
 
@@ -283,10 +295,15 @@ describe("MRTR InputRequired vs outputSchema", () => {
     const handler = createMcpHandler(() => createServer(cfg), {
       legacy: "stateless",
     });
-    const body = await mcpRpc(handler, "tools/call", {
-      name: "create_agent_wallet",
-      arguments: {},
-    });
+    const body = await mcpRpc(
+      handler,
+      "tools/call",
+      {
+        name: "create_agent_wallet",
+        arguments: {},
+      },
+      { elicitation: { form: {} } },
+    );
     const result = body.result as Record<string, unknown>;
     const text = JSON.stringify(result);
     expect(text).not.toMatch(/Output validation error/i);
