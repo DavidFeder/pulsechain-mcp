@@ -124,6 +124,8 @@ pulsechain_health
   → optional flow: get_recent_swaps (labels on catalogued sides)
 ```
 
+Prefer canonical `get_*` names for chain reads; `pulsechain_*` chain tools are compatibility aliases.
+
 **Prefer**
 
 | Goal | Tools |

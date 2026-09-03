@@ -396,11 +396,14 @@ export function registerChainTools(
 
   // -------------------------------------------------------------------------
   // Legacy scaffold tools (pulsechain_* names — kept for compatibility)
+  // Descriptions lead with DEPRECATED and point at canonical replacements.
   // -------------------------------------------------------------------------
 
   registerTool(server, config, {
     name: "pulsechain_chain_id",
-    description: "Return the PulseChain chain ID and configured RPC URL.",
+    description:
+      "DEPRECATED: Prefer pulsechain_health for configured chain id and network. " +
+      "Return the PulseChain chain ID and configured RPC URL.",
     category: "chain",
     inputSchema: {},
     handler: async (_args, cfg) =>
@@ -412,7 +415,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_block_number",
-    description: "Fetch the latest block number from PulseChain RPC.",
+    description:
+      "DEPRECATED: Prefer get_block. Fetch the latest block number from PulseChain RPC.",
     category: "chain",
     inputSchema: {},
     handler: async (_args, cfg) => {
@@ -423,7 +427,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_get_block",
-    description: "Fetch a block by number (or latest). Returns summary fields.",
+    description:
+      "DEPRECATED: Prefer get_block. Fetch a block by number (or latest). Returns summary fields.",
     category: "chain",
     inputSchema: {
       blockNumber: z
@@ -443,7 +448,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_get_balance",
-    description: "Get native PLS balance for an address.",
+    description:
+      "DEPRECATED: Prefer get_balance. Get native PLS balance for an address.",
     category: "chain",
     inputSchema: {
       address: addressSchema,
@@ -456,7 +462,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_get_transaction",
-    description: "Fetch a transaction by hash from RPC.",
+    description:
+      "DEPRECATED: Prefer get_transaction. Fetch a transaction by hash from RPC.",
     category: "chain",
     inputSchema: {
       hash: txHashSchema,
@@ -469,7 +476,9 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_get_receipt",
-    description: "Fetch a transaction receipt by hash from RPC.",
+    description:
+      "DEPRECATED: Prefer get_transaction (includes receipt when available). " +
+      "Fetch a transaction receipt by hash from RPC.",
     category: "chain",
     inputSchema: {
       hash: txHashSchema,
@@ -482,7 +491,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_estimate_gas",
-    description: "Estimate gas for a call (to/data/value/from).",
+    description:
+      "DEPRECATED: Prefer estimate_gas. Estimate gas for a call (to/data/value/from).",
     category: "chain",
     inputSchema: {
       to: addressSchema.optional(),
@@ -503,7 +513,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_eth_call",
-    description: "Execute eth_call against a contract (read-only).",
+    description:
+      "DEPRECATED: Prefer read_contract. Execute eth_call against a contract (read-only).",
     category: "chain",
     inputSchema: {
       to: addressSchema,
@@ -524,7 +535,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_gas_price",
-    description: "Current gas price from PulseChain RPC.",
+    description:
+      "DEPRECATED: Prefer get_gas_price. Current gas price from PulseChain RPC.",
     category: "chain",
     inputSchema: {},
     handler: async (_args, cfg) => ok(await getGasPrice(cfg)),
@@ -532,7 +544,8 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_erc20_metadata",
-    description: "Read ERC-20 name/symbol/decimals via multicall.",
+    description:
+      "DEPRECATED: Prefer get_token_balance. Read ERC-20 name/symbol/decimals via multicall.",
     category: "chain",
     inputSchema: {
       token: addressSchema,
@@ -544,6 +557,7 @@ export function registerChainTools(
   registerTool(server, config, {
     name: "pulsechain_erc20_balances",
     description:
+      "DEPRECATED: Prefer get_token_balance. " +
       "Batch ERC-20 balanceOf for multiple tokens owned by one address (multicall).",
     category: "chain",
     inputSchema: {
@@ -567,6 +581,7 @@ export function registerChainTools(
   registerTool(server, config, {
     name: "pulsechain_account_txlist",
     description:
+      "DEPRECATED: Prefer get_transaction_history. " +
       "List recent transactions for an address via BlockScout explorer API.",
     category: "chain",
     inputSchema: {
@@ -587,7 +602,9 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_token_transfers",
-    description: "ERC-20 token transfers for an address (explorer).",
+    description:
+      "DEPRECATED: Prefer get_transaction_history. " +
+      "ERC-20 token transfers for an address (explorer).",
     category: "chain",
     inputSchema: {
       address: addressSchema,
@@ -608,6 +625,7 @@ export function registerChainTools(
   registerTool(server, config, {
     name: "pulsechain_token_info",
     description:
+      "DEPRECATED: Prefer get_token_info. " +
       "Token metadata with soft-fail fallbacks: BlockScout getToken → v2 tokens " +
       "API → RPC ERC-20 name/symbol/decimals (and CORE_TOKENS for known assets). " +
       "Does not hard-fail when explorer returns HTTP 400/500.",
@@ -695,7 +713,9 @@ export function registerChainTools(
 
   registerTool(server, config, {
     name: "pulsechain_get_logs",
-    description: "Query event logs via explorer API (address/topics/blocks).",
+    description:
+      "DEPRECATED: Prefer blockscout_event_logs. " +
+      "Query event logs via explorer API (address/topics/blocks).",
     category: "chain",
     inputSchema: {
       address: addressSchema.optional(),
