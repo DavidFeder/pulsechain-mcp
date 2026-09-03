@@ -1075,6 +1075,7 @@ async function executeAgentTxLocked(
     );
   } finally {
     // Drop reference; cannot truly wipe immutable JS strings
+    // eslint-disable-next-line no-useless-assignment -- intentional local wipe
     privateKey = undefined;
   }
 }

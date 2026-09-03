@@ -114,14 +114,12 @@ export async function httpFetch(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // AbortError and network failures propagate after finally (no 429 retry).
     try {
       lastResponse = await fetchImpl(input, {
         ...init,
         signal: controller.signal,
       });
-    } catch (err) {
-      // AbortError and network failures: do not enter the 429 retry path.
-      throw err;
     } finally {
       clearTimeout(timer);
     }

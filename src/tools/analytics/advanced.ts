@@ -199,7 +199,7 @@ export function registerAdvancedAnalyticsTools(
       const sampleSize = (args.sampleSize as number) ?? 50;
 
       // Soft-fail explorer getcontractcreation (HTTP 400/500 common on BlockScout)
-      let creationRaw: unknown = null;
+      let creationRaw: unknown;
       let creationError: string | null = null;
       try {
         creationRaw = await getContractCreation(cfg, contractAddress);
@@ -271,7 +271,7 @@ export function registerAdvancedAnalyticsTools(
         );
       }
 
-      let source: unknown = null;
+      let source: unknown;
       try {
         source = await getContractSourceCode(cfg, contractAddress);
       } catch {
@@ -756,7 +756,6 @@ export function registerAdvancedAnalyticsTools(
           }));
           const tip = v2.items?.[0]?.token;
           if (tip?.total_supply) totalSupply = tip.total_supply;
-          source = "v2";
         } catch {
           source = "module";
         }

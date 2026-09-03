@@ -321,7 +321,7 @@ export async function opGetTransaction(config: AppConfig, hash: string) {
       : new RpcError(err instanceof Error ? err.message : "tx fetch failed");
   }
 
-  let receipt: Record<string, unknown> | null = null;
+  let receipt: Record<string, unknown> | null;
   try {
     receipt = await getTransactionReceipt(config, txHash);
   } catch {
@@ -769,7 +769,7 @@ export async function opPrepareSwap(
     });
   }
 
-  let gasEstimate: string | null = null;
+  let gasEstimate: string | null;
   try {
     const est = await rpcEstimateGas(config, {
       to: router,
