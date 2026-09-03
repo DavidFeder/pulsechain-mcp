@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Research-only mode (`AGENT_WALLET_ENABLED=false`) omits write/signing tools from `tools/list`; wallet reads still register; wallets-on still advertises the full 96-tool surface
 - MCP tool registrations include SDK `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) derived from the existing `write` flag; unsigned prepare tools stay read-only
 - Write-tool warning mentions `confirm=true` and modern MRTR `InputRequiredResult` elicitation (host UX only, not a cryptographic lock)
 - `createServer` instructions branch on `agentWalletEnabled` (research-only vs operator-trust wallets)
