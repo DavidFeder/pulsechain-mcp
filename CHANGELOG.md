@@ -7,35 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-**Remaining review items after operator-trust.** Research-only is now the runtime default; npm pack ships `scripts/`; testnet uses official explorer/PulseX hosts; token transfers have a canonical tool; live `eth_chainId` is checked before sign; heuristic scores are labeled not settlement-grade.
+## [1.0.7] - 2026-09-04
+
+**Operator-trust cleanup + remaining review items** (PRs #18–#19). Funding an agent wallet is authorization to spend it. Version surfaces **1.0.7**. Tool counts **97** (wallets-on) / **88** (research-only).
+
+### Highlights
+
+| Area | Change |
+|------|--------|
+| **Wallet** | Removed fake caps, allowlists, confirm/MRTR write gates, and leftover display-only limit fields. Send-time blocks: kill switch, `enabled=false`, invalid address/value |
+| **Default** | `AGENT_WALLET_ENABLED` unset/empty → **false** (signing is opt-in: `true` + master key) |
+| **Testnet** | Official v4 explorer + PulseX subgraph defaults |
+| **Tools** | Canonical `get_token_transfers`; live `eth_chainId` before sign; heuristic scores labeled not settlement-grade |
+| **Packaging** | npm pack `files` includes `scripts/` |
 
 ### Added
 
-- Canonical `get_token_transfers` (BlockScout `tokentx`); `pulsechain_token_transfers` now points there
+- Canonical `get_token_transfers` (BlockScout `tokentx`); `pulsechain_token_transfers` deprecates toward it
 - Live RPC `eth_chainId` check on propose/execute and on `get_rpc_health probe=true`
 - Official testnet v4 explorer + PulseX subgraph defaults (`api.scan.v4.testnet.pulsechain.com`, `graph.v4.testnet.pulsechain.com`)
 
 ### Changed
 
-- `AGENT_WALLET_ENABLED` unset/empty defaults to **false** (signing is opt-in)
-- npm pack `files` includes `scripts/` (`generate-wallet-env`, `start-wallet-mcp`, `install-for-host`)
+- `AGENT_WALLET_ENABLED` unset/empty defaults to **false**
+- npm pack ships `scripts/` (`generate-wallet-env`, `start-wallet-mcp`, `install-for-host`)
 - Safety/scam/honeypot/ranking payloads include `scoreKind: heuristic_directional` and `settlementGrade: false`
-
-**Operator-trust without security theatre.** Funding an agent wallet is authorization to spend it. Removed non-functional caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields that confused agents.
+- `inspect_tx_intent` reports `decodeComplete` (visibility only; never a send gate)
+- `agentGuidance` is `ready` | `blocked`
 
 ### Removed
 
 - `AGENT_WALLET_ENFORCE_LEGACY_CAPS`, `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` config, and send-time allowlist / token-notional / `requireDecodableCalldata` gates
-- Required `confirm=true` / MRTR elicitation on wallet writes (create, policy, execute, transfer, settle, kill, revoke)
+- Required `confirm=true` / MRTR elicitation on wallet writes
 - HTTP + wallets requiring `AGENT_WALLET_MRTR_SECRET`
 - Review/status fields that looked like remaining limits (`remainingDaily`, `legacyCapsDisplayOnly`, `capsApplied`, `proceed_with_confirm` / `refuse`)
 
-### Changed
+### Unchanged
 
-- Send-time blocks are kill switch, `enabled=false`, and invalid address/value only
-- `inspect_tx_intent` reports `decodeComplete` (visibility only; never a send gate)
-- `agentGuidance` is `ready` | `blocked`
-- Docs and env templates tell operators: if you fund the wallet, the agent can use it
+- Dual-era MCP SDK `@modelcontextprotocol/server@2.0.0` (`2026-07-28` + `2025-11-25`)
+- AES-256-GCM keys; unique `AGENT_WALLET_DIR`; `kill_switch`
+- Funding authorizes spend when wallets are on
+
+### Residual honesty (not blockers)
+
+- Multiproc is process-local; unique `AGENT_WALLET_DIR` remains the multi-instance model
+- Confirm / MRTR are unused for writes (host UX only if present)
+- Heuristic analytics scores are directional, not settlement-grade
 
 ## [1.0.6] - 2026-09-03
 

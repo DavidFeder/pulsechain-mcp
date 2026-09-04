@@ -6,7 +6,7 @@ You can give your AI agent its own PLS and other tokens in a local wallet it con
 
 Sending PLS and swaps on PulseX/Piteas have been successful.
 
-**Version `1.0.6`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
+**Version `1.0.7`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
 
 ## Features
 

@@ -1,6 +1,6 @@
 /**
  * Structural docs tests: ask-agent human README, single bootstrap path,
- * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.6 pins.
+ * slim SECURITY front + SECURITY_DEEP residual, public doc set, 1.0.7 pins.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
@@ -70,7 +70,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.6");
+    expect(pkg.version).toBe("1.0.7");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
@@ -306,8 +306,9 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(codex).not.toMatch(/HTTP_TRANSPORT_PORT\s*[=:]/);
   });
 
-  it("RELEASE_NOTES has v1.0.6 plus prior 1.0.x content", () => {
+  it("RELEASE_NOTES has v1.0.7 plus prior 1.0.x content", () => {
     const notes = read("RELEASE_NOTES.md");
+    expect(notes).toMatch(/1\.0\.7/);
     expect(notes).toMatch(/1\.0\.6/);
     expect(notes).toMatch(/1\.0\.5/);
     expect(notes).toMatch(/1\.0\.4/);
@@ -325,10 +326,11 @@ describe("agent bootstrap + durable rules (docs product)", () => {
     expect(notes).not.toMatch(/repository\s+(stays\s+)?\*{0,2}private|keep\s+\*{0,2}private/i);
   });
 
-  it("CHANGELOG is public-facing history with 1.0.6 plus prior 1.0.x analytics and residual honesty", () => {
+  it("CHANGELOG is public-facing history with 1.0.7 plus prior 1.0.x analytics and residual honesty", () => {
     const log = read("CHANGELOG.md");
     const lines = log.split(/\r?\n/).length;
     expect(lines).toBeLessThan(360);
+    expect(log).toMatch(/## \[1\.0\.7\]/);
     expect(log).toMatch(/## \[1\.0\.6\]/);
     expect(log).toMatch(/## \[1\.0\.5\]/);
     expect(log).toMatch(/## \[1\.0\.4\]/);

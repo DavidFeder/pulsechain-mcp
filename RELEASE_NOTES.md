@@ -1,23 +1,18 @@
-# Release notes — pulsechain-mcp 1.0.6
+# Release notes — pulsechain-mcp 1.0.7
 
 Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.
 
-## Unreleased
+## What shipped (1.0.7)
 
-Operator-trust without security theatre: if you fund an agent wallet, the agent can spend it. Removed fake spend caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields. Real controls remain AES-256-GCM keys, kill_switch / enabled=false, unique `AGENT_WALLET_DIR`, and how much you fund.
+Operator-trust cleanup and remaining review items from PRs #18–#19. If you fund an agent wallet, the agent can spend it.
 
-## What shipped (1.0.6)
+- **Wallet:** removed fake spend caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields. Send-time blocks: kill switch, `enabled=false`, invalid address/value.
+- **Default:** `AGENT_WALLET_ENABLED` unset/empty → false. Signing is opt-in (`true` + 64-hex master key).
+- **Testnet / tools:** official v4 explorer + PulseX subgraphs; canonical `get_token_transfers`; live `eth_chainId` before sign; heuristic scores labeled not settlement-grade.
+- **Packaging:** npm pack includes `scripts/` (`generate-wallet-env`, write-only `.env.wallet`, `install-for-host`).
+- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.7**. Tool counts **97** / **88**.
 
-Agent-surface, chain/policy correctness, reliability, and packaging from PRs #3–#16 on the 1.0.5 tree. **Not** a protocol or wallet-model change.
-
-- **Agent / MCP:** tool `annotations`; research-only (`AGENT_WALLET_ENABLED=false`) omits write tools from `tools/list`; `outputSchema` on health and wallet tools; legacy `pulsechain_*` chain tools marked `DEPRECATED:`.
-- **Correctness:** configured chainId (369/943) on chain tools, health, unsigned prepare, and `pulsechain://chain/config`; proposals seal `chainId`/`network`; execute/settle/`sign_and_send` use a real `policySnapshotId`; swap/explorer pages set `incomplete`/`truncated` when capped.
-- **Reliability:** explorer/subgraph HTTP 429 retry with capped Retry-After; CI ESLint + Node 20/22 + targeted coverage + docker build.
-- **Wallet:** AES-256-GCM AAD binds `walletId` + address (`aadVersion: 1`; legacy blobs still decrypt); wallets-on `AGENT_WALLET_MULTIPROC_STRICT` defaults true; wallets + HTTP require `AGENT_WALLET_MRTR_SECRET`; opt-in `AGENT_WALLET_ENFORCE_LEGACY_CAPS` (`true`/`1`) hard-denies stored `MAX_PLS_*` / allowlists / token caps — unset stays operator-trust (display-only).
-- **Packaging:** npm pack includes `docs/` + `examples/`; unused production helpers removed.
-- **Version surfaces:** package, `SERVER_VERSION`, health, docs, Docker/compose report **1.0.6**. Tool counts stay **96** / **87**.
-
-Operator-trust, dual-era MCP (`2026-07-28` + `2025-11-25`), and research-first agent install (`generate-wallet-env`, write-only `.env.wallet`, `install-for-host`) are **unchanged**.
+Dual-era MCP (`2026-07-28` + `2025-11-25`), AES-256-GCM keys, unique `AGENT_WALLET_DIR`, and research-first agent install remain.
 
 ## Upgrade
 
@@ -26,19 +21,20 @@ git pull
 npm install
 npm run build
 # Prefer: node scripts/install-for-host.mjs --host <host> --mode research
-# reload the MCP host so pulsechain_health.version shows 1.0.6
+# reload the MCP host so pulsechain_health.version shows 1.0.7
 ```
 
 Optional smoke after reload:
 
-1. `pulsechain_health` → version `1.0.6`
-2. Research-only: write tools are absent from `tools/list` while `AGENT_WALLET_ENABLED=false`
-3. Wallets-on: `agent_wallet_status` still shows operator-trust (legacy caps display-only) unless `AGENT_WALLET_ENFORCE_LEGACY_CAPS=true`
+1. `pulsechain_health` → version `1.0.7`
+2. Research-only: write tools are absent from `tools/list` while `AGENT_WALLET_ENABLED` is unset or `false`
+3. Wallets-on: `agent_wallet_status` shows `fundingAuthorizesSpend: true`; no spend-cap / confirm write gates
 
-No OT wallet model change. Tags **v1.0.0**–**v1.0.5** remain historical; **v1.0.6** is this patch.
+Tags **v1.0.0**–**v1.0.6** remain historical; **v1.0.7** is this release.
 
 ## What shipped earlier
 
+- **1.0.6:** agent-surface, chain/policy correctness, reliability, and packaging (PRs #3–#16).
 - **1.0.5:** review-hardening (configured-chain signing, confirm binds proposal contents, analytics skip/path/TVL/volume-window fixes).
 - **1.0.4:** `phiat_dashboard` + `piteas_accumulation_plan` (research-only quote analytics).
 - **1.0.3:** key-install hygiene (write-only recovery text; no console.log key recipe).
@@ -51,11 +47,11 @@ No OT wallet model change. Tags **v1.0.0**–**v1.0.5** remain historical; **v1.
 | Residual | Meaning |
 |----------|---------|
 | Multiproc | Process-local barrier; not multi-writer-safe across hosts sharing a dir |
-| Confirm / MRTR | Host UX only — not a cryptographic security product |
-| Legacy `MAX_PLS_*` | Display/advisory if present — not hard spend gates unless `AGENT_WALLET_ENFORCE_LEGACY_CAPS` is on |
+| Confirm / MRTR | Unused for wallet writes; host UX only if present — not a cryptographic security product |
+| Legacy `MAX_PLS_*` | Removed as product spend-caps; operator-trust is funding + kill_switch + `enabled=false` (not hard spend gates) |
 | Windows file modes | chmod 600/700 is best-effort; use NTFS ACLs for real restriction |
 | Host reload | Install session doctor ≠ tools injected into the same chat |
-| Analytics quotes | Piteas/BlockScout/DexScreener data is advisory research — not execution guarantees |
+| Analytics quotes | Piteas/BlockScout/DexScreener data is advisory research — heuristic_directional, not settlement-grade |
 
 ## Operator-trust reminder
 
@@ -63,5 +59,5 @@ Funding the agent is authorization. Fund only what you accept the agent may spen
 
 ## Tag / about topics
 
-1. Confirm tags: **`v1.0.0`**–**`v1.0.5`** untouched; **`v1.0.6`** on this release commit.
+1. Confirm tags: **`v1.0.0`**–**`v1.0.6`** untouched; **`v1.0.7`** on this release commit.
 2. About / topics: pulsechain, mcp, web3, defi, phiat, piteas (operator choice).
