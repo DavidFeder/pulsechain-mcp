@@ -4,7 +4,7 @@
  * Preferred wallet path remains scripts/start-wallet-mcp.mjs (loads env always).
  * This module only runs when the operator opts in via a gitignored marker plus
  * a present gitignored wallet env file. Prefer scripts/start-wallet-mcp.mjs;
- * product default is wallets-on when AGENT_WALLET_ENABLED is unset (master key required).
+ * runtime default is research-only when AGENT_WALLET_ENABLED is unset.
  *
  * Markers (either):
  *   data/wallets/.enable-wallet-autoload

@@ -155,7 +155,7 @@ describe("outputSchema registration", () => {
     expect(walletJson).not.toContain("ciphertext");
   });
 
-  it("research-only still lists 87 tools with health/wallet-read schemas", () => {
+  it("research-only still lists 88 tools with health/wallet-read schemas", () => {
     const configs = captureRegisterConfigs(researchConfig);
     expect(configs.size).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(configs.get("pulsechain_health")?.outputSchema).toBeDefined();
@@ -331,6 +331,9 @@ describe("wallet writes vs outputSchema (no InputRequired gate)", () => {
       maxFeePerGas: "100000000000000",
       maxPriorityFeePerGas: "1000000000",
     });
+    vi.spyOn(rpc, "assertLiveRpcChainMatchesConfig").mockImplementation(
+      async (cfg) => (cfg.network === "testnet" ? 943 : 369),
+    );
     const { setTestBroadcast } = await import("../src/wallet/service.js");
     setTestBroadcast(async () => ("0x" + "ab".repeat(32)) as `0x${string}`);
 

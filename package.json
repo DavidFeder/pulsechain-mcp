@@ -20,7 +20,8 @@
     "README.md",
     "LICENSE",
     "docs",
-    "examples"
+    "examples",
+    "scripts"
   ],
   "engines": {
     "node": ">=20"

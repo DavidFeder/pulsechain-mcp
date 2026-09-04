@@ -69,13 +69,14 @@ const ADVANCED_ANALYTICS = [
   "get_holder_rank",
 ] as const;
 
-/** Verification inventory — canonical chain tools (12) */
+/** Verification inventory — canonical chain tools (13) */
 const CHAIN_CANONICAL = [
   "get_balance",
   "get_token_balance",
   "get_portfolio",
   "get_transaction",
   "get_transaction_history",
+  "get_token_transfers",
   "get_gas_price",
   "estimate_gas",
   "get_block",
@@ -151,7 +152,7 @@ describe("smoke: tool registration (no live network)", () => {
 
     const meta = getRegisteredTools();
     expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(87);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(88);
     expect(names.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(names.length).toBe(meta.length);
 
@@ -169,7 +170,7 @@ describe("smoke: tool registration (no live network)", () => {
 
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
-    expect(byCat("chain").length).toBe(27);
+    expect(byCat("chain").length).toBe(28);
     expect(byCat("wallet").length).toBe(WALLET_READ_TOOL_NAMES.length);
     expect(meta.filter((t) => t.write)).toEqual([]);
     expect(new Set(meta.map((t) => t.name)).size).toBe(meta.length);
@@ -239,10 +240,10 @@ describe("smoke: tool registration (no live network)", () => {
       expect(byName.has(n)).toBe(true);
     }
 
-    // Exact family counts: 3 health + 27 chain + 52 analytics + 14 wallet = 96
+    // Exact family counts: 3 health + 28 chain + 52 analytics + 14 wallet = 97
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
-    expect(byCat("chain").length).toBe(27);
+    expect(byCat("chain").length).toBe(28);
     expect(byCat("wallet").length).toBe(WALLET_TOOL_NAMES.length);
     const analytics = byCat("analytics");
     // free + advanced + PulseX + DexScreener + Tier A (11) + Tier B

@@ -6,6 +6,9 @@ import {
   DEFAULT_PULSEX_SUBGRAPH_V1,
   DEFAULT_PULSEX_SUBGRAPH_V2,
   DEFAULT_RPC_URLS,
+  DEFAULT_TESTNET_EXPLORER_API,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2,
   DEFAULT_TESTNET_RPC_URLS,
 } from "./constants.js";
 import { logger } from "./logger.js";
@@ -28,7 +31,7 @@ const envSchema = z.object({
   AGENT_WALLET_ENABLED: z
     .enum(["true", "false", "1", "0", ""])
     .optional()
-    .default("true"),
+    .default("false"),
   AGENT_WALLET_MASTER_KEY: z.string().optional(),
   AGENT_WALLET_DIR: z.string().optional(),
   AGENT_WALLET_MRTR_SECRET: z.string().optional(),
@@ -244,10 +247,9 @@ export function resolveRpcUrls(options: {
 
 /**
  * Parse environment into AppConfig.
- * AGENT_WALLET_ENABLED defaults to true (product default). Encryption stays
- * required: enabled without a master key fails startup. Set
- * AGENT_WALLET_ENABLED=false for pure research / read-only.
- * Throws ConfigError on invalid env (fail early, clear message).
+ * AGENT_WALLET_ENABLED defaults to false (research-only). Signing is opt-in:
+ * set AGENT_WALLET_ENABLED=true and a master key. Enabled without a master key
+ * fails startup. Throws ConfigError on invalid env (fail early, clear message).
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.safeParse(env);
@@ -293,15 +295,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     e.AGENT_WALLET_MASTER_KEY?.trim(),
   );
 
-  // Fail early: wallets on (including product default) without master key
+  // Fail early: wallets opted in without master key
   if (agentWalletEnabled && !agentWalletMasterKey) {
     throw new ConfigError(
-      "Agent wallets are on by default and require AGENT_WALLET_MASTER_KEY. " +
+      "AGENT_WALLET_ENABLED=true requires AGENT_WALLET_MASTER_KEY. " +
         "Write-only (never prints the key): node scripts/generate-wallet-env.mjs " +
         "or node scripts/install-for-host.mjs --host <grok|cursor|claude|codex> --mode wallets " +
         "(host entry = scripts/start-wallet-mcp.mjs + gitignored .env.wallet; " +
         "do not embed AGENT_WALLET_MASTER_KEY in host config or chat). " +
-        "For research-only (no signing): set AGENT_WALLET_ENABLED=false. " +
+        "For research-only (no signing): leave AGENT_WALLET_ENABLED unset or false. " +
         "One MCP process → one unique AGENT_WALLET_DIR. See docs/BOOTSTRAP.md.",
     );
   }
@@ -359,11 +361,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     rpcUrls,
     rpcUrl,
     network,
-    explorerApi: e.PULSECHAIN_EXPLORER_API ?? DEFAULT_EXPLORER_API,
+    explorerApi:
+      e.PULSECHAIN_EXPLORER_API ??
+      (network === "testnet"
+        ? DEFAULT_TESTNET_EXPLORER_API
+        : DEFAULT_EXPLORER_API),
     pulseXSubgraphV1:
-      emptyToUndefined(e.PULSEX_SUBGRAPH_V1) ?? DEFAULT_PULSEX_SUBGRAPH_V1,
+      emptyToUndefined(e.PULSEX_SUBGRAPH_V1) ??
+      (network === "testnet"
+        ? DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1
+        : DEFAULT_PULSEX_SUBGRAPH_V1),
     pulseXSubgraphV2:
-      emptyToUndefined(e.PULSEX_SUBGRAPH_V2) ?? DEFAULT_PULSEX_SUBGRAPH_V2,
+      emptyToUndefined(e.PULSEX_SUBGRAPH_V2) ??
+      (network === "testnet"
+        ? DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2
+        : DEFAULT_PULSEX_SUBGRAPH_V2),
     agentWalletEnabled,
     agentWalletMasterKey,
     agentWalletDir,

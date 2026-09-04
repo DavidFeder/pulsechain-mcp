@@ -642,6 +642,7 @@ describe("registerChainTools exports interactive names", () => {
       "get_portfolio",
       "get_transaction",
       "get_transaction_history",
+      "get_token_transfers",
       "get_gas_price",
       "estimate_gas",
       "get_block",
@@ -668,5 +669,21 @@ describe("registerChainTools exports interactive names", () => {
     for (const name of expected) {
       expect(tools).toContain(name);
     }
+  });
+
+  it("get_token_transfers is the canonical replacement for pulsechain_token_transfers", async () => {
+    const { registerChainTools } = await import(
+      "../src/tools/chain/index.js"
+    );
+    const { getRegisteredTools, resetToolRegistry } = await import(
+      "../src/tools/define.js"
+    );
+    resetToolRegistry();
+    registerChainTools({ registerTool: () => undefined } as never, baseConfig);
+    const byName = new Map(getRegisteredTools().map((t) => [t.name, t]));
+    expect(byName.get("get_token_transfers")?.description).toMatch(/tokentx|ERC-20/i);
+    expect(byName.get("pulsechain_token_transfers")?.description).toMatch(
+      /DEPRECATED: Prefer get_token_transfers/,
+    );
   });
 });

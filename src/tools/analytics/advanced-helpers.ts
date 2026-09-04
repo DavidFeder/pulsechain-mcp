@@ -8,7 +8,11 @@ import {
   POPULAR_CONTRACTS_BY_ADDRESS,
   WPLS_ADDRESS,
 } from "../../constants.js";
-import { resolvePairLiquidityUsd } from "./helpers.js";
+import {
+  HEURISTIC_SCORE_HONESTY,
+  resolvePairLiquidityUsd,
+  type HeuristicScoreHonesty,
+} from "./helpers.js";
 
 export type Confidence = "high" | "medium" | "low";
 
@@ -180,7 +184,7 @@ export function scoreAddressRisk(input: {
   signals: RiskSignal[];
   confidence: Confidence;
   method: string;
-} {
+} & HeuristicScoreHonesty {
   const signals: RiskSignal[] = [];
   let score = 0;
   const nowSec = input.nowSec ?? Math.floor(Date.now() / 1000);
@@ -197,9 +201,10 @@ export function scoreAddressRisk(input: {
       riskScore: 0,
       riskLevel: "low",
       signals,
-      confidence: "high",
+      confidence: "medium",
       method:
         "Public heuristics on explorer tx history + known CORE_TOKENS/POPULAR_CONTRACTS registry",
+      ...HEURISTIC_SCORE_HONESTY,
     };
   }
 
@@ -304,6 +309,7 @@ export function scoreAddressRisk(input: {
     method:
       "Public heuristics on explorer tx history + known CORE_TOKENS/POPULAR_CONTRACTS registry. " +
       "Not a scam blacklist; false positives expected. Confidence reflects sample size.",
+    ...HEURISTIC_SCORE_HONESTY,
   };
 }
 
@@ -362,7 +368,7 @@ export function detectScamAlerts(input: {
   }>;
   method: string;
   confidence: Confidence;
-} {
+} & HeuristicScoreHonesty {
   const nowSec = input.nowSec ?? Math.floor(Date.now() / 1000);
   const maxAgeDays = input.maxAgeDays ?? 14;
   const volRatio = input.volumeToLiquidityRatio ?? 20;
@@ -499,6 +505,7 @@ export function detectScamAlerts(input: {
       "(2) thin-liquidity high-tx pairs, (3) large burns vs remaining reserves. " +
       "Not definitive scam detection; no private openpulsechain feeds.",
     confidence: "medium",
+    ...HEURISTIC_SCORE_HONESTY,
   };
 }
 

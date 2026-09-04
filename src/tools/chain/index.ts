@@ -45,6 +45,7 @@ import {
   opGetPortfolio,
   opGetTokenBalance,
   opGetTransaction,
+  opGetTokenTransfers,
   opGetTransactionHistory,
   opPrepareSwap,
   opPrepareTransaction,
@@ -159,7 +160,8 @@ export function registerChainTools(
   registerTool(server, config, {
     name: "get_transaction_history",
     description:
-      "Recent transactions for an address via BlockScout explorer API (api.scan.pulsechain.com).",
+      "Recent native transactions for an address via BlockScout explorer API. " +
+      "For ERC-20 token transfers use get_token_transfers (not this tool).",
     category: "chain",
     inputSchema: {
       address: addressSchema,
@@ -174,6 +176,30 @@ export function registerChainTools(
           (args.page as number) ?? 1,
           (args.offset as number) ?? 20,
         ),
+      ),
+  });
+
+  registerTool(server, config, {
+    name: "get_token_transfers",
+    description:
+      "Recent ERC-20 token transfers for an address via BlockScout explorer tokentx. " +
+      "Optional contractAddress filters to one token. Native txs: get_transaction_history.",
+    category: "chain",
+    inputSchema: {
+      address: addressSchema,
+      contractAddress: addressSchema
+        .optional()
+        .describe("Optional token contract to filter transfers"),
+      page: z.number().int().min(1).optional().default(1),
+      offset: z.number().int().min(1).max(100).optional().default(20),
+    },
+    handler: async (args, cfg) =>
+      ok(
+        await opGetTokenTransfers(cfg, args.address as string, {
+          contractAddress: args.contractAddress as string | undefined,
+          page: (args.page as number) ?? 1,
+          offset: (args.offset as number) ?? 20,
+        }),
       ),
   });
 
@@ -605,7 +631,7 @@ export function registerChainTools(
   registerTool(server, config, {
     name: "pulsechain_token_transfers",
     description:
-      "DEPRECATED: Prefer get_transaction_history. " +
+      "DEPRECATED: Prefer get_token_transfers. " +
       "ERC-20 token transfers for an address (explorer).",
     category: "chain",
     inputSchema: {
@@ -765,6 +791,7 @@ export {
   opGetBalance,
   opGetPortfolio,
   opGetTokenBalance,
+  opGetTokenTransfers,
   opPrepareSwap,
   opPrepareTransaction,
   opPulsexQuote,

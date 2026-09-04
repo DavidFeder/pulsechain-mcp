@@ -8,9 +8,9 @@ Also: [AGENT_GUIDANCE.md](AGENT_GUIDANCE.md) · [TOKEN_IDENTITY.md](TOKEN_IDENTI
 ---
 ## Product default (v0.3.0+)
 
-1. **`AGENT_WALLET_ENABLED` defaults to `true`** — signing tools are available after you set a master key and create/fund a wallet.
-2. **Master key is required** when wallets are enabled (including the default). Startup fails with a clear setup message if it is missing.
-3. **Research-only:** set **`AGENT_WALLET_ENABLED=false`** and omit the master key — write/signing tools refuse; analytics and quotes still work.
+1. **`AGENT_WALLET_ENABLED` defaults to `false`** — research-only until you opt in.
+2. **Master key is required** when wallets are enabled. Startup fails with a clear setup message if it is missing.
+3. **Signing:** set **`AGENT_WALLET_ENABLED=true`** and a master key. Research-only omits the master key — write/signing tools refuse; analytics and quotes still work.
 4. Prefer **stdio** clients (Cursor / Grok / Claude / Codex) with absolute path to `dist/index.js`.
 5. Multi-RPC (`PULSECHAIN_RPC_URLS`) with local/LAN first when available — see [OPERATOR.md](OPERATOR.md).
 6. Prefer **token addresses** over symbols — see [TOKEN_IDENTITY.md](TOKEN_IDENTITY.md).
@@ -22,8 +22,8 @@ Run wallets on a machine you control, with a strong master key and unique `AGENT
 
 | Mode | Host entry | Wallets | Use |
 |------|------------|---------|-----|
-| **Wallets on (product default)** | `dist/index.js` + master key, or `scripts/start-wallet-mcp.mjs` | On | Encrypted EOAs under **operator-trust** |
-| **Research-only** | `dist/index.js` + `AGENT_WALLET_ENABLED=false` | Off | Analytics, prices, identity, unsigned prepare |
+| **Research-only (default)** | `dist/index.js` + `AGENT_WALLET_ENABLED` unset/`false` | Off | Analytics, prices, identity, unsigned prepare |
+| **Wallets on (opt-in)** | `AGENT_WALLET_ENABLED=true` + master key, or `scripts/start-wallet-mcp.mjs` | On | Encrypted EOAs under **operator-trust** |
 
 ### First-run master key
 
@@ -67,7 +67,7 @@ After `npm run build`, restart the MCP host / refresh MCP so the process loads t
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| `AGENT_WALLET_ENABLED` | `true` (default) | Signing available on this process |
+| `AGENT_WALLET_ENABLED` | `true` (opt-in; default is `false`) | Signing available on this process |
 | `AGENT_WALLET_DIR` | unique path (e.g. `./data/wallets`) | One process → one dir; never share across hosts |
 | `AGENT_WALLET_MULTIPROC_STRICT` | `true` (wallets-on default) | Refuse writes on live foreign-owner conflict; explicit `false`/`0` is warn-only |
 | `AGENT_WALLET_MASTER_KEY` | 64-char hex preferred (or passphrase ≥16) | Offline-generated; password manager only |
@@ -125,10 +125,10 @@ The design goal: **keys stay encrypted and never appear in tool output**. Send-t
 
 ---
 
-## Agent wallets on by default (research-only opt-out)
+## Agent wallets off by default (signing is opt-in)
 
-- `AGENT_WALLET_ENABLED` defaults to **`true`** (see `src/config.ts`). A master key is required at startup when enabled.
-- Write tools (`write: true` in `registerTool`) refuse when you set `AGENT_WALLET_ENABLED=false`.
+- `AGENT_WALLET_ENABLED` defaults to **`false`** (see `src/config.ts`). A master key is required at startup only when enabled.
+- Write tools (`write: true` in `registerTool`) refuse when wallets are off and are omitted from `tools/list`.
 - Read-only tools such as `agent_wallet_status` still work and report posture without secrets.
 
 Use a machine you control, a strong master key, and a unique wallet directory when signing.

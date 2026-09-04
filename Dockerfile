@@ -1,8 +1,8 @@
 # Multi-stage production image for pulsechain-mcp
 # - Builds TypeScript → dist/
 # - Runtime: production deps only, non-root, no secrets
-# - Image ENV: AGENT_WALLET_ENABLED=false (secretless container; product host
-#   default is wallets-on — containers must opt in with a master key)
+# - Image ENV: AGENT_WALLET_ENABLED=false (secretless container; runtime
+#   default is also research-only — wallets-on must opt in with a master key)
 # - Primary production path remains host stdio (Cursor/Grok/Claude);
 #   this image is for local/co-located testing and optional HTTP smoke.
 

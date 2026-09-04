@@ -215,7 +215,8 @@ export function registerAnalyticsTools(
     description:
       "Top tokens by volume, liquidity, or tx count (raw PulseX subgraph). " +
       "Catalogued addresses get display_symbol/token_origin (e.g. pHEX, eUSDC) — never invented. " +
-      "Prefer get_top_tokens for free-tier ranking with liquidity demotion.",
+      "Prefer get_top_tokens for free-tier ranking with liquidity demotion. " +
+      "Ranking is heuristic/directional — not settlement-grade.",
     category: "analytics",
     inputSchema: {
       first: z.number().int().min(1).max(100).default(20),
@@ -253,7 +254,8 @@ export function registerAnalyticsTools(
     description:
       "Top pairs by volume, liquidity (reserveUSD), or tx count (raw PulseX subgraph). " +
       "Catalogued token sides get display_symbol/origin — never invented. " +
-      "Prefer get_top_pairs for free-tier ranking with sanitized liquidity.",
+      "Prefer get_top_pairs for free-tier ranking with sanitized liquidity. " +
+      "Ranking is heuristic/directional — not settlement-grade.",
     category: "analytics",
     inputSchema: {
       first: z.number().int().min(1).max(100).default(20),

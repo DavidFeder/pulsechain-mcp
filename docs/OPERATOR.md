@@ -45,11 +45,11 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `PULSECHAIN_RPC_URLS` | multi public | Ordered list |
 | `PULSECHAIN_RPC_URL` | merged | Legacy single; prepended when set |
 | `PULSECHAIN_NETWORK` | `mainnet` | or `testnet` |
-| `PULSECHAIN_EXPLORER_API` | scan.pulsechain.com API | BlockScout-compatible |
-| `PULSEX_SUBGRAPH_V1` / `V2` | graph.pulsechain.com | PulseX |
+| `PULSECHAIN_EXPLORER_API` | mainnet: scan.pulsechain.com API; testnet: api.scan.v4.testnet.pulsechain.com/api | BlockScout-compatible |
+| `PULSEX_SUBGRAPH_V1` / `V2` | mainnet: graph.pulsechain.com; testnet: graph.v4.testnet.pulsechain.com | PulseX |
 | `HTTP_TIMEOUT_MS` | `30000` | Explorer/subgraph/per-RPC |
-| `AGENT_WALLET_ENABLED` | **`true`** | Product default; set `false` for research-only |
-| `AGENT_WALLET_MASTER_KEY` | empty | **Required** when wallets on (including default) |
+| `AGENT_WALLET_ENABLED` | **`false`** | Research-only default; set `true` to opt in to signing |
+| `AGENT_WALLET_MASTER_KEY` | empty | **Required** when wallets on |
 | `AGENT_WALLET_DIR` | `./data/wallets` | One process → one unique dir |
 | `AGENT_WALLET_MULTIPROC_STRICT` | wallets-on: `true` if unset/empty; research-only unset: `false` | `false`/`0` warn-only opt-out; `true`/`1` refuse writes on foreign owner. Not a distributed lock |
 | `AGENT_WALLET_MRTR_SECRET` | unused leftover | Unused for wallet writes. HTTP + wallets does not require it. If set, ≥32 bytes UTF-8. Do not reuse `AGENT_WALLET_MASTER_KEY` |
@@ -57,7 +57,7 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `HTTP_TRANSPORT_PORT` | empty | If set: HTTP-only (breaks stdio hosts) |
 | `LOG_LEVEL` | `info` | stderr only |
 
-When `PULSECHAIN_NETWORK=testnet`, explorer and PulseX subgraph still default to those mainnet hosts; `pulsechain_health` and `pulsechain://chain/config` report `networkMismatch` rather than inventing unofficial testnet subgraph URLs.
+When `PULSECHAIN_NETWORK=testnet` and explorer/subgraph env vars are unset, the server uses official testnet v4 hosts (`api.scan.v4.testnet.pulsechain.com`, `graph.v4.testnet.pulsechain.com`). `pulsechain_health` and `pulsechain://chain/config` still report `networkMismatch` if you point testnet at the mainnet hosts.
 
 ---
 
@@ -65,7 +65,7 @@ When `PULSECHAIN_NETWORK=testnet`, explorer and PulseX subgraph still default to
 
 1. Node 20+ as `command`.  
 2. Absolute path to `dist/index.js` (or wallet launcher).  
-3. Master key set when wallets on (default), or `AGENT_WALLET_ENABLED=false` for research-only.  
+3. Research-only by default (no master key). Master key required only when `AGENT_WALLET_ENABLED=true`.  
 4. **Unset** `HTTP_TRANSPORT_PORT` for Cursor/Grok/Claude/Codex.  
 5. Logs on **stderr**; stdout is JSON-RPC.
 

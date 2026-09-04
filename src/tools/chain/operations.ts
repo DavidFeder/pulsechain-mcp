@@ -28,6 +28,7 @@ import {
 import {
   batchErc20Balances,
   chainIdForConfig,
+  getAccountTokenTransfers,
   getAccountTxList,
   getErc20Metadata,
   getFeeData,
@@ -359,7 +360,42 @@ export async function opGetTransactionHistory(
     address: addr,
     page,
     offset,
+    kind: "native",
     transactions: txs,
+    chainId: chainIdForConfig(config),
+    source: "explorer",
+    tokenTransfersTool: "get_token_transfers",
+  };
+}
+
+/** ERC-20 token transfers via BlockScout `tokentx` (canonical replacement for pulsechain_token_transfers). */
+export async function opGetTokenTransfers(
+  config: AppConfig,
+  address: string,
+  options: {
+    contractAddress?: string;
+    page?: number;
+    offset?: number;
+  } = {},
+) {
+  const addr = assertAddress(address);
+  const page = options.page ?? 1;
+  const offset = options.offset ?? 20;
+  const contractAddress = options.contractAddress
+    ? assertAddress(options.contractAddress)
+    : undefined;
+  const transfers = await getAccountTokenTransfers(config, addr, {
+    contractAddress,
+    page,
+    offset,
+  });
+  return {
+    address: addr,
+    page,
+    offset,
+    kind: "token",
+    contractAddress,
+    transfers,
     chainId: chainIdForConfig(config),
     source: "explorer",
   };

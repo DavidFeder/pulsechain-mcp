@@ -24,7 +24,7 @@ const LEGACY_CHAIN_ALIASES: Record<string, string> = {
   pulsechain_erc20_metadata: "get_token_balance",
   pulsechain_erc20_balances: "get_token_balance",
   pulsechain_account_txlist: "get_transaction_history",
-  pulsechain_token_transfers: "get_transaction_history",
+  pulsechain_token_transfers: "get_token_transfers",
   pulsechain_token_info: "get_token_info",
   pulsechain_get_logs: "blockscout_event_logs",
 };
@@ -39,6 +39,7 @@ const CANONICAL_REPLACEMENTS = [
   "get_gas_price",
   "get_token_balance",
   "get_transaction_history",
+  "get_token_transfers",
   "get_token_info",
   "blockscout_event_logs",
 ] as const;
@@ -93,8 +94,8 @@ describe("legacy pulsechain_* chain aliases (deprecated descriptions)", () => {
   });
 
   it("does not change registered tool counts", () => {
-    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(96);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(87);
+    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(97);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(88);
 
     resetToolRegistry();
     registerAllTools(

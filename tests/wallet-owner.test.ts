@@ -88,6 +88,9 @@ function mockRpcEoa() {
     maxFeePerGas: "100000000000000",
     maxPriorityFeePerGas: "1000000000",
   });
+  vi.spyOn(rpc, "assertLiveRpcChainMatchesConfig").mockImplementation(
+    async (cfg) => (cfg.network === "testnet" ? 943 : 369),
+  );
 }
 
 describe("isPidAlive / parseOwnerRecord (shipped)", () => {

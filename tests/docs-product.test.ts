@@ -95,7 +95,7 @@ describe("human README front door (docs product)", () => {
       bin: Record<string, string>;
     };
     expect(pkg.files).toEqual(
-      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples"]),
+      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples", "scripts"]),
     );
     expect(pkg.files).not.toEqual(
       expect.arrayContaining(["node_modules", "coverage", "data", "data/wallets"]),

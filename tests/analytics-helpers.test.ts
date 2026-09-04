@@ -4,6 +4,7 @@ import {
   buildTokenInfoPayload,
   catalogPairSideLabels,
   computeSafetyScore,
+  HEURISTIC_SCORE_HONESTY,
   estimatePairLiquidityUsd,
   isSaneReserveUsd,
   isoDateFromUnix,
@@ -92,6 +93,19 @@ describe("safety scoring", () => {
     });
     expect(score).toBeGreaterThanOrEqual(80);
     expect(["A", "B"]).toContain(grade);
+    const scored = computeSafetyScore({
+      verified: true,
+      ownershipRenounced: true,
+      liquidityUsd: 200_000,
+      topHolderShare: 0.05,
+      top10Share: 0.2,
+      ageDays: 400,
+      honeypotFlags: [],
+      suspiciousAbi: [],
+    });
+    expect(scored.settlementGrade).toBe(false);
+    expect(scored.scoreKind).toBe(HEURISTIC_SCORE_HONESTY.scoreKind);
+    expect(scored.scoreNote).toMatch(/not a security audit|settlement-grade/i);
   });
 
   it("penalizes unverified low-liq honeypot flags", () => {
