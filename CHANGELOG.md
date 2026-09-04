@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Remaining review items after operator-trust.** Research-only is now the runtime default; npm pack ships `scripts/`; testnet uses official explorer/PulseX hosts; token transfers have a canonical tool; live `eth_chainId` is checked before sign; heuristic scores are labeled not settlement-grade.
+
+### Added
+
+- Canonical `get_token_transfers` (BlockScout `tokentx`); `pulsechain_token_transfers` now points there
+- Live RPC `eth_chainId` check on propose/execute and on `get_rpc_health probe=true`
+- Official testnet v4 explorer + PulseX subgraph defaults (`api.scan.v4.testnet.pulsechain.com`, `graph.v4.testnet.pulsechain.com`)
+
+### Changed
+
+- `AGENT_WALLET_ENABLED` unset/empty defaults to **false** (signing is opt-in)
+- npm pack `files` includes `scripts/` (`generate-wallet-env`, `start-wallet-mcp`, `install-for-host`)
+- Safety/scam/honeypot/ranking payloads include `scoreKind: heuristic_directional` and `settlementGrade: false`
+
 **Operator-trust without security theatre.** Funding an agent wallet is authorization to spend it. Removed non-functional caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields that confused agents.
 
 ### Removed

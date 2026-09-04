@@ -15,6 +15,7 @@ import {
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import type { AppConfig } from "../types.js";
 import {
+  assertLiveRpcChainMatchesConfig,
   chainForConfig,
   chainIdForConfig,
   estimateGas,
@@ -659,6 +660,7 @@ export async function proposeAgentTx(
   req: TxProposalRequest,
 ): Promise<TxProposalWithReview> {
   requireWritable(config);
+  await assertLiveRpcChainMatchesConfig(config);
   const record = loadWalletRecord(config.agentWalletDir, req.walletId);
   record.dailySpend = normalizeDailySpend(record.dailySpend);
   record.tokenDailySpend = normalizeTokenDailySpend(record.tokenDailySpend);
@@ -815,6 +817,7 @@ async function executeAgentTxLocked(
   }
 
   assertProposalExecutable(proposal, config);
+  await assertLiveRpcChainMatchesConfig(config);
 
   let record = loadWalletRecord(config.agentWalletDir, proposal.walletId);
   record.dailySpend = normalizeDailySpend(record.dailySpend);

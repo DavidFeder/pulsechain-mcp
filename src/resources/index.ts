@@ -7,6 +7,11 @@ import {
   DEFAULT_PULSEX_SUBGRAPH_V2,
   DEFAULT_RPC_URL,
   DEFAULT_RPC_URLS,
+  DEFAULT_TESTNET_EXPLORER_API,
+  DEFAULT_TESTNET_EXPLORER_UI,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2,
+  DEFAULT_TESTNET_RPC_URLS,
   DUAL_DAI_GUIDANCE,
   EHEX_TOKEN,
   EP_NAMING_RULES,
@@ -97,6 +102,15 @@ export function registerResources(server: McpServer, config: AppConfig): void {
           },
           multicall3: MULTICALL3_ADDRESS,
           pulsex: PULSEX_CONTRACTS,
+        },
+        testnetDefaults: {
+          rpcUrls: [...DEFAULT_TESTNET_RPC_URLS],
+          explorerApi: DEFAULT_TESTNET_EXPLORER_API,
+          explorerUi: DEFAULT_TESTNET_EXPLORER_UI,
+          subgraphs: {
+            pulsexV1: DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1,
+            pulsexV2: DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2,
+          },
         },
         active: {
           network: config.network,

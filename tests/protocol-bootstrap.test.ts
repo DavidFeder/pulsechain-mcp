@@ -223,7 +223,7 @@ describe("protocol bootstrap: dual-era createMcpHandler", () => {
     );
   });
 
-  it("wallets-on tools/list is 96 and annotates writes vs unsigned prepare", async () => {
+  it("wallets-on tools/list is 97 and annotates writes vs unsigned prepare", async () => {
     const walletsOn: AppConfig = { ...smokeConfig, agentWalletEnabled: true };
     const handler = createMcpHandler(() => createServer(walletsOn), {
       legacy: "stateless",

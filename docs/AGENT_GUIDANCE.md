@@ -198,7 +198,7 @@ Security essentials: [SECURITY.md](SECURITY.md). Residual detail: [SECURITY_DEEP
 |--------|----------|
 | On-chain reads by **address**, catalog origin labels, `pulsechain_health` | High confidence when tools succeed |
 | Aggregator quotes, gas estimates, USD notionals | Advisory — re-check before send; re-quote if stale |
-| DexScreener **search by ticker**, scam scores, ranking heuristics | Noisy / discovery-only — never settle identity on ticker alone |
+| DexScreener **search by ticker**, scam/safety/honeypot scores, pair ranking | Heuristic / directional only — **not** settlement-grade; never settle identity or risk on a score alone |
 | Funding a wallet | Authorization to spend that balance |
 
 **Best tools for careful work:** address-first `get_token_info` / balances / DexScreener-by-address; `piteas_quote` + prepare for swaps; `hex_global_state` only on **pHEX** for stake global state.

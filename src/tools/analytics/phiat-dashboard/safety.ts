@@ -1,7 +1,11 @@
 import type { DexScreenerPairSummary } from "../../../data/index.js";
 import type { AppConfig } from "../../../types.js";
 import { assertAddress } from "../../../utils/safety.js";
-import { computeSafetyScore, scanSuspiciousPatterns } from "../helpers.js";
+import {
+  computeSafetyScore,
+  HEURISTIC_SCORE_HONESTY,
+  scanSuspiciousPatterns,
+} from "../helpers.js";
 import {
   computeAddressAge,
   inferFirstFunder,
@@ -152,6 +156,7 @@ export function buildSafetyOutput(input: {
     safetyFactors: scored?.factors ?? null,
     safetyGradeConfidence,
     unavailableInputs: [...new Set(unavailableInputs)],
+    ...HEURISTIC_SCORE_HONESTY,
     limitations: [
       "Heuristic score only; not a security audit or honeypot oracle.",
       "Ownership renounce status is not probed by this dashboard.",

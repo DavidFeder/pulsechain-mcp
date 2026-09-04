@@ -47,7 +47,7 @@ export function chainIdForConfig(config: Pick<AppConfig, "network">): number {
 }
 
 export const TESTNET_MAINNET_DEFAULTS_WARNING =
-  "PULSECHAIN_NETWORK=testnet (chain 943) but explorer and/or PulseX subgraph URLs still use the mainnet defaults (scan.pulsechain.com / graph.pulsechain.com). This server does not invent unofficial testnet subgraph hosts — set PULSECHAIN_EXPLORER_API and PULSEX_SUBGRAPH_V1/V2 if you have official testnet endpoints.";
+  "PULSECHAIN_NETWORK=testnet (chain 943) but explorer and/or PulseX subgraph URLs still use the mainnet hosts (scan.pulsechain.com / graph.pulsechain.com). Official testnet defaults are api.scan.v4.testnet.pulsechain.com and graph.v4.testnet.pulsechain.com — set PULSECHAIN_EXPLORER_API and PULSEX_SUBGRAPH_V1/V2, or omit them so loadConfig applies those testnet defaults.";
 
 /**
  * When testnet still points explorer/subgraph at shipped mainnet defaults.
@@ -353,6 +353,51 @@ export async function getChainId(config: AppConfig): Promise<number> {
       err instanceof Error ? err.message : "Failed to fetch chain id",
     );
   }
+}
+
+/**
+ * Compare a live `eth_chainId` to configured 369/943. Pure — used by the
+ * async RPC wrapper and unit tests.
+ */
+export function assertLiveChainIdMatchesConfig(
+  live: number,
+  config: Pick<AppConfig, "network">,
+): number {
+  const expected = chainIdForConfig(config);
+  if (!Number.isInteger(live)) {
+    throw new RpcError(
+      `RPC eth_chainId is not an integer (${String(live)}). ` +
+        `Configured chain is ${expected} (${config.network}).`,
+    );
+  }
+  if (live !== expected) {
+    throw new RpcError(
+      `RPC eth_chainId is ${live} but this process is configured for chainId ${expected} (${config.network}). ` +
+        "Refusing to propose or sign on a mismatched chain. " +
+        "Fix PULSECHAIN_RPC_URLS or PULSECHAIN_NETWORK.",
+    );
+  }
+  return live;
+}
+
+/**
+ * Live `eth_chainId` must match the configured network (369 / 943).
+ * Fail closed so a mis-pointed RPC cannot silently sign or report the wrong chain.
+ */
+export async function assertLiveRpcChainMatchesConfig(
+  config: AppConfig,
+): Promise<number> {
+  const expected = chainIdForConfig(config);
+  let live: number;
+  try {
+    live = await getChainId(config);
+  } catch (err) {
+    throw new RpcError(
+      `Cannot verify RPC eth_chainId against configured ${expected} (${config.network}): ` +
+        (err instanceof Error ? err.message : String(err)),
+    );
+  }
+  return assertLiveChainIdMatchesConfig(live, config);
 }
 
 export async function getGasPrice(config: AppConfig): Promise<{

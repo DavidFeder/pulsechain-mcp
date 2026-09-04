@@ -191,10 +191,16 @@ describe("get_rpc_health tool registration", () => {
         endpoints: Array<{ status: string; url: string }>;
         summary: Record<string, number>;
         probed: boolean;
+        configuredChainId: number;
+        rpcChainId: number | null;
+        rpcChainMatch: boolean | null;
       };
     };
     expect(body.ok).toBe(true);
     expect(body.data.probed).toBe(false);
+    expect(body.data.configuredChainId).toBe(369);
+    expect(body.data.rpcChainId).toBeNull();
+    expect(body.data.rpcChainMatch).toBeNull();
     expect(body.data.rpcUrls.length).toBe(2);
     expect(body.data.endpoints.length).toBe(2);
     expect(body.data.endpoints[0]!.status).toBeDefined();

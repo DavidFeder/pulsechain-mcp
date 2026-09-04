@@ -2,7 +2,7 @@
  * v0.1.20: Docker packaging structural checks on shipped files.
  * Asserts production-sensible Docker defaults (image wallets off / secretless,
  * non-root, no secrets, compose env_file as authoritative config surface)
- * without requiring a live daemon. Product host default is wallets-on.
+ * without requiring a live daemon. Runtime default is research-only.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync, writeFileSync, unlinkSync, mkdtempSync } from "node:fs";
@@ -27,7 +27,7 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(df).toMatch(/npm run build/);
     expect(df).toMatch(/ENTRYPOINT\s*\[\s*"node"\s*,\s*"dist\/index\.js"\s*\]/);
     expect(df).toMatch(/USER\s+node/);
-    // Containers stay secretless; host product default is wallets-on
+    // Containers stay secretless; runtime default is research-only
     expect(df).toMatch(/AGENT_WALLET_ENABLED=false/);
     expect(df).toMatch(/secretless|wallets-on/i);
     expect(df).toMatch(/NODE_ENV=production/);
@@ -98,7 +98,7 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(operator).toMatch(/stdio vs HTTP|stdio.*HTTP/i);
     expect(operator).toMatch(/AGENT_WALLET_ENABLED/);
     expect(operator).toMatch(/## Client hosts \(stdio\)|Client hosts/i);
-    expect(operator).toMatch(/true.*product default|Product default|defaults to/i);
+    expect(operator).toMatch(/research-only default|defaults to|product default/i);
   });
 
   it("Docker packaging posture is documented after changelog flatten", () => {
@@ -120,7 +120,7 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
       bin: Record<string, string>;
     };
     expect(pkg.files).toEqual(
-      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples"]),
+      expect.arrayContaining(["dist", "README.md", "LICENSE", "docs", "examples", "scripts"]),
     );
     expect(pkg.files).not.toEqual(
       expect.arrayContaining([
@@ -153,6 +153,9 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(out).toMatch(/docs\/OPERATOR\.md/);
     expect(out).toMatch(/examples\/README\.md/);
     expect(out).toMatch(/examples\/cursor_mcp_config\.json/);
+    expect(out).toMatch(/scripts\/generate-wallet-env\.mjs/);
+    expect(out).toMatch(/scripts\/start-wallet-mcp\.mjs/);
+    expect(out).toMatch(/scripts\/install-for-host\.mjs/);
     expect(out).toMatch(/dist\/index\.js/);
     expect(out).not.toMatch(/node_modules\//);
     expect(out).not.toMatch(/(^|\/)coverage\//);

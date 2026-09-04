@@ -53,7 +53,7 @@ Confirm `dist/index.js` exists. That file is the research-only host entry.
 
 If the user only asked to install, choose **research-only first**. Promoting to wallets-on is an **explicit later step**.
 
-**Product vs agent:** the product runtime may default wallets-on when `AGENT_WALLET_ENABLED` is unset (operators who want signing immediately). That is **not** the agent first-install default — agents follow this checklist (research-only unless the user asked to sign).
+**Runtime default matches agent first-install:** `AGENT_WALLET_ENABLED` unset or `false` is research-only. Signing requires an explicit `AGENT_WALLET_ENABLED=true` plus a master key.
 
 ---
 

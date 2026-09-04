@@ -12,6 +12,10 @@ import {
   DEFAULT_PULSEX_SUBGRAPH_V2,
   DEFAULT_RPC_URL,
   DEFAULT_RPC_URLS,
+  DEFAULT_TESTNET_EXPLORER_API,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2,
+  DEFAULT_TESTNET_RPC_URLS,
 } from "../src/constants.js";
 import { ConfigError } from "../src/utils/errors.js";
 import { z } from "zod";
@@ -20,9 +24,11 @@ import { z } from "zod";
 const TEST_MASTER_KEY = "a".repeat(64);
 
 describe("loadConfig", () => {
-  it("defaults wallets on and fails without master key (product default)", () => {
-    expect(() => loadConfig({})).toThrow(ConfigError);
-    expect(() => loadConfig({})).toThrow(/MASTER_KEY|by default|research-only|false/i);
+  it("defaults research-only without master key", () => {
+    const cfg = loadConfig({});
+    expect(cfg.agentWalletEnabled).toBe(false);
+    expect(cfg.agentWalletMasterKey).toBeUndefined();
+    expect(cfg.agentWalletMultiprocStrict).toBe(false);
   });
 
   it("missing-key ConfigError steers to write-only path; never console.log randomBytes recipe", () => {
@@ -54,8 +60,15 @@ describe("loadConfig", () => {
     expect(msg).not.toMatch(/randomBytes/);
   });
 
-  it("enables wallets when unset and master key is present", () => {
+  it("master key alone does not enable wallets; ENABLED=true is required", () => {
+    const off = loadConfig({
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+    });
+    expect(off.agentWalletEnabled).toBe(false);
+    expect(off.agentWalletMultiprocStrict).toBe(false);
+
     const cfg = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
       AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
     });
     expect(cfg.agentWalletEnabled).toBe(true);
@@ -132,6 +145,7 @@ describe("loadConfig", () => {
       PULSECHAIN_RPC_URL: "https://custom-rpc.example/pls",
       PULSECHAIN_EXPLORER_API: "https://custom-scan.example/api",
       AGENT_WALLET_DIR: "/tmp/agent-wallets",
+      AGENT_WALLET_ENABLED: "true",
       AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
       HTTP_TIMEOUT_MS: "12000",
     });
@@ -142,6 +156,15 @@ describe("loadConfig", () => {
     expect(cfg.agentWalletMasterKey).toBe(TEST_MASTER_KEY);
     expect(cfg.httpTimeoutMs).toBe(12_000);
     expect(cfg.agentWalletEnabled).toBe(true);
+  });
+
+  it("uses official testnet explorer and PulseX subgraphs when NETWORK=testnet", () => {
+    const cfg = loadConfig({ PULSECHAIN_NETWORK: "testnet" });
+    expect(cfg.network).toBe("testnet");
+    expect(cfg.explorerApi).toBe(DEFAULT_TESTNET_EXPLORER_API);
+    expect(cfg.pulseXSubgraphV1).toBe(DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1);
+    expect(cfg.pulseXSubgraphV2).toBe(DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2);
+    expect(cfg.rpcUrls).toEqual([...DEFAULT_TESTNET_RPC_URLS]);
   });
 
   it("treats empty subgraph env as default public endpoints", () => {
@@ -275,6 +298,7 @@ describe("loadConfig", () => {
     ).toBe(false);
     expect(
       loadConfig({
+        AGENT_WALLET_ENABLED: "true",
         AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
       }).agentWalletMultiprocStrict,
     ).toBe(true);

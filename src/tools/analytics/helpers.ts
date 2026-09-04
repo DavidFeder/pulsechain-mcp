@@ -32,6 +32,19 @@ export function scoreToGrade(score: number): SafetyGrade {
   return "F";
 }
 
+/**
+ * Shared honesty envelope for heuristic scores / rankings.
+ * Never treat these as settlement-grade or audit-grade.
+ */
+export const HEURISTIC_SCORE_HONESTY = {
+  scoreKind: "heuristic_directional",
+  settlementGrade: false,
+  scoreNote:
+    "Directional heuristic only — not a security audit, honeypot oracle, or settlement-grade signal.",
+} as const;
+
+export type HeuristicScoreHonesty = typeof HEURISTIC_SCORE_HONESTY;
+
 export interface SafetySignals {
   /** Contract source verified on explorer */
   verified: boolean;
@@ -59,7 +72,7 @@ export function computeSafetyScore(signals: SafetySignals): {
   score: number;
   grade: SafetyGrade;
   factors: Record<string, { score: number; detail: string }>;
-} {
+} & HeuristicScoreHonesty {
   const factors: Record<string, { score: number; detail: string }> = {};
   let total = 0;
   let weightSum = 0;
@@ -176,7 +189,12 @@ export function computeSafetyScore(signals: SafetySignals): {
   const score =
     weightSum > 0 ? Math.round(Math.min(100, Math.max(0, total / weightSum))) : 50;
 
-  return { score, grade: scoreToGrade(score), factors };
+  return {
+    score,
+    grade: scoreToGrade(score),
+    factors,
+    ...HEURISTIC_SCORE_HONESTY,
+  };
 }
 
 /** Suspicious ABI / source keywords used as soft honeypot proxies. */

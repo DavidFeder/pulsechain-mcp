@@ -7,6 +7,7 @@ import {
 import {
   chainIdForConfig,
   getActiveRpcUrl,
+  getChainId,
   getRpcStatusSnapshot,
   networkMismatchForConfig,
   probeRpcEndpoints,
@@ -106,7 +107,8 @@ export function registerHealthTools(
       "activeRpcUrl = last successful request or probe — not sticky and not a permanent primary " +
       "(probe may set active to the last probed endpoint). Failover still follows list order. " +
       "Default passive (no extra RPC load). Set probe=true for one sequential eth_blockNumber " +
-      "per endpoint (max 8) — do not spam. No secrets returned.",
+      "per endpoint (max 8) plus a live eth_chainId check against configured 369/943 — do not spam. " +
+      "No secrets returned.",
     category: "health",
     inputSchema: {
       probe: z
@@ -132,12 +134,29 @@ export function registerHealthTools(
         network: cfg.network,
         primaryRpcUrl: cfg.rpcUrl,
       });
+      const configuredChainId = chainIdForConfig(cfg);
+      let rpcChainId: number | null = null;
+      let rpcChainMatch: boolean | null = null;
+      let rpcChainError: string | undefined;
+      if (probe) {
+        try {
+          rpcChainId = await getChainId(cfg);
+          rpcChainMatch = rpcChainId === configuredChainId;
+        } catch (err) {
+          rpcChainError =
+            err instanceof Error ? err.message : String(err);
+        }
+      }
       return ok({
         ...snapshot,
         probed: probe,
+        configuredChainId,
+        rpcChainId,
+        rpcChainMatch,
+        ...(rpcChainError ? { rpcChainError } : {}),
         hint: probe
-          ? "Probe completed (sequential eth_blockNumber). activeRpcUrl may now be the last probed success — primaryRpcUrl remains the configured first priority. Prefer probe=false for routine checks."
-          : "Passive snapshot only — status is unknown until endpoints see traffic or you set probe=true. primaryRpcUrl = configured priority; activeRpcUrl = last success.",
+          ? "Probe completed (sequential eth_blockNumber + live eth_chainId). activeRpcUrl may now be the last probed success — primaryRpcUrl remains the configured first priority. Prefer probe=false for routine checks. rpcChainMatch compares live eth_chainId to configured 369/943."
+          : "Passive snapshot only — status is unknown until endpoints see traffic or you set probe=true. primaryRpcUrl = configured priority; activeRpcUrl = last success. Set probe=true to compare live eth_chainId to configuredChainId.",
       });
     },
   });

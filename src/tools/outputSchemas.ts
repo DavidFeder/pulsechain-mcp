@@ -87,6 +87,10 @@ export const healthStatusDataSchema = z.object({
 export const rpcHealthDataSchema = rpcStatusSnapshotSchema.extend({
   probed: z.boolean(),
   hint: z.string(),
+  configuredChainId: z.number(),
+  rpcChainId: z.number().nullable(),
+  rpcChainMatch: z.boolean().nullable(),
+  rpcChainError: z.string().optional(),
 });
 
 /**

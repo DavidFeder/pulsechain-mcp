@@ -15,6 +15,8 @@ export {
   estimateGas,
   ethCall,
   getChainId,
+  assertLiveChainIdMatchesConfig,
+  assertLiveRpcChainMatchesConfig,
   getGasPrice,
   getFeeData,
   resetRpcClient,

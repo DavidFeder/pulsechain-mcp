@@ -13,7 +13,7 @@ This page is the **short essentials** front door only. Residual detail (launcher
 | **Research-only (agent install default)** | `dist/index.js` + `AGENT_WALLET_ENABLED=false`, omit master key | Analytics + quotes; no signing |
 | **Wallets on (when user asks to sign)** | `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` | Encrypted EOAs; funding authorizes spend |
 
-**Product vs agent default:** the runtime may treat wallets as on when `AGENT_WALLET_ENABLED` is unset (operators who want signing immediately). **Agent first-install** still follows [BOOTSTRAP.md](BOOTSTRAP.md): research-only unless the user explicitly asked to sign.
+**Runtime and agent first-install both default to research-only** (`AGENT_WALLET_ENABLED` unset or `false`). Signing is opt-in: `AGENT_WALLET_ENABLED=true` plus a master key (prefer [BOOTSTRAP.md](BOOTSTRAP.md) wallets-on path).
 
 When wallets are **enabled** in the process, a master key is required to start. Prefer write-only generation — never print or paste the key into chat or host config.
 

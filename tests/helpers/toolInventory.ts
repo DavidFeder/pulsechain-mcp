@@ -43,8 +43,8 @@ export const OUTPUT_SCHEMA_TOOL_NAMES = [
 ] as const;
 
 /** Full surface when AGENT_WALLET_ENABLED=true. */
-export const REGISTERED_TOOL_COUNT_WALLETS_ON = 96;
+export const REGISTERED_TOOL_COUNT_WALLETS_ON = 97;
 
-/** Research-only: 96 minus the 9 write tools. */
+/** Research-only: 97 minus the 9 write tools. */
 export const REGISTERED_TOOL_COUNT_RESEARCH_ONLY =
   REGISTERED_TOOL_COUNT_WALLETS_ON - WALLET_WRITE_TOOL_NAMES.length;

@@ -47,6 +47,7 @@ export const PULSECHAIN_TESTNET_CHAIN_ID = 943 as const;
  */
 export const DEFAULT_TESTNET_RPC_URLS = [
   "https://rpc-testnet-pulsechain.g4mm4.io",
+  "https://rpc.v4.testnet.pulsechain.com",
 ] as const;
 
 /**
@@ -71,6 +72,15 @@ export const DEFAULT_EXPLORER_API = "https://api.scan.pulsechain.com/api";
 export const DEFAULT_EXPLORER_UI = "https://scan.pulsechain.com";
 
 /**
+ * Official PulseChain testnet v4 BlockScout (chain 943).
+ * UI: https://scan.v4.testnet.pulsechain.com
+ */
+export const DEFAULT_TESTNET_EXPLORER_API =
+  "https://api.scan.v4.testnet.pulsechain.com/api";
+export const DEFAULT_TESTNET_EXPLORER_UI =
+  "https://scan.v4.testnet.pulsechain.com";
+
+/**
  * Official public PulseX subgraph endpoints (The Graph on PulseChain).
  * V1 = INC farm / buy-and-burn fee model; V2 = standard LP fee DEX.
  */
@@ -78,6 +88,15 @@ export const DEFAULT_PULSEX_SUBGRAPH_V1 =
   "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex";
 export const DEFAULT_PULSEX_SUBGRAPH_V2 =
   "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2";
+
+/**
+ * Official PulseX subgraphs on PulseChain testnet v4 (same path names as mainnet).
+ * Verified live: `_meta.block` responds on both hosts.
+ */
+export const DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1 =
+  "https://graph.v4.testnet.pulsechain.com/subgraphs/name/pulsechain/pulsex";
+export const DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2 =
+  "https://graph.v4.testnet.pulsechain.com/subgraphs/name/pulsechain/pulsexv2";
 
 export const DEFAULT_LOG_LEVEL = "info" as const;
 
@@ -362,7 +381,7 @@ export const EP_NAMING_RULES = [
 export const RO_RESEARCH_GUIDANCE = {
   title: "PulseChain MCP read-only research guidance",
   version_note:
-    "Ship with SERVER_VERSION; wallets on by default (master key required); set AGENT_WALLET_ENABLED=false for research-only",
+    "Ship with SERVER_VERSION; research-only by default (AGENT_WALLET_ENABLED unset/false); set AGENT_WALLET_ENABLED=true and a master key to sign",
   principles: [
     "Address identity always beats ticker — verify the 0x before acting on a symbol.",
     ...EP_NAMING_RULES,

@@ -85,6 +85,8 @@ describe("advanced-helpers pure risk/scam", () => {
     expect(["high", "critical"]).toContain(scored.riskLevel);
     expect(scored.signals.some((s) => s.id === "burst_deployer")).toBe(true);
     expect(scored.method).toContain("Public heuristics");
+    expect(scored.settlementGrade).toBe(false);
+    expect(scored.scoreKind).toBe("heuristic_directional");
   });
 
   it("scoreAddressRisk is low for known core addresses", () => {
@@ -139,6 +141,13 @@ describe("advanced-helpers pure risk/scam", () => {
     );
     expect(alerts.some((a) => a.type === "liquidity_pull_signal")).toBe(true);
     expect(method).toContain("PulseX subgraph");
+    const detected = detectScamAlerts({
+      nowSec: now,
+      pairs: [],
+      burns: [],
+    });
+    expect(detected.settlementGrade).toBe(false);
+    expect(detected.scoreKind).toBe("heuristic_directional");
   });
 
   it("detectScamAlerts uses sanitized liquidity so absurd reserveUSD cannot suppress alerts", () => {

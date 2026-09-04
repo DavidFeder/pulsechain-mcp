@@ -28,7 +28,7 @@ describe("v0.1.2 polish", () => {
       expect(err).toBeInstanceOf(ConfigError);
       expect((err as ConfigError).code).toBe("CONFIG_ERROR");
       expect((err as Error).message).toMatch(/MASTER_KEY/);
-      expect((err as Error).message).toMatch(/\.env\.example|false|research-only|by default/i);
+      expect((err as Error).message).toMatch(/\.env\.example|false|research-only|ENABLED/i);
     }
   });
 
@@ -72,8 +72,14 @@ describe("v0.1.2 polish", () => {
     expect(killed.reasons.some((r) => /kill/i.test(r))).toBe(true);
   });
 
-  it("default is wallets on with master key; research-only via false; multi RPC includes g4mm4", () => {
+  it("default is research-only; wallets on requires ENABLED=true; multi RPC includes g4mm4", () => {
+    const implicit = loadConfig({
+      AGENT_WALLET_MASTER_KEY: "d".repeat(64),
+    });
+    expect(implicit.agentWalletEnabled).toBe(false);
+
     const on = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
       AGENT_WALLET_MASTER_KEY: "d".repeat(64),
     });
     expect(on.agentWalletEnabled).toBe(true);

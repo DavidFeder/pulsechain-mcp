@@ -92,7 +92,8 @@ export function registerAdvancedAnalyticsTools(
       "Heuristic risk signals for a PulseChain address from public data only. " +
       "Methodology: explorer txlist (age, fail rate, funders, contract creates) + " +
       "known CORE_TOKENS/POPULAR_CONTRACTS allowlist. No private openpulsechain backend. " +
-      "Returns riskScore 0–100, signals[], confidence, and method. Approximate — not a blacklist.",
+      "Returns riskScore 0–100, signals[], confidence, and method. " +
+      "Heuristic/directional only — not a blacklist or settlement-grade score.",
     category: "analytics",
     inputSchema: {
       address: addressSchema,
@@ -300,7 +301,7 @@ export function registerAdvancedAnalyticsTools(
       "Recent suspicious PulseX tokens/pairs from public subgraph heuristics only. " +
       "Signals: (1) young pairs with volume>>liquidity, (2) thin-reserve high-tx pairs, " +
       "(3) large LP burns vs remaining reserves (liquidity-pull). " +
-      "Each alert includes confidence + method. Not a definitive scam oracle.",
+      "Each alert includes confidence + method. Heuristic/directional only — not a definitive scam oracle or settlement-grade feed.",
     category: "analytics",
     inputSchema: {
       first: z.number().int().min(5).max(50).default(25),

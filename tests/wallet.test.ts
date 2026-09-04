@@ -53,6 +53,12 @@ function tempWalletDir(): string {
   return d;
 }
 
+function mockLiveChainId() {
+  vi.spyOn(rpc, "assertLiveRpcChainMatchesConfig").mockImplementation(
+    async (cfg) => (cfg.network === "testnet" ? 943 : 369),
+  );
+}
+
 afterEach(() => {
   setTestBroadcast(null);
   vi.restoreAllMocks();
@@ -523,6 +529,7 @@ describe("wallet store + create (no key leak)", () => {
   });
 
   it("transfer_pls is blocked by kill switch without key leak", async () => {
+    mockLiveChainId();
     const cfg = testConfig();
     const info = await createAgentWallet(cfg);
 
@@ -739,6 +746,7 @@ describe("wallet store + create (no key leak)", () => {
       maxFeePerGas: "100000000000000",
       maxPriorityFeePerGas: "1000000000",
     });
+    mockLiveChainId();
     let broadcasted = false;
     setTestBroadcast(async () => {
       broadcasted = true;

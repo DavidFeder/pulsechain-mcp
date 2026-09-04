@@ -2,10 +2,14 @@
  * Configured chain id (369/943) on reports, prepare payloads, health, and resources.
  */
 import { afterEach, describe, expect, it } from "vitest";
+import { loadConfig } from "../src/config.js";
 import {
   DEFAULT_EXPLORER_API,
   DEFAULT_PULSEX_SUBGRAPH_V1,
   DEFAULT_PULSEX_SUBGRAPH_V2,
+  DEFAULT_TESTNET_EXPLORER_API,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1,
+  DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2,
 } from "../src/constants.js";
 import {
   MAINNET_ONLY_AGGREGATOR_WARNING,
@@ -99,6 +103,17 @@ describe("networkMismatchForConfig", () => {
         }),
       ),
     ).toBeUndefined();
+  });
+
+  it("is absent on loadConfig testnet (official testnet explorer/subgraph defaults)", () => {
+    const cfg = loadConfig({
+      AGENT_WALLET_ENABLED: "false",
+      PULSECHAIN_NETWORK: "testnet",
+    });
+    expect(cfg.explorerApi).toBe(DEFAULT_TESTNET_EXPLORER_API);
+    expect(cfg.pulseXSubgraphV1).toBe(DEFAULT_TESTNET_PULSEX_SUBGRAPH_V1);
+    expect(cfg.pulseXSubgraphV2).toBe(DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2);
+    expect(networkMismatchForConfig(cfg)).toBeUndefined();
   });
 
   it("is present on testnet with default mainnet explorer", () => {
@@ -221,7 +236,7 @@ describe("pulsechain://chain/config resource", () => {
     };
     expect(testJson.chainId).toBe(943);
     expect(testJson.active.chainId).toBe(943);
-    expect(testJson.networkMismatch?.warning).toMatch(/mainnet defaults/i);
+    expect(testJson.networkMismatch?.warning).toMatch(/mainnet hosts|mainnet defaults/i);
 
     const aliasJson = JSON.parse(
       (

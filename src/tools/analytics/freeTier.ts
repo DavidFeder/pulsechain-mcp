@@ -53,6 +53,7 @@ import {
   bucketHoldersByLeague,
   buildTokenInfoPayload,
   computeSafetyScore,
+  HEURISTIC_SCORE_HONESTY,
   isoDateFromUnix,
   mapPairsWithSaneLiquidity,
   num,
@@ -383,7 +384,8 @@ export function registerFreeTierAnalyticsTools(
       "Top PulseX tokens by volume, liquidity, or transaction count " +
       "(subgraph orderBy). Public PulseX data. Catalogued addresses include " +
       "display_symbol / token_origin (e.g. pHEX vs eHEX, pDAI vs DAI) — never invented for unknowns. " +
-      "liquidity_usd_estimate demotes absurd subgraph derivedUSD products (not invented ranks).",
+      "liquidity_usd_estimate demotes absurd subgraph derivedUSD products (not invented ranks). " +
+      "Ranking is heuristic/directional — not settlement-grade.",
     category: "analytics",
     inputSchema: {
       sort_by: z
@@ -469,6 +471,8 @@ export function registerFreeTierAnalyticsTools(
           : {}),
         source: "PulseX subgraph",
         subgraph: version,
+        rankingKind: HEURISTIC_SCORE_HONESTY.scoreKind,
+        settlementGrade: HEURISTIC_SCORE_HONESTY.settlementGrade,
       });
     },
   });
@@ -482,7 +486,8 @@ export function registerFreeTierAnalyticsTools(
       "Catalogued token sides include token0/1_display_symbol and token0/1_origin " +
       "(e.g. pHEX/eHEX, pDAI/DAI). " +
       "IMPORTANT: token0_price and token1_price are pair-relative (token1 per token0 / inverse), " +
-      "NOT USD — prefer reserves, get_token_price, or DexScreener by address for pricing.",
+      "NOT USD — prefer reserves, get_token_price, or DexScreener by address for pricing. " +
+      "Ranking is heuristic/directional — not settlement-grade.",
     category: "analytics",
     inputSchema: {
       sort_by: z
@@ -562,6 +567,8 @@ export function registerFreeTierAnalyticsTools(
           .join(". "),
         price_fields_note: PAIR_PRICE_FIELDS_NOTE,
         source: "PulseX subgraph",
+        rankingKind: HEURISTIC_SCORE_HONESTY.scoreKind,
+        settlementGrade: HEURISTIC_SCORE_HONESTY.settlementGrade,
         subgraph: version,
       });
     },
@@ -838,6 +845,7 @@ export function registerFreeTierAnalyticsTools(
         confidence: "medium",
         subgraph: version,
         source: "public BlockScout + PulseX + RPC",
+        ...HEURISTIC_SCORE_HONESTY,
       });
     },
   });
@@ -991,6 +999,7 @@ export function registerFreeTierAnalyticsTools(
         confidence: "low",
         subgraph: version,
         source: "PulseX subgraph + BlockScout ABI",
+        ...HEURISTIC_SCORE_HONESTY,
       });
     },
   });
