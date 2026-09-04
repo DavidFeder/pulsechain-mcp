@@ -3,8 +3,7 @@
  * create via shipped service, status/list visibility, no secret leakage,
  * wallets-off refuse. Mirrors .env.wallet.example posture without committing secrets.
  *
- * Templates omit MAX_PLS_* product knobs (operator-trust; funding authorizes).
- * Optional legacy env parse still works when operators set values.
+ * Templates omit spend-cap knobs (operator-trust; funding authorizes).
  */
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,10 +23,6 @@ import type { AppConfig } from "../src/types.js";
 const PRIVATE_KEY_HEX_RE = /0x[a-fA-F0-9]{64}/;
 const SECRET_FIELD_RE =
   /"privateKey"|"private_key"|"mnemonic"|"encryptedKey"|"ciphertext"|"masterKey"|"agentWalletMasterKey"/i;
-
-/** Optional legacy parse values used only in loadConfig compatibility checks. */
-const LEGACY_MAX_PLS_PER_TX = 500;
-const LEGACY_MAX_PLS_DAILY = 2000;
 
 const tempDirs: string[] = [];
 
@@ -57,9 +52,6 @@ function labConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempWalletDir(),
     agentWalletMultiprocStrict: true,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: LEGACY_MAX_PLS_PER_TX,
-    maxPlsDaily: LEGACY_MAX_PLS_DAILY,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -77,7 +69,7 @@ function assertNoSecrets(payload: unknown, masterKey?: string): void {
 }
 
 describe("optional agent wallet path (shipped service)", () => {
-  it("loadConfig accepts wallet env posture (enabled + strict + unique dir; optional legacy caps)", () => {
+  it("loadConfig accepts wallet env posture (enabled + strict + unique dir)", () => {
     const dir = tempWalletDir();
     const master = randomBytes(32).toString("hex");
     const cfg = loadConfig({
@@ -85,16 +77,14 @@ describe("optional agent wallet path (shipped service)", () => {
       AGENT_WALLET_MASTER_KEY: master,
       AGENT_WALLET_DIR: dir,
       AGENT_WALLET_MULTIPROC_STRICT: "true",
-      MAX_PLS_PER_TX: String(LEGACY_MAX_PLS_PER_TX),
-      MAX_PLS_DAILY: String(LEGACY_MAX_PLS_DAILY),
       LOG_LEVEL: "error",
     });
     expect(cfg.agentWalletEnabled).toBe(true);
     expect(cfg.agentWalletMultiprocStrict).toBe(true);
     expect(cfg.agentWalletDir).toBe(dir);
     expect(cfg.agentWalletMasterKey).toBe(master);
-    expect(cfg.maxPlsPerTx).toBe(LEGACY_MAX_PLS_PER_TX);
-    expect(cfg.maxPlsDaily).toBe(LEGACY_MAX_PLS_DAILY);
+    expect(cfg).not.toHaveProperty("maxPlsPerTx");
+    expect(cfg).not.toHaveProperty("maxPlsDaily");
   });
 
   it("wallets-on MULTIPROC unset/empty defaults true; explicit false stays warn-only", () => {
@@ -162,24 +152,23 @@ describe("optional agent wallet path (shipped service)", () => {
       headline: string;
       nextAction: string;
       policyPosture: string;
-      defaultCaps: { maxPlsPerTx: number; maxPlsDaily: number };
+      fundingAuthorizesSpend: boolean;
       bullets: string[];
     };
     expect(status.enabled).toBe(true);
     expect(status.walletDir).toBe(dir);
     expect(status.masterKeyConfigured).toBe(true);
     expect(status.walletCount).toBe(1);
-    expect(status.maxPlsPerTxDefault).toBe(LEGACY_MAX_PLS_PER_TX);
-    expect(status.maxPlsDailyDefault).toBe(LEGACY_MAX_PLS_DAILY);
+    expect(status.fundingAuthorizesSpend).toBe(true);
+    expect(status.maxPlsPerTxDefault).toBeUndefined();
+    expect(status.maxPlsDailyDefault).toBeUndefined();
     expect(glance.walletsEnabled).toBe(true);
     expect(glance.multiprocMode).toBe("strict-fail-closed");
     expect(glance.walletCount).toBe(1);
     expect(glance.headline).toMatch(/Wallets ON/i);
     expect(glance.policyPosture).toBe("operator_trust");
-    expect(glance.defaultCaps).toEqual({
-      maxPlsPerTx: LEGACY_MAX_PLS_PER_TX,
-      maxPlsDaily: LEGACY_MAX_PLS_DAILY,
-    });
+    expect(glance.fundingAuthorizesSpend).toBe(true);
+    expect(glance.defaultCaps).toBeUndefined();
     // Gas-aware + operator-trust guidance must surface on wallet status
     const bulletText = glance.bullets.join(" ");
     expect(bulletText).toMatch(/EIP-1559|BEATS|PulseChain/i);
@@ -201,19 +190,17 @@ describe("optional agent wallet path (shipped service)", () => {
     const listed = listAgentWallets(cfg);
     expect(listed).toHaveLength(1);
     expect(listed[0]!.address.toLowerCase()).toBe(created.address.toLowerCase());
-    // H2: list surfaces mark legacy maxPls* display-only (not hard gates)
-    expect(listed[0]!.legacyCapsDisplayOnly).toBe(true);
-    expect(listed[0]!.legacyCapsNote).toMatch(/display-only|operator-trust|funding/i);
+    expect(listed[0]!.fundingAuthorizesSpend).toBe(true);
+    expect(listed[0]!.legacyCapsDisplayOnly).toBeUndefined();
     assertNoSecrets(listed, master);
 
     const info = await getAgentWalletInfo(cfg, created.id, {
       includeBalance: false,
     });
     expect(info.address.toLowerCase()).toBe(created.address.toLowerCase());
-    expect(info.legacyCapsDisplayOnly).toBe(true);
-    expect(info.legacyCapsNote).toMatch(/display-only|operator-trust|funding/i);
-    // Caps remain present as legacy fields but are not re-enabled as hard gates
-    expect(typeof info.policy.maxPlsPerTx).toBe("number");
+    expect(info.fundingAuthorizesSpend).toBe(true);
+    expect(info.legacyCapsDisplayOnly).toBeUndefined();
+    expect(info.policy).toEqual({ enabled: true, killed: false });
     assertNoSecrets(info, master);
 
     // On-disk: encrypted record only; master key not stored

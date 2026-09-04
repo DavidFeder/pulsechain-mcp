@@ -92,9 +92,6 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 100,
-    maxPlsDaily: 1000,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -187,7 +184,7 @@ describe("parsePlsToWei / normalizePlsDecimal (shipped value path)", () => {
   it("evaluatePolicy tracks projected daily spend in wei without hard-denying over legacy caps", () => {
     const day = new Date().toISOString().slice(0, 10);
     const check = evaluatePolicy({
-      policy: DEFAULT_POLICY(1, 1), // legacy display caps only
+      policy: DEFAULT_POLICY(),
       dailySpend: {
         date: day,
         spentPls: 0.6,
@@ -215,11 +212,7 @@ describe("parsePlsToWei / normalizePlsDecimal (shipped value path)", () => {
     };
     ledger = addSpendWei(ledger, parsePlsToWei("0.1"));
     const check = evaluatePolicy({
-      policy: {
-        ...DEFAULT_POLICY(1, 1),
-        maxPlsPerTx: 1,
-        maxPlsDaily: 0.3 as unknown as number,
-      },
+      policy: DEFAULT_POLICY(),
       dailySpend: ledger,
       to: "0x0000000000000000000000000000000000000001",
       valueWei: parsePlsToWei("0.2"),
@@ -268,7 +261,7 @@ describe("withWalletLock (shipped serialization)", () => {
   });
 
   it("second concurrent execute of same proposal fails closed after first succeeds", async () => {
-    const cfg = testConfig({ maxPlsPerTx: 50, maxPlsDaily: 100 });
+    const cfg = testConfig();
     mockRpcEoa();
 
     // Drive withWalletLock + proposal status re-check (same primitive execute uses):
@@ -372,8 +365,6 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
         destinationIsContract: false,
         valuePls: 0,
         projectedDailySpend: 0,
-        remainingDaily: 1,
-        allowlistExpired: false,
       },
       status: "pending" as const,
       chainId: 369,
@@ -412,10 +403,9 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
         alg: "aes-256-gcm" as const,
       },
       policy: {
-        ...DEFAULT_POLICY(10, 100),
+        ...DEFAULT_POLICY(),
         killed: true,
         enabled: false,
-        contractAllowlist: [] as `0x${string}`[],
       },
       dailySpend: { date: day, spentPls: 0, spentWei: "0" },
       tokenDailySpend: {},
@@ -431,7 +421,7 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
   });
 
   it("concurrent kill_switch + execute leaves wallet killed (shipped lock path)", async () => {
-    const cfg = testConfig({ maxPlsPerTx: 50, maxPlsDaily: 100 });
+    const cfg = testConfig();
     mockRpcEoa();
 
     let releaseSend!: (h: `0x${string}`) => void;
@@ -476,11 +466,11 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
     const final = loadWalletRecord(cfg.agentWalletDir, w.id);
     expect(final.policy.killed).toBe(true);
     expect(final.policy.enabled).toBe(false);
-    expect(final.policy.contractAllowlist).toEqual([]);
+    expect(final.policy).toEqual({ enabled: false, killed: true });
   });
 
   it("execute merge preserves mid-broadcast disk kill (stale full-record overwrite fixed)", async () => {
-    const cfg = testConfig({ maxPlsPerTx: 50, maxPlsDaily: 100 });
+    const cfg = testConfig();
     mockRpcEoa();
 
     const w = await createAgentWallet(cfg);
@@ -499,9 +489,6 @@ describe("v0.1.5 kill/policy lock + execute durability", () => {
         ...rec.policy,
         killed: true,
         enabled: false,
-        contractAllowlist: [],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
       };
       saveWalletRecord(cfg.agentWalletDir, rec);
       return FAKE_HASH;
@@ -622,8 +609,6 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
         destinationIsContract: false,
         valuePls: 0,
         projectedDailySpend: 0,
-        remainingDaily: 1,
-        allowlistExpired: false,
       },
       status: "pending",
     };
@@ -653,8 +638,7 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
         alg: "aes-256-gcm" as const,
       },
       policy: {
-        ...DEFAULT_POLICY(10, 100),
-        contractAllowlist: [] as `0x${string}`[],
+        ...DEFAULT_POLICY(),
       },
       dailySpend: { date: day, spentPls: 0, spentWei: "0" },
       tokenDailySpend: {},
@@ -842,7 +826,7 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
     ).toBe(true);
   });
 
-  it("settle without txHash fails closed; settle without confirm fails closed", async () => {
+  it("settle without txHash fails closed", async () => {
     const cfg = testConfig();
     mockRpcEoa();
     const w = await createAgentWallet(cfg);
@@ -852,16 +836,13 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
       valuePls: 0,
       data: "0x",
     });
-    await expect(settleInterruptedBroadcast(cfg, proposal.id, true)).rejects.toThrow(
+    await expect(settleInterruptedBroadcast(cfg, proposal.id)).rejects.toThrow(
       /without txHash|Cannot settle/i,
-    );
-    await expect(settleInterruptedBroadcast(cfg, proposal.id, false)).rejects.toThrow(
-      /confirm=true/i,
     );
   });
 
   it("set_agent_policy under lock is not undone by concurrent execute save", async () => {
-    const cfg = testConfig({ maxPlsPerTx: 50, maxPlsDaily: 100 });
+    const cfg = testConfig();
     mockRpcEoa();
 
     let releaseSend!: (h: `0x${string}`) => void;
@@ -890,16 +871,15 @@ describe("v0.1.17 post-broadcast durability + recovery", () => {
 
     // Tighten caps while execute holds lock (queued; maxPerTx must stay <= daily)
     const policyP = setAgentPolicy(cfg, w.id, {
-      maxPlsPerTx: 2,
-      maxPlsDaily: 3,
+      enabled: true,
     });
     releaseSend(FAKE_HASH);
     const settled = await Promise.allSettled([execP, policyP]);
     expect(settled[1].status).toBe("fulfilled");
 
     const final = loadWalletRecord(cfg.agentWalletDir, w.id);
-    expect(final.policy.maxPlsDaily).toBe(3);
-    expect(final.policy.maxPlsPerTx).toBe(2);
+    expect(final.policy.enabled).toBe(true);
+    expect(final.policy.killed).toBe(false);
   });
 
   it("atomicWriteJson produces readable JSON at target path", () => {

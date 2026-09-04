@@ -168,7 +168,7 @@ Call **after** reload, in order:
 2. **`agent_wallet_status`** — flags only (`masterKeyConfigured`, enabled, dir); **no** private key, master key, or ciphertext  
 3. Optional: `get_rpc_health`, `get_token_balance`, or `dexscreener_search`  
 
-When wallets are on: **funding authorizes** (operator-trust); legacy `maxPls*` on list/info are **display-only** — not hard send gates; use `kill_switch` in emergencies. Do **not** fund during bootstrap smoke.
+When wallets are on: **funding authorizes** (operator-trust) — if you later fund a wallet, the agent can spend it. Use `kill_switch` in emergencies. Do **not** fund during bootstrap smoke.
 
 If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, research-only or launcher+`.env.wallet`, and check host stderr for `CONFIG_ERROR`.
 

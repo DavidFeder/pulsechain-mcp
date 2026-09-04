@@ -437,10 +437,7 @@ describe("Piteas tool registration", () => {
       agentWalletEnabled: false,
       agentWalletDir: "./data/wallets-test",
       agentWalletMultiprocStrict: false,
-      agentWalletEnforceLegacyCaps: false,
-      maxPlsPerTx: 100,
-      maxPlsDaily: 1000,
-      logLevel: "error" as const,
+        logLevel: "error" as const,
     };
     registerAllTools(server as never, cfg as AppConfig);
     expect(names).toContain("piteas_quote");

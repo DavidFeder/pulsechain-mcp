@@ -43,9 +43,6 @@ function testConfig(): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: true,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 1,
-    maxPlsDaily: 5,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -94,7 +91,7 @@ describe("operator-trust wallet path (shipped)", () => {
 
     expect(walletsOn).toMatch(/operator-trust agent wallets/i);
     expect(walletsOn).toMatch(/funding authorizes/i);
-    expect(walletsOn).toMatch(/confirm=true \/ MRTR is host UX only/i);
+    expect(walletsOn).toMatch(/no spend caps/i);
 
     expect(researchOnly).toMatch(/analytics and chain reads/i);
     expect(researchOnly).toMatch(/Write and signing tools refuse/i);
@@ -106,11 +103,11 @@ describe("operator-trust wallet path (shipped)", () => {
     expect(walletsOn).not.toBe(researchOnly);
   });
 
-  it("evaluatePolicy marks legacy caps display-only and still allows over-cap", () => {
+  it("evaluatePolicy allows large native value (no remaining-cap field)", () => {
     const amountPls = 50_000;
     const valueWei = parsePlsToWei(amountPls);
     const check = evaluatePolicy({
-      policy: DEFAULT_POLICY(1, 5),
+      policy: DEFAULT_POLICY(),
       dailySpend: {
         date: new Date().toISOString().slice(0, 10),
         spentPls: 0,
@@ -123,14 +120,14 @@ describe("operator-trust wallet path (shipped)", () => {
       destinationIsContract: false,
     });
     expect(check.allowed).toBe(true);
-    expect(check.legacyCapsDisplayOnly).toBe(true);
-    // remainingDaily can be 0 while still allowed (display only)
-    expect(check.remainingDaily).toBe(0);
+    expect(check.legacyCapsDisplayOnly).toBeUndefined();
+    expect(check.remainingDaily).toBeUndefined();
+    expect(check.projectedDailySpend).toBe(amountPls);
   });
 
   it("allows contract call with empty allowlist (was deny-by-default)", () => {
     const check = evaluatePolicy({
-      policy: DEFAULT_POLICY(1, 5),
+      policy: DEFAULT_POLICY(),
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
       valueWei: 0n,
@@ -147,7 +144,7 @@ describe("operator-trust wallet path (shipped)", () => {
     const amountPls = 50_000;
     const valueWei = parsePlsToWei(amountPls);
     const check = evaluatePolicy({
-      policy: DEFAULT_POLICY(1, 5),
+      policy: DEFAULT_POLICY(),
       dailySpend: {
         date: new Date().toISOString().slice(0, 10),
         spentPls: 0,

@@ -209,18 +209,6 @@ describe("router liquidity notional (shipped inspectTokenNotional)", () => {
       policy: {
         enabled: true,
         killed: false,
-        maxPlsPerTx: 1000,
-        maxPlsDaily: 10000,
-        contractAllowlist: [PULSEX_V2_ROUTER.toLowerCase() as `0x${string}`],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {
-          [tokenA.toLowerCase()]: parseEther("5").toString(), // below desired 10
-        },
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -231,12 +219,12 @@ describe("router liquidity notional (shipped inspectTokenNotional)", () => {
     });
     expect(check.allowed).toBe(true);
     expect(check.tokenNotional?.pattern).toBe("router.addLiquidity");
-    expect(check.tokenNotional?.notes.join(" ")).toMatch(/Operator-trust/i);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 });
 
 describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", () => {
-  it("inspect path: known addLiquidity → proceed_with_confirm + explanations", () => {
+  it("inspect path: known addLiquidity → decodeComplete + explanations", () => {
     const data = encodeFunctionData({
       abi: liquidityAbi,
       functionName: "addLiquidityETH",
@@ -254,7 +242,7 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       valueWei,
       inspection,
     });
-    expect(intent.agentGuidance).toBe("proceed_with_confirm");
+    expect(intent.decodeComplete).toBe(true);
     expect(intent.decodeKnowledge.status).toBe("known_priority");
     expect(intent.movementExplanations.length).toBeGreaterThan(0);
     expect(intent.movementExplanations.join(" ")).toMatch(/liquidity|native/i);
@@ -262,7 +250,7 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
     expect(JSON.stringify(intent)).not.toMatch(/privateKey|masterKey/i);
   });
 
-  it("unknown selector → review_carefully (not silent safe)", () => {
+  it("unknown selector → decodeComplete false (not a send gate)", () => {
     const inspection = inspectTokenNotional({
       to: PULSEX_V2_ROUTER,
       data: "0x12345678" + "00".repeat(64),
@@ -274,12 +262,11 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       valueWei: "0",
       inspection,
     });
-    expect(intent.agentGuidance).toBe("review_carefully");
+    expect(intent.decodeComplete).toBe(false);
     expect(intent.decodeKnowledge.status).toBe("unknown");
-    expect(intent.decodeKnowledge.unknownMayBypassNotionalCaps).toBe(true);
   });
 
-  it("truncated priority selector → review_carefully (advisory, not hard refuse)", () => {
+  it("truncated priority selector → decodeComplete false (not a send gate)", () => {
     const inspection = inspectTokenNotional({
       to: tokenA,
       data: TOKEN_NOTIONAL_SELECTORS.transfer + "00".repeat(4),
@@ -289,7 +276,7 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       data: TOKEN_NOTIONAL_SELECTORS.transfer + "00".repeat(4),
       inspection,
     });
-    expect(intent.agentGuidance).toBe("review_carefully");
+    expect(intent.decodeComplete).toBe(false);
     expect(intent.decodeKnowledge.status).toBe("truncated_or_invalid");
   });
 
@@ -298,16 +285,6 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       policy: {
         enabled: true,
         killed: false,
-        maxPlsPerTx: 10,
-        maxPlsDaily: 100,
-        contractAllowlist: [],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {},
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -324,27 +301,17 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       policyCheck: check,
       context: "propose",
     });
-    expect(summary.agentGuidance).toBe("proceed_with_confirm");
+    expect(summary.agentGuidance).toBe("ready");
     expect(summary.decodeKnowledge.status).toBe("empty");
     expect(summary.movementExplanations).toEqual([]);
     expect(summary.safetyHints.length).toBeGreaterThan(0);
   });
 
-  it("kill-switch deny sets agentGuidance refuse", () => {
+  it("kill-switch deny sets agentGuidance blocked", () => {
     const check = evaluatePolicy({
       policy: {
         enabled: false,
         killed: true,
-        maxPlsPerTx: 0.1,
-        maxPlsDaily: 100,
-        contractAllowlist: [],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {},
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -360,6 +327,6 @@ describe("agent intelligence (shipped buildAgentIntentView / reviewSummary)", ()
       context: "propose",
     });
     expect(summary.decision).toBe("deny");
-    expect(summary.agentGuidance).toBe("refuse");
+    expect(summary.agentGuidance).toBe("blocked");
   });
 });

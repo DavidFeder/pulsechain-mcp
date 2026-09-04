@@ -1,17 +1,11 @@
 /**
- * Encrypted agent wallet tools (operator-trust model, v0.1.38+).
+ * Encrypted agent wallet tools.
  *
- * SECURITY:
- * - Private keys are AES-256-GCM encrypted at rest and NEVER returned in
- *   tool responses, logs, or error messages.
- * - All write/signing tools require AGENT_WALLET_ENABLED=true.
- * - Operator-trust (product default): funding the agent is authorization.
- *   Hard spend caps and deny-by-default allowlists are NOT safety backstops
- *   unless AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1 (opt-in on this process).
- * - Optional kill_switch / enabled=false remain emergency operator controls.
+ * - Private keys are AES-256-GCM encrypted at rest and NEVER returned.
+ * - Write/signing tools require AGENT_WALLET_ENABLED=true.
+ * - Funding the agent is authorization. No spend caps or allowlists.
+ * - kill_switch / enabled=false stop signing.
  * - Transactions are simulated (estimateGas / eth_call) before broadcast.
- * - Confirm is dual-path: confirm=true arg (legacy/scripts) OR MRTR
- *   InputRequiredResult elicitation with HMAC-signed requestState (host UX).
  */
 
 import { z } from "zod";
@@ -24,7 +18,6 @@ import {
   buildTxReviewSummary,
   createAgentWallet,
   executeAgentTx,
-  formatConfirmPrompt,
   getAgentWalletInfo,
   inspectTokenNotional,
   killSwitch,
@@ -35,7 +28,7 @@ import {
   settleInterruptedBroadcast,
 } from "../../wallet/index.js";
 import { evaluatePolicy } from "../../wallet/policy.js";
-import { loadProposal, loadWalletRecord } from "../../wallet/store.js";
+import { loadWalletRecord } from "../../wallet/store.js";
 import { PolicyError } from "../../utils/errors.js";
 import { ok } from "../../utils/result.js";
 import {
@@ -43,25 +36,15 @@ import {
   assertPositiveAmount,
   neverReturnPrivateKey,
 } from "../../utils/safety.js";
-import {
-  policySnapshotId,
-  proposalExecutionIntentArgs,
-  assertSameExecutionIntent,
-  readVerifiedConfirmState,
-  requireConfirmOrInput,
-} from "../../utils/confirm.js";
 import { registerTool, type RegisterToolOptions } from "../define.js";
 import { walletToolOutputSchema } from "../outputSchemas.js";
 import { parsePlsToWei } from "../../wallet/value.js";
 
-/** Extra security banner for every wallet write tool description. */
 export const WALLET_SECURITY_WARNING =
-  "SECURITY WARNING: Private keys are encrypted (AES-256-GCM) at rest and " +
-  "NEVER returned in tool responses or logs. Operator-trust mode: funding the " +
-  "agent is authorization — there is no hard spend-cap or deny-by-default " +
-  "allowlist safety backstop. Requires AGENT_WALLET_ENABLED=true. Confirm via " +
-  "confirm=true (legacy/scripts) or modern MRTR InputRequiredResult elicitation " +
-  "(host UX only). Optional kill_switch/revoke immediately disable signing.";
+  "Private keys are encrypted (AES-256-GCM) at rest and NEVER returned in " +
+  "tool responses or logs. Funding the agent is authorization — there are no " +
+  "spend caps or allowlists. Requires AGENT_WALLET_ENABLED=true. " +
+  "Use kill_switch/revoke to stop signing.";
 
 const addressSchema = z
   .string()
@@ -78,19 +61,6 @@ const proposalIdSchema = z
   .regex(/^prop_[a-f0-9]{24}$/)
   .describe("Proposal id (prop_…)");
 
-/** Dual-protocol confirm: arg path or MRTR elicitation. */
-const confirmSchema = z
-  .boolean()
-  .optional()
-  .describe(
-    "Pass true to authorize (legacy/script path). Modern MRTR clients may omit " +
-      "this and complete the server's confirm elicitation (InputRequiredResult) instead.",
-  );
-
-/**
- * PLS amount for tool args: number (JSON decimals like 0.1) or plain decimal string.
- * Parsed via parsePlsToWei (rejects scientific notation).
- */
 const plsAmountSchema = z
   .union([
     z.number().finite().nonnegative(),
@@ -116,11 +86,9 @@ const plsAmountPositiveSchema = z
   );
 
 function withWalletSecurity(description: string): string {
-  // WRITE_TOOL_WARNING is appended by registerTool when write=true
   return `${description}\n\n⚠️ ${WALLET_SECURITY_WARNING}`;
 }
 
-/** Wallet surface always advertises the ToolResult envelope (no secret fields). */
 function registerWalletTool(
   server: McpServer,
   config: AppConfig,
@@ -132,59 +100,6 @@ function registerWalletTool(
   });
 }
 
-function snapshotForWallet(
-  cfg: AppConfig,
-  walletId: string | undefined,
-  opts?: { required?: boolean },
-): string {
-  if (!walletId) {
-    if (opts?.required) {
-      throw new PolicyError(
-        "Confirmation cannot bind a policy snapshot without a wallet id.",
-      );
-    }
-    return "none";
-  }
-  try {
-    const record = loadWalletRecord(cfg.agentWalletDir, walletId);
-    const snap = policySnapshotId(record.policy);
-    if (opts?.required && (snap === "none" || !snap)) {
-      throw new PolicyError(
-        `Wallet ${walletId} has no usable policy snapshot; refusing to skip confirmation policy checks.`,
-      );
-    }
-    return snap;
-  } catch (err) {
-    if (opts?.required) {
-      if (err instanceof PolicyError) throw err;
-      throw new PolicyError(
-        `Cannot load policy snapshot for wallet ${walletId}; confirmation cannot skip policy-change checks. ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-    return "none";
-  }
-}
-
-function assertNativeTransferMatchesArgs(
-  proposal: { to: string; valueWei: string; data?: string },
-  to: string,
-  amountPls: number | string,
-): void {
-  const wantWei = parsePlsToWei(amountPls).toString();
-  const data = (proposal.data ?? "0x").toLowerCase();
-  if (
-    proposal.to.toLowerCase() !== to.toLowerCase() ||
-    proposal.valueWei !== wantWei ||
-    data !== "0x"
-  ) {
-    throw new PolicyError(
-      "Sealed transfer_pls proposal does not match args; re-issue the tool call.",
-    );
-  }
-}
-
 /**
  * Register agent wallet MCP tools.
  */
@@ -192,17 +107,12 @@ export function registerWalletTools(
   server: McpServer,
   config: AppConfig,
 ): void {
-  // -------------------------------------------------------------------------
-  // Status / diagnostics (no secrets; works when disabled)
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "agent_wallet_status",
     description:
-      "Operator snapshot first: operatorAtAGlance (wallets on/off, multiproc risk, writes blocked, " +
-      "policy posture, safeFlow, nextAction). Also default PLS limits, master-key configured flag, " +
-      "walletDirOwnership (riskLevel none|warn|blocked), and security posture notes " +
-      "(tokenAllowlist = tx.to only; token-notional / WPLS / multicall). " +
-      "Safe flow: inspect_tx_intent → propose → reviewSummary → execute. " +
+      "Operator snapshot: wallets on/off, multiproc risk, writes blocked, " +
+      "funding-authorizes-spend, kill switch counts. " +
+      "Flow: inspect_tx_intent → propose_agent_tx → reviewSummary → execute_agent_tx. " +
       "Does NOT return secrets or private keys. Not a distributed lock.",
     category: "wallet",
     inputSchema: {},
@@ -210,19 +120,14 @@ export function registerWalletTools(
       ok(neverReturnPrivateKey(agentWalletSystemStatus(cfg))),
   });
 
-  // -------------------------------------------------------------------------
-  // inspect_tx_intent — pure local decode for agents (no wallet required)
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "inspect_tx_intent",
     description:
-      "Decode a transaction intent for agent safety judgment (no signing, no chain I/O). " +
-      "Returns token-notional pattern/confidence, movement explanations, decodeKnowledge " +
-      "(known vs unknown), agentGuidance (proceed_with_confirm | review_carefully | refuse), " +
-      "and residualUncertainty. Covers ERC-20, WPLS wrap/unwrap, PulseX-style swaps, " +
+      "Decode a transaction intent (no signing, no chain I/O). " +
+      "Returns token-notional pattern/confidence, movement explanations, and decodeKnowledge. " +
+      "Does not block propose/execute. Covers ERC-20, WPLS wrap/unwrap, PulseX-style swaps, " +
       "add/remove liquidity, one-level multicall. Not full EVM simulation. " +
-      "Does NOT return secrets. Preferred first step when calldata is unclear: " +
-      "inspect_tx_intent → propose_agent_tx → read reviewSummary → execute_agent_tx.",
+      "Does NOT return secrets.",
     category: "wallet",
     inputSchema: {
       to: addressSchema.describe("Destination contract or EOA"),
@@ -248,11 +153,8 @@ export function registerWalletTools(
       return ok(
         neverReturnPrivateKey({
           ...intent,
-          safeUsage:
-            "If agentGuidance is refuse → do not propose/execute (kill/disabled/invalid only hard-block under OT). " +
-            "If review_carefully → human review of destination/calldata (advisory decode; not a hard gate). " +
-            "If proceed_with_confirm → still propose_agent_tx and read reviewSummary before confirm. " +
-            "Operator-trust: funding authorizes; confirm is host UX only.",
+          note:
+            "Decode only. Funding the agent is authorization — this tool does not block sends.",
         }),
       );
     },
@@ -261,32 +163,15 @@ export function registerWalletTools(
   registerWalletTool(server, config, {
     name: "agent_wallet_check_policy",
     description:
-      "Dry-run wallet write check for a native PLS amount (no send, no signing). " +
-      "Kill/disabled still block when walletId is supplied. Stored maxPls*/allowlists " +
-      "are display-only unless this process set AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1. " +
-      "Returns allow/deny, reasons, reviewSummary, and whether this process is " +
-      "enforcing or display-only. Prefer propose_agent_tx for real destinations.",
+      "Dry-run: would this wallet sign a native PLS amount? " +
+      "Blocks only when killed, disabled, or the amount is invalid. " +
+      "No spend caps. Prefer propose_agent_tx for a real destination.",
     category: "wallet",
     inputSchema: {
       walletId: walletIdSchema
         .optional()
-        .describe("When set, uses that wallet's kill/enabled state (not a synthetic always-on policy)"),
+        .describe("When set, uses that wallet's kill/enabled state"),
       amountPls: plsAmountPositiveSchema.describe("Amount of PLS to send"),
-      dailySpentPls: z
-        .number()
-        .min(0)
-        .default(0)
-        .describe("PLS already spent today (caller-supplied override)"),
-      maxPlsPerTx: z
-        .number()
-        .positive()
-        .optional()
-        .describe("Override max per tx (defaults to config)"),
-      maxPlsDaily: z
-        .number()
-        .positive()
-        .optional()
-        .describe("Override max daily (defaults to config)"),
     },
     handler: async (args, cfg) => {
       if (!cfg.agentWalletEnabled) {
@@ -295,29 +180,21 @@ export function registerWalletTools(
         );
       }
       const amountPls = args.amountPls as number | string;
-      const dailySpentPls = (args.dailySpentPls as number) ?? 0;
-      // Validate via policy path (parsePlsToWei inside evaluatePolicy)
       if (typeof amountPls === "number") {
         assertPositiveAmount(amountPls, "amountPls");
       }
       const walletId = args.walletId as string | undefined;
       let enabled = true;
       let killed = false;
-      let maxPer = (args.maxPlsPerTx as number | undefined) ?? cfg.maxPlsPerTx;
-      let maxDaily =
-        (args.maxPlsDaily as number | undefined) ?? cfg.maxPlsDaily;
       let dailySpend = {
         date: new Date().toISOString().slice(0, 10),
-        spentPls: dailySpentPls,
+        spentPls: 0,
       };
       if (walletId) {
         const record = loadWalletRecord(cfg.agentWalletDir, walletId);
         enabled = record.policy.enabled;
         killed = record.policy.killed;
-        maxPer = (args.maxPlsPerTx as number | undefined) ?? record.policy.maxPlsPerTx;
-        maxDaily =
-          (args.maxPlsDaily as number | undefined) ?? record.policy.maxPlsDaily;
-        if (dailySpentPls === 0 && record.dailySpend) {
+        if (record.dailySpend) {
           dailySpend = {
             date: record.dailySpend.date,
             spentPls: record.dailySpend.spentPls,
@@ -326,29 +203,14 @@ export function registerWalletTools(
       }
       const toPlaceholder =
         "0x0000000000000000000000000000000000000001" as const;
-      const enforceLegacyCaps = cfg.agentWalletEnforceLegacyCaps === true;
       const check = evaluatePolicy({
-        policy: {
-          enabled,
-          killed,
-          maxPlsPerTx: maxPer,
-          maxPlsDaily: maxDaily,
-          contractAllowlist: [],
-          tokenAllowlist: [],
-          allowlistExpiresAt: null,
-          tokenSpendCaps: {},
-          tokenDailyCaps: {},
-          erc20NotionalCaps: {},
-          requireDecodableCalldata: false,
-          allowNativeTransfers: true,
-        },
+        policy: { enabled, killed },
         dailySpend,
         tokenDailySpend: {},
         to: toPlaceholder,
         valuePls: amountPls,
         data: "0x",
         destinationIsContract: false,
-        enforceLegacyCaps,
       });
       const reviewSummary = buildTxReviewSummary({
         to: toPlaceholder,
@@ -367,38 +229,22 @@ export function registerWalletTools(
           walletId: walletId ?? null,
           killed,
           enabled,
-          remainingDaily: check.remainingDaily,
-          maxPlsPerTx: maxPer,
-          maxPlsDaily: maxDaily,
-          legacyCapsDisplayOnly: check.legacyCapsDisplayOnly,
-          legacyCapsEnforced: enforceLegacyCaps,
-          legacyCapsMode: enforceLegacyCaps ? "enforcing" : "display-only",
-          tokenNotional: check.tokenNotional,
+          fundingAuthorizesSpend: true,
           reviewSummary,
-          note: enforceLegacyCaps
-            ? "This process is ENFORCING stored legacy caps (AGENT_WALLET_ENFORCE_LEGACY_CAPS). " +
-              "Product default remains display-only / operator-trust when the env is unset. " +
-              "Dry-run uses a placeholder destination. Pass walletId to include " +
-              "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
-              "use propose_agent_tx and read reviewSummary before execute."
-            : "This process is display-only for stored legacy caps (operator-trust default). " +
-              "Dry-run uses a placeholder destination. Pass walletId to include " +
-              "that wallet's kill/enabled state. For real to/calldata/token-notional, " +
-              "use propose_agent_tx and read reviewSummary before execute.",
+          note:
+            "Dry-run uses a placeholder destination. Kill/disabled/invalid only. " +
+            "For a real to/calldata, use propose_agent_tx.",
         }),
       );
     },
   });
 
-  // -------------------------------------------------------------------------
-  // create_agent_wallet
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "create_agent_wallet",
     description: withWalletSecurity(
       "Generate a new agent EOA (viem), encrypt the private key with " +
         "AES-256-GCM under AGENT_WALLET_MASTER_KEY, and store under AGENT_WALLET_DIR. " +
-        "Returns ONLY public address, wallet id, and default policy — never the private key.",
+        "Returns ONLY public address, wallet id, and enabled/killed — never the private key.",
     ),
     category: "wallet",
     write: true,
@@ -408,21 +254,8 @@ export function registerWalletTools(
         .max(64)
         .optional()
         .describe("Optional human label for the wallet"),
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
-      const gate = await requireConfirmOrInput({
-        tool: "create_agent_wallet",
-        message:
-          "Create a new encrypted agent wallet (operator-trust when funded)? " +
-          "Private key will be generated and encrypted at rest (AES-256-GCM). " +
-          "Confirm only if you intend to create a new EOA under AGENT_WALLET_DIR.",
-        args,
-        ctx,
-        policySnapshotId: "none",
-      });
-      if (gate !== true) return gate;
-
+    handler: async (args, cfg) => {
       const info = await createAgentWallet(cfg, {
         label: args.label as string | undefined,
       });
@@ -430,20 +263,16 @@ export function registerWalletTools(
         neverReturnPrivateKey({
           ...info,
           note:
-            "Private key encrypted at rest. Operator-trust: funding this address " +
-            "authorizes the agent to spend it. Optional kill_switch for emergencies.",
+            "Private key encrypted at rest. Funding this address authorizes the agent to spend it.",
         }),
       );
     },
   });
 
-  // -------------------------------------------------------------------------
-  // get_agent_wallet_info / list
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "get_agent_wallet_info",
     description:
-      "Return public agent wallet info: address, policy, balances summary, " +
+      "Return public agent wallet info: address, enabled/killed, balances, " +
       "created_at, daily spend. Never returns private keys or encrypted blobs.",
     category: "wallet",
     inputSchema: {
@@ -464,7 +293,7 @@ export function registerWalletTools(
   registerWalletTool(server, config, {
     name: "list_agent_wallets",
     description:
-      "List all agent wallets (public fields only: id, address, policy, daily spend).",
+      "List all agent wallets (public fields only: id, address, enabled/killed, daily spend).",
     category: "wallet",
     inputSchema: {},
     handler: async (_args, cfg) => {
@@ -473,163 +302,41 @@ export function registerWalletTools(
     },
   });
 
-  // -------------------------------------------------------------------------
-  // set_agent_policy
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "set_agent_policy",
     description: withWalletSecurity(
-      "Update per-wallet policy record. Operator-trust (v0.1.38+): maxPls*, allowlists, " +
-        "and token-notional fields are legacy/storage only — NOT hard send gates. " +
-        "Hard controls: enabled and killed. To clear kill switch: set killed=false AND enabled=true together.",
+      "Update enabled/killed only. To clear kill switch: set killed=false AND enabled=true together.",
     ),
     category: "wallet",
     write: true,
     inputSchema: {
       walletId: walletIdSchema,
-      maxPlsPerTx: z
-        .number()
-        .min(0)
-        .optional()
-        .describe(
-          "Legacy max PLS value per transaction (storage/display only; not a hard send gate v0.1.38+)",
-        ),
-      maxPlsDaily: z
-        .number()
-        .min(0)
-        .optional()
-        .describe(
-          "Legacy max PLS value per UTC day (storage/display only; not a hard send gate v0.1.38+)",
-        ),
-      contractAllowlist: z
-        .array(addressSchema)
-        .optional()
-        .describe(
-          "Legacy contract address list (storage/display only). Empty/omit-to-keep; " +
-            "empty array does NOT deny contracts under operator-trust (v0.1.38+).",
-        ),
-      tokenAllowlist: z
-        .array(addressSchema)
-        .optional()
-        .describe(
-          "Legacy destination list (storage/display only; not a hard send gate v0.1.38+). " +
-            "When non-empty historically filtered tx.to only — no longer enforced as a block.",
-        ),
       enabled: z
         .boolean()
         .optional()
-        .describe("Soft enable/disable signing (hard control)"),
+        .describe("Soft enable/disable signing"),
       killed: z
         .boolean()
         .optional()
-        .describe("Hard kill flag; clear only with enabled=true (hard control)"),
-      allowNativeTransfers: z
-        .boolean()
-        .optional()
-        .describe(
-          "Legacy native-transfer flag (storage/display only; not a hard send gate v0.1.38+)",
-        ),
-      allowlistExpiresAt: z
-        .string()
-        .nullable()
-        .optional()
-        .describe(
-          "Legacy ISO-8601 UTC allowlist display field; null clears. Not a hard send gate (v0.1.38+).",
-        ),
-      tokenSpendCaps: z
-        .record(z.string(), z.number().min(0))
-        .optional()
-        .describe(
-          "Legacy map of 0x address → max native PLS (display/storage only; not a hard gate v0.1.38+)",
-        ),
-      tokenDailyCaps: z
-        .record(z.string(), z.number().min(0))
-        .optional()
-        .describe(
-          "Legacy map of 0x address → max daily native PLS (display/storage only; not a hard gate v0.1.38+)",
-        ),
-      erc20NotionalCaps: z
-        .record(z.string(), z.string())
-        .optional()
-        .describe(
-          'Legacy map of token 0x address (or "native") → raw amount string. ' +
-            "Storage/display only — not a hard send gate (v0.1.38+).",
-        ),
-      requireDecodableCalldata: z
-        .boolean()
-        .optional()
-        .describe(
-          "Legacy flag (v0.1.38+: not a hard send gate). Calldata decode remains advisory only.",
-        ),
-      confirm: confirmSchema,
+        .describe("Hard kill flag; clear only with enabled=true"),
     },
-    handler: async (args, cfg, ctx) => {
+    handler: async (args, cfg) => {
       const walletId = args.walletId as string;
-      const gate = await requireConfirmOrInput({
-        tool: "set_agent_policy",
-        message:
-          `Apply policy-record changes to wallet ${walletId}? Hard controls are enabled/killed only. ` +
-          "Legacy allowlist/cap fields are storage/display only under operator-trust (not hard send gates).",
-        args,
-        ctx,
-        walletId,
-        policySnapshotId: snapshotForWallet(cfg, walletId),
-      });
-      if (gate !== true) return gate;
-
       const patch: Parameters<typeof setAgentPolicy>[2] = {};
-      if (args.maxPlsPerTx !== undefined) {
-        patch.maxPlsPerTx = args.maxPlsPerTx as number;
-      }
-      if (args.maxPlsDaily !== undefined) {
-        patch.maxPlsDaily = args.maxPlsDaily as number;
-      }
-      if (args.contractAllowlist !== undefined) {
-        patch.contractAllowlist = args.contractAllowlist as `0x${string}`[];
-      }
-      if (args.tokenAllowlist !== undefined) {
-        patch.tokenAllowlist = args.tokenAllowlist as `0x${string}`[];
-      }
       if (args.enabled !== undefined) patch.enabled = args.enabled as boolean;
       if (args.killed !== undefined) patch.killed = args.killed as boolean;
-      if (args.allowNativeTransfers !== undefined) {
-        patch.allowNativeTransfers = args.allowNativeTransfers as boolean;
-      }
-      if (args.allowlistExpiresAt !== undefined) {
-        patch.allowlistExpiresAt = args.allowlistExpiresAt as string | null;
-      }
-      if (args.tokenSpendCaps !== undefined) {
-        patch.tokenSpendCaps = args.tokenSpendCaps as Record<string, number>;
-      }
-      if (args.tokenDailyCaps !== undefined) {
-        patch.tokenDailyCaps = args.tokenDailyCaps as Record<string, number>;
-      }
-      if (args.erc20NotionalCaps !== undefined) {
-        patch.erc20NotionalCaps = args.erc20NotionalCaps as Record<
-          string,
-          string
-        >;
-      }
-      if (args.requireDecodableCalldata !== undefined) {
-        patch.requireDecodableCalldata =
-          args.requireDecodableCalldata as boolean;
-      }
       const info = await setAgentPolicy(cfg, walletId, patch);
       return ok(neverReturnPrivateKey(info));
     },
   });
 
-  // -------------------------------------------------------------------------
-  // propose_agent_tx
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "propose_agent_tx",
     description: withWalletSecurity(
       "Prepare an unsigned transaction proposal with simulation (estimateGas/eth_call) " +
-        "and operator-readable reviewSummary (destination, PLS, token movements, checksApplied). " +
-        "Does not sign or broadcast. Operator-trust: funding authorizes; hard blocks are kill/disabled only. " +
-        "Safe pattern: propose → review reviewSummary → execute_agent_tx with confirm=true (or MRTR). " +
-        "Confirm is host UX only.",
+        "and reviewSummary (destination, PLS, decoded token movements, gas hints). " +
+        "Does not sign or broadcast. Hard blocks are kill/disabled/invalid only. " +
+        "Then execute_agent_tx with the proposalId.",
     ),
     category: "wallet",
     write: true,
@@ -656,153 +363,74 @@ export function registerWalletTools(
       return ok(
         neverReturnPrivateKey({
           ...proposal,
-          // reviewSummary already attached by proposeAgentTx
           nextStep: proposal.reviewSummary.nextStep,
-          safeUsage:
-            "propose_agent_tx → review reviewSummary + policyCheck → execute_agent_tx with confirm",
         }),
       );
     },
   });
 
-  // -------------------------------------------------------------------------
-  // execute_agent_tx / sign_and_send
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "execute_agent_tx",
     description: withWalletSecurity(
       "Sign and broadcast a pending proposal. Re-checks kill/enabled and re-simulates before send. " +
-        "Confirm message includes proposal reviewSummary. Requires confirm=true or MRTR confirm. " +
-        "Private key never returned. Operator-trust: funding authorizes; confirm is host UX only.",
+        "Private key never returned. Funding the agent is authorization.",
     ),
     category: "wallet",
     write: true,
     inputSchema: {
       proposalId: proposalIdSchema,
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
+    handler: async (args, cfg) => {
       const proposalId = args.proposalId as string;
-      const peek = loadProposal(cfg.agentWalletDir, proposalId);
-      const summary = buildProposalReviewSummary(peek, "execute");
-      const confirmMessage = formatConfirmPrompt(summary);
-      const gate = await requireConfirmOrInput({
-        tool: "execute_agent_tx",
-        message: confirmMessage,
-        args: { ...args, ...proposalExecutionIntentArgs(peek) },
-        ctx,
-        walletId: peek.walletId,
-        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
-          required: true,
-        }),
-      });
-      if (gate !== true) return gate;
-
-      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
-      assertSameExecutionIntent(peek, fresh);
-
-      // Service re-checks AGENT_WALLET_ENABLED + kill/enabled + simulate before sign.
-      const result = await executeAgentTx(cfg, proposalId, true);
+      const result = await executeAgentTx(cfg, proposalId);
       return ok(neverReturnPrivateKey(result));
     },
   });
 
-  // Alias name for discoverability
   registerWalletTool(server, config, {
     name: "sign_and_send",
     description: withWalletSecurity(
-      "Alias of execute_agent_tx: sign + broadcast of a pending proposal. " +
-        "Confirm includes reviewSummary. Requires confirm=true or MRTR confirm. " +
+      "Alias of execute_agent_tx: sign + broadcast a pending proposal. " +
         "Private key never returned.",
     ),
     category: "wallet",
     write: true,
     inputSchema: {
       proposalId: proposalIdSchema,
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
-      const proposalId = args.proposalId as string;
-      const peek = loadProposal(cfg.agentWalletDir, proposalId);
-      const confirmMessage = formatConfirmPrompt(
-        buildProposalReviewSummary(peek, "execute"),
-      );
-      const gate = await requireConfirmOrInput({
-        tool: "sign_and_send",
-        message: confirmMessage,
-        args: { ...args, ...proposalExecutionIntentArgs(peek) },
-        ctx,
-        walletId: peek.walletId,
-        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
-          required: true,
-        }),
-      });
-      if (gate !== true) return gate;
-
-      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
-      assertSameExecutionIntent(peek, fresh);
-
-      const result = await executeAgentTx(cfg, proposalId, true);
+    handler: async (args, cfg) => {
+      const result = await executeAgentTx(cfg, args.proposalId as string);
       return ok(neverReturnPrivateKey(result));
     },
   });
 
-  // -------------------------------------------------------------------------
-  // settle_interrupted_broadcast — local recovery only (no re-broadcast)
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "settle_interrupted_broadcast",
     description: withWalletSecurity(
       "Recover local state after chain accept when proposal is broadcasting+txHash " +
-        "but not yet executed (crash between barrier and spend merge). NEVER re-broadcasts. " +
-        "Idempotent spend merge via appliedSpendProposalIds. Requires confirm=true (host-strength). " +
-        "Gated by multiproc write rules (same requireWritable as execute). " +
-        "Fails closed if no txHash. Verify txHash on explorer first. " +
-        "Do not use to re-send; execute_agent_tx stays fail-closed on broadcasting/txHash.",
+        "but not yet executed. NEVER re-broadcasts. Idempotent spend merge. " +
+        "Fails closed if no txHash. Verify txHash on explorer first.",
     ),
     category: "wallet",
     write: true,
     inputSchema: {
       proposalId: proposalIdSchema,
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
-      const proposalId = args.proposalId as string;
-      const peek = loadProposal(cfg.agentWalletDir, proposalId);
-      const confirmMessage =
-        `Settle interrupted proposal ${proposalId}? status=${peek.status} ` +
-        `txHash=${peek.txHash ?? "(none)"}. No re-broadcast; local spend merge only.`;
-      const gate = await requireConfirmOrInput({
-        tool: "settle_interrupted_broadcast",
-        message: confirmMessage,
-        args: { ...args, ...proposalExecutionIntentArgs(peek) },
-        ctx,
-        walletId: peek.walletId,
-        policySnapshotId: snapshotForWallet(cfg, peek.walletId, {
-          required: true,
-        }),
-      });
-      if (gate !== true) return gate;
-
-      const fresh = loadProposal(cfg.agentWalletDir, proposalId);
-      assertSameExecutionIntent(peek, fresh);
-
-      const result = await settleInterruptedBroadcast(cfg, proposalId, true);
+    handler: async (args, cfg) => {
+      const result = await settleInterruptedBroadcast(
+        cfg,
+        args.proposalId as string,
+      );
       return ok(neverReturnPrivateKey(result));
     },
   });
 
-  // -------------------------------------------------------------------------
-  // transfer_pls
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "transfer_pls",
     description: withWalletSecurity(
-      "Native PLS transfer: simulate first, then confirm with fee/review, then broadcast. " +
-        "Requires confirm=true or MRTR confirm after the simulated proposal is shown. " +
-        "Prefer propose → review reviewSummary → execute for a two-step audit. " +
-        "Operator-trust: EOAs and contracts are not blocked by allowlists/caps; " +
-        "kill/disabled still stop signing. Confirm is host UX only.",
+      "Native PLS transfer: simulate, then broadcast. " +
+        "Prefer propose_agent_tx → reviewSummary → execute_agent_tx for a two-step review. " +
+        "Funding the agent is authorization.",
     ),
     category: "wallet",
     write: true,
@@ -812,60 +440,21 @@ export function registerWalletTools(
       amountPls: plsAmountPositiveSchema.describe(
         "PLS amount to transfer (number or plain decimal string)",
       ),
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
+    handler: async (args, cfg) => {
       const walletId = args.walletId as string;
       const amountPls = args.amountPls as number | string;
       const to = assertAddress(args.to as string);
+      void parsePlsToWei(amountPls);
 
-      if (args.confirm === false) {
-        throw new PolicyError(
-          'Write tool "transfer_pls" confirmation was declined. No broadcast.',
-        );
-      }
-
-      // Reuse a proposal sealed into MRTR requestState so resume does not
-      // create a second pending transfer.
-      const prior = await readVerifiedConfirmState(ctx);
-      let proposal;
-      if (
-        prior?.proposalId &&
-        prior.tool === "transfer_pls" &&
-        prior.walletId === walletId
-      ) {
-        proposal = loadProposal(cfg.agentWalletDir, prior.proposalId);
-        assertNativeTransferMatchesArgs(proposal, to, amountPls);
-      } else {
-        proposal = await proposeAgentTx(cfg, {
-          walletId,
-          to,
-          valuePls: amountPls,
-          data: "0x",
-        });
-      }
-
-      const summary = buildProposalReviewSummary(proposal, "execute");
-      const gate = await requireConfirmOrInput({
-        tool: "transfer_pls",
-        message: formatConfirmPrompt(summary),
-        args: {
-          ...args,
-          ...proposalExecutionIntentArgs(proposal),
-          amountPls,
-        },
-        ctx,
+      const proposal = await proposeAgentTx(cfg, {
         walletId,
-        policySnapshotId: snapshotForWallet(cfg, walletId),
-        sealedProposalId: proposal.id,
+        to,
+        valuePls: amountPls,
+        data: "0x",
       });
-      if (gate !== true) return gate;
-
-      const fresh = loadProposal(cfg.agentWalletDir, proposal.id);
-      assertSameExecutionIntent(proposal, fresh);
-      assertNativeTransferMatchesArgs(fresh, to, amountPls);
-
-      const result = await executeAgentTx(cfg, proposal.id, true);
+      const summary = buildProposalReviewSummary(proposal, "execute");
+      const result = await executeAgentTx(cfg, proposal.id);
       return ok(
         neverReturnPrivateKey({
           ...result,
@@ -877,37 +466,19 @@ export function registerWalletTools(
     },
   });
 
-  // -------------------------------------------------------------------------
-  // revoke / kill_switch
-  // -------------------------------------------------------------------------
   registerWalletTool(server, config, {
     name: "kill_switch",
     description: withWalletSecurity(
       "EMERGENCY: Immediately disable wallet signing (enabled=false, killed=true). " +
-        "Also clears legacy allowlist fields on disk (display only; not hard send gates). " +
         "Idempotent if already killed. To resume: set_agent_policy with killed=false AND enabled=true.",
     ),
     category: "wallet",
     write: true,
     inputSchema: {
       walletId: walletIdSchema,
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
-      const walletId = args.walletId as string;
-      const gate = await requireConfirmOrInput({
-        tool: "kill_switch",
-        message:
-          `Activate kill switch for wallet ${walletId}? This immediately disables ` +
-          "all signing until policy is re-enabled.",
-        args,
-        ctx,
-        walletId,
-        policySnapshotId: snapshotForWallet(cfg, walletId),
-      });
-      if (gate !== true) return gate;
-
-      const info = await killSwitch(cfg, walletId);
+    handler: async (args, cfg) => {
+      const info = await killSwitch(cfg, args.walletId as string);
       return ok(
         neverReturnPrivateKey({
           ...info,
@@ -927,22 +498,9 @@ export function registerWalletTools(
     write: true,
     inputSchema: {
       walletId: walletIdSchema,
-      confirm: confirmSchema,
     },
-    handler: async (args, cfg, ctx) => {
-      const walletId = args.walletId as string;
-      const gate = await requireConfirmOrInput({
-        tool: "revoke",
-        message:
-          `Revoke signing for wallet ${walletId}? This immediately disables all signing.`,
-        args,
-        ctx,
-        walletId,
-        policySnapshotId: snapshotForWallet(cfg, walletId),
-      });
-      if (gate !== true) return gate;
-
-      const info = await revokeAgentWallet(cfg, walletId);
+    handler: async (args, cfg) => {
+      const info = await revokeAgentWallet(cfg, args.walletId as string);
       return ok(
         neverReturnPrivateKey({
           ...info,

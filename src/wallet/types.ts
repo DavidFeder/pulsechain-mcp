@@ -27,11 +27,8 @@ export interface EncryptedBlob {
 }
 
 /**
- * Per-wallet policy record (v0.1.38+ operator-trust).
- *
- * Hard controls at send time: `enabled` and `killed` only.
- * Legacy fields (maxPls*, allowlists, notional caps) remain for storage /
- * display / spend accounting but are NOT hard send gates.
+ * Per-wallet controls. Funding the agent is authorization.
+ * Send-time blocks: `enabled` and `killed` only (plus invalid address/value).
  */
 export interface AgentWalletPolicy {
   /**
@@ -41,50 +38,6 @@ export interface AgentWalletPolicy {
   enabled: boolean;
   /** Hard kill — signing blocked until set_agent_policy re-enables and clears killed. */
   killed: boolean;
-  /** Legacy display / spend accounting field — not a hard gate (v0.1.38+) */
-  maxPlsPerTx: number;
-  /** Legacy display / spend accounting field — not a hard gate (v0.1.38+) */
-  maxPlsDaily: number;
-  /**
-   * Legacy contract allowlist field (not a hard gate as of v0.1.38).
-   */
-  contractAllowlist: `0x${string}`[];
-  /**
-   * Legacy destination filter field (not a hard gate as of v0.1.38).
-   */
-  tokenAllowlist: `0x${string}`[];
-  /**
-   * Legacy time-box for allowlist display (not a hard gate as of v0.1.38).
-   */
-  allowlistExpiresAt?: string | null;
-  /**
-   * Legacy per-destination native PLS display caps (not a hard gate).
-   */
-  tokenSpendCaps: Record<string, number>;
-  /**
-   * Optional per-destination max **native PLS** spent per UTC day.
-   * Keys: lowercase 0x addresses. Tracked via tokenDailySpend ledger.
-   * This is NOT an ERC-20 amount cap — see `erc20NotionalCaps`.
-   */
-  tokenDailyCaps: Record<string, number>;
-  /**
-   * Optional per-token max **raw** amount per transaction (token smallest units).
-   * Keys: lowercase token contract addresses, or `"native"` for native-in legs
-   * (ETH-in swaps, WETH9 deposit). Values: non-negative integer decimal strings
-   * (decimals are NOT resolved — e.g. 1e18 raw for 1 token with 18 decimals).
-   * Applied when calldata is reliably decoded: ERC-20 transfer/transferFrom/approve,
-   * WETH9 deposit/withdraw, router exact-in/out + fee-supporting, addLiquidity
-   * desired amounts, and one-level multicall inners (amounts **summed per token**).
-   * removeLiquidity notes LP shares only (underlyings not invented). Empty map = no caps.
-   */
-  /** Legacy per-token raw amount map (not a hard gate as of v0.1.38). */
-  erc20NotionalCaps: Record<string, string>;
-  /**
-   * Legacy flag (not a hard gate as of v0.1.38). Calldata decode remains advisory.
-   */
-  requireDecodableCalldata: boolean;
-  /** Legacy field; native transfers are allowed under operator-trust when enabled. */
-  allowNativeTransfers: boolean;
 }
 
 export interface DailySpendLedger {
@@ -115,7 +68,7 @@ export interface AgentWalletRecord {
   dailySpend: DailySpendLedger;
   /**
    * Per-destination daily spend (lowercase address → ledger).
-   * Used with policy.tokenDailyCaps.
+   * Spend accounting only — not a send gate.
    */
   tokenDailySpend: Record<string, DailySpendLedger>;
   /**
@@ -136,36 +89,10 @@ export interface AgentWalletPublicInfo {
   policy: AgentWalletPolicy;
   dailySpend: DailySpendLedger;
   tokenDailySpend: Record<string, DailySpendLedger>;
-  /** True when allowlist time-box has expired (contracts denied). */
-  allowlistExpired?: boolean;
-  /**
-   * True when this process is operator-trust (display-only). False when
-   * AGENT_WALLET_ENFORCE_LEGACY_CAPS is on for this process.
-   */
-  legacyCapsDisplayOnly: boolean;
-  /** Short note: display-only vs this-process opt-in enforcement. */
-  legacyCapsNote: string;
+  /** Funding this address authorizes the agent to spend it. */
+  fundingAuthorizesSpend: true;
   balanceWei?: string;
   balancePls?: string;
-}
-
-/** Shared OT note for list/info public wallet surfaces (H2). */
-export const LEGACY_CAPS_DISPLAY_ONLY_NOTE =
-  "Legacy maxPlsPerTx / maxPlsDaily / dailySpend are display-only under " +
-  "operator-trust. They do not hard-block sends. Funding the agent is authorization.";
-
-/** This-process note when AGENT_WALLET_ENFORCE_LEGACY_CAPS is true/1. */
-export const LEGACY_CAPS_ENFORCED_NOTE =
-  "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS enabled: stored " +
-  "maxPlsPerTx/daily, allowlists, tokenSpendCaps/tokenDailyCaps, " +
-  "erc20NotionalCaps (when decode is reliable), requireDecodableCalldata, " +
-  "and allowNativeTransfers are hard denies. Product default remains " +
-  "operator-trust (display-only) when that env is unset/false/0/empty.";
-
-export function legacyCapsNoteForProcess(enforceLegacyCaps: boolean): string {
-  return enforceLegacyCaps
-    ? LEGACY_CAPS_ENFORCED_NOTE
-    : LEGACY_CAPS_DISPLAY_ONLY_NOTE;
 }
 
 export interface TxProposalRequest {
@@ -226,15 +153,6 @@ export interface TokenNotionalPolicyView {
     multicallIndex?: number;
   }>;
   notes: string[];
-  /** Cap comparisons applied (when erc20NotionalCaps hit a decoded token). */
-  capsApplied: Array<{
-    token: string;
-    amountRaw: string;
-    capRaw: string;
-    withinCap: boolean;
-  }>;
-  /** True when requireDecodableCalldata denied unknown/unreliable calldata. */
-  requireDecodableCalldata: boolean;
 }
 
 export interface PolicyCheckResult {
@@ -246,18 +164,10 @@ export interface PolicyCheckResult {
   valuePls: number;
   /** Exact proposed value in wei (decimal string). */
   valueWei?: string;
+  /** Native PLS already spent today plus this value (accounting only). */
   projectedDailySpend: number;
-  /** Projected daily spend in wei (decimal string). */
   projectedDailySpendWei?: string;
-  remainingDaily: number;
-  remainingDailyWei?: string;
-  /**
-   * True under operator-trust (product default): remainingDaily / maxPls* are
-   * display-only. False when this process opted into AGENT_WALLET_ENFORCE_LEGACY_CAPS.
-   */
-  legacyCapsDisplayOnly: boolean;
-  allowlistExpired: boolean;
-  /** Token-notional inspection + how caps / fail-closed applied. */
+  /** Token-notional inspection for review visibility — never a send gate. */
   tokenNotional?: TokenNotionalPolicyView;
 }
 
@@ -330,22 +240,9 @@ export interface AuditEntry {
   detail?: string;
 }
 
-export const DEFAULT_POLICY = (
-  maxPlsPerTx: number,
-  maxPlsDaily: number,
-): AgentWalletPolicy => ({
+export const DEFAULT_POLICY = (): AgentWalletPolicy => ({
   enabled: true,
   killed: false,
-  maxPlsPerTx,
-  maxPlsDaily,
-  contractAllowlist: [],
-  tokenAllowlist: [],
-  allowlistExpiresAt: null,
-  tokenSpendCaps: {},
-  tokenDailyCaps: {},
-  erc20NotionalCaps: {},
-  requireDecodableCalldata: false,
-  allowNativeTransfers: true,
 });
 
 /** Proposal TTL (ms) — short-lived to limit replay window */
@@ -353,27 +250,16 @@ export const PROPOSAL_TTL_MS = 15 * 60 * 1000;
 
 /** Loud warning when agent wallets are enabled (config / status). */
 export const AGENT_WALLET_ENABLE_WARNING =
-  "SECURITY WARNING: AGENT_WALLET_ENABLED=true — this process can SIGN and " +
-  "BROADCAST with funded agent EOAs. This is operator-trust mode (v0.1.38+): " +
-  "funding the agent is authorization. There is no hard spend-cap or " +
-  "deny-by-default allowlist safety backstop. Keep AGENT_WALLET_MASTER_KEY secret; " +
-  "lose it and encrypted wallets are unrecoverable. Prefer kill_switch / revoke if " +
-  "compromised. Private keys stay AES-256-GCM encrypted at rest and are never " +
-  "returned in tool responses. Wallet locks are process-local only — do not share " +
-  "AGENT_WALLET_DIR across multiple MCP processes (see docs/SECURITY.md). " +
-  "AGENT_WALLET_MULTIPROC_STRICT defaults to true when wallets are enabled " +
-  "(unset/empty). Explicit false or 0 is warn-only opt-out. Strict is not a " +
-  "distributed lock; shared AGENT_WALLET_DIR is still not multi-writer-safe.";
-
-/**
- * Legacy field semantics (storage/display only; not a hard gate as of v0.1.38).
- */
-export const TOKEN_ALLOWLIST_SEMANTICS =
-  "Legacy fields (tokenAllowlist, contractAllowlist, maxPls*, erc20NotionalCaps) may " +
-  "still be stored for compatibility. Product default (operator-trust): they are NOT " +
-  "hard send gates. Opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS=true|1 makes those stored " +
-  "fields hard denies on this process only. Funding the agent is authorization unless " +
-  "that env is on; kill_switch remains an emergency operator control.";
+  "AGENT_WALLET_ENABLED=true — this process can SIGN and BROADCAST with funded " +
+  "agent EOAs. Funding the agent is authorization: there are no spend caps or " +
+  "allowlists. Keep AGENT_WALLET_MASTER_KEY secret; lose it and encrypted wallets " +
+  "are unrecoverable. Use kill_switch / revoke to stop signing. Private keys stay " +
+  "AES-256-GCM encrypted at rest and are never returned in tool responses. " +
+  "Wallet locks are process-local only — do not share AGENT_WALLET_DIR across " +
+  "MCP processes (see docs/SECURITY.md). AGENT_WALLET_MULTIPROC_STRICT defaults " +
+  "to true when wallets are enabled (unset/empty). Explicit false or 0 is " +
+  "warn-only opt-out. Strict is not a distributed lock; shared AGENT_WALLET_DIR " +
+  "is still not multi-writer-safe.";
 
 /**
  * Operator-facing multiproc posture (not a distributed lock).

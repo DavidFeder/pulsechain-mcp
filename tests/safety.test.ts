@@ -40,14 +40,14 @@ describe("safety", () => {
     expect(redact(undefined)).toBe("");
   });
 
-  it("WRITE_TOOL_WARNING mentions confirm=true and modern MRTR InputRequired", () => {
+  it("WRITE_TOOL_WARNING mentions funding authorizes and kill_switch", () => {
     expect(WRITE_TOOL_WARNING).toMatch(/WRITE OPERATION/);
-    expect(WRITE_TOOL_WARNING).toMatch(/confirm=true/);
-    expect(WRITE_TOOL_WARNING).toMatch(/MRTR/);
-    expect(WRITE_TOOL_WARNING).toMatch(/InputRequiredResult/);
-    expect(WRITE_TOOL_WARNING).toMatch(/omit confirm/i);
-    expect(WRITE_TOOL_WARNING).toMatch(/host UX/i);
-    expect(WRITE_TOOL_WARNING).toMatch(/not a cryptographic lock/i);
+    expect(WRITE_TOOL_WARNING).toMatch(/AGENT_WALLET_ENABLED=true/);
+    expect(WRITE_TOOL_WARNING).toMatch(/funding the agent is authorization/i);
+    expect(WRITE_TOOL_WARNING).toMatch(/no spend caps|allowlists/i);
+    expect(WRITE_TOOL_WARNING).toMatch(/kill_switch/);
+    expect(WRITE_TOOL_WARNING).not.toMatch(/confirm=true/);
+    expect(WRITE_TOOL_WARNING).not.toMatch(/MRTR|InputRequiredResult/);
   });
 
   it("never returns private key fields", () => {

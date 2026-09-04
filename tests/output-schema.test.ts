@@ -283,8 +283,8 @@ describe("structuredContent matches outputSchema", () => {
   });
 });
 
-describe("MRTR InputRequired vs outputSchema", () => {
-  it("create_agent_wallet first round is InputRequired (no schema error) via tools/call", async () => {
+describe("wallet writes vs outputSchema (no InputRequired gate)", () => {
+  it("create_agent_wallet succeeds immediately and matches wallet outputSchema", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aw-os-"));
     tempDirs.push(dir);
     const cfg = testAppConfig({
@@ -308,12 +308,12 @@ describe("MRTR InputRequired vs outputSchema", () => {
     const text = JSON.stringify(result);
     expect(text).not.toMatch(/Output validation error/i);
     expect(result.isError).toBeFalsy();
-    expect(isInputRequiredResult(result)).toBe(true);
-    expect(result.resultType).toBe("input_required");
-    expect(typeof result.requestState).toBe("string");
+    expect(isInputRequiredResult(result)).toBe(false);
+    const parsed = walletToolOutputSchema.safeParse(result.structuredContent);
+    expect(parsed.success, JSON.stringify(parsed)).toBe(true);
   });
 
-  it("execute_agent_tx first round is InputRequired without wrapping as ToolResult", async () => {
+  it("execute_agent_tx runs immediately and is not wrapped as InputRequired", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aw-os-ex-"));
     tempDirs.push(dir);
     const cfg = testAppConfig({
@@ -331,6 +331,8 @@ describe("MRTR InputRequired vs outputSchema", () => {
       maxFeePerGas: "100000000000000",
       maxPriorityFeePerGas: "1000000000",
     });
+    const { setTestBroadcast } = await import("../src/wallet/service.js");
+    setTestBroadcast(async () => ("0x" + "ab".repeat(32)) as `0x${string}`);
 
     const wallet = await createAgentWallet(cfg);
     const proposal = await proposeAgentTx(cfg, {
@@ -365,11 +367,14 @@ describe("MRTR InputRequired vs outputSchema", () => {
       { proposalId: proposal.id },
       { mcpReq: { envelope: {} } },
     );
-    expect(isInputRequiredResult(first)).toBe(true);
+    expect(isInputRequiredResult(first)).toBe(false);
     expect(JSON.stringify(first)).not.toMatch(/Output validation error/i);
-    const ir = first as { resultType?: string; structuredContent?: unknown };
-    expect(ir.resultType).toBe("input_required");
-    expect(ir.structuredContent).toBeUndefined();
+    const res = first as {
+      structuredContent?: { ok?: boolean; data?: { txHash?: string } };
+    };
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(res.structuredContent?.data?.txHash).toMatch(/^0x/);
+    setTestBroadcast(null);
   });
 });
 

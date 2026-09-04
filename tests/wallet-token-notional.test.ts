@@ -243,7 +243,7 @@ describe("inspectTokenNotional (shipped decode)", () => {
 });
 
 describe("evaluatePolicy token-notional integration", () => {
-  const base = DEFAULT_POLICY(100, 1000);
+  const base = DEFAULT_POLICY();
 
   it("(a) native-only transfer: legacy PLS caps display-only (over-cap still allowed)", () => {
     const check = evaluatePolicy({
@@ -281,8 +281,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "1000" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -292,7 +290,7 @@ describe("evaluatePolicy token-notional integration", () => {
     });
     expect(check.allowed).toBe(true);
     expect(check.tokenNotional?.confidence).toBe("high");
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("(c) same transfer over per-token cap still allowed (operator-trust)", () => {
@@ -305,8 +303,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "1000" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -316,15 +312,13 @@ describe("evaluatePolicy token-notional integration", () => {
     });
     expect(check.allowed).toBe(true); // operator-trust: not a hard gate
     expect(check.reasons).toEqual([]);
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("(d) risk-relevant undecodable calldata still allowed when requireDecodableCalldata (operator-trust)", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -336,15 +330,13 @@ describe("evaluatePolicy token-notional integration", () => {
     expect(check.reasons).toEqual([]);
     expect(check.tokenNotional?.pattern).toBe("unknown");
     // Operator-trust never hard-enforces requireDecodableCalldata
-    expect(check.tokenNotional?.requireDecodableCalldata).toBe(false);
+    expect(check.tokenNotional).not.toHaveProperty("requireDecodableCalldata");
   });
 
   it("truncated transfer marked unreliable without hard-deny (even without requireDecodableCalldata)", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        requireDecodableCalldata: false,
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -368,8 +360,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        tokenSpendCaps: { [TOKEN.toLowerCase()]: 1 },
         // no erc20NotionalCaps
       },
       dailySpend: daySpend(0),
@@ -394,10 +384,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const under = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [ROUTER],
-        erc20NotionalCaps: {
-          [TOKEN.toLowerCase()]: parseEther("100").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: ROUTER,
@@ -411,10 +397,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const over = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [ROUTER],
-        erc20NotionalCaps: {
-          [TOKEN.toLowerCase()]: parseEther("10").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: ROUTER,
@@ -430,8 +412,6 @@ describe("evaluatePolicy token-notional integration", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: false,
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -444,30 +424,24 @@ describe("evaluatePolicy token-notional integration", () => {
     expect(check.tokenNotional?.considered).toBe(true);
   });
 
-  it("mergePolicy / normalizePolicy preserve new notional fields", () => {
-    const current = DEFAULT_POLICY(10, 100);
-    const next = mergePolicy(current, {
-      erc20NotionalCaps: { [TOKEN]: "12345" },
-      requireDecodableCalldata: true,
-    });
-    expect(next.erc20NotionalCaps[TOKEN.toLowerCase()]).toBe("12345");
-    expect(next.requireDecodableCalldata).toBe(true);
+  it("mergePolicy / normalizePolicy keep only enabled/killed", () => {
+    const current = DEFAULT_POLICY();
+    const next = mergePolicy(current, { enabled: false });
+    expect(next).toEqual({ enabled: false, killed: false });
 
     const migrated = normalizePolicy({
+      enabled: true,
+      killed: false,
       maxPlsPerTx: 1,
-      maxPlsDaily: 2,
-      // legacy record missing new fields
+      requireDecodableCalldata: true,
     });
-    expect(migrated.erc20NotionalCaps).toEqual({});
-    expect(migrated.requireDecodableCalldata).toBe(false);
+    expect(migrated).toEqual({ enabled: true, killed: false });
   });
 
-  it("mergePolicy rejects non-integer erc20NotionalCaps", () => {
+  it("mergePolicy still requires enabled=true to clear kill", () => {
     expect(() =>
-      mergePolicy(DEFAULT_POLICY(10, 100), {
-        erc20NotionalCaps: { [TOKEN]: "1.5" },
-      }),
-    ).toThrow(/integer decimal string/i);
+      mergePolicy({ enabled: false, killed: true }, { killed: false }),
+    ).toThrow(/kill switch/i);
   });
 });
 
@@ -702,7 +676,7 @@ describe("inspectTokenNotional v0.1.8 multicall", () => {
 });
 
 describe("evaluatePolicy v0.1.8 router + multicall", () => {
-  const base = DEFAULT_POLICY(100, 1000);
+  const base = DEFAULT_POLICY();
 
   it("exact-out amountInMax notional inspected; over erc20NotionalCaps still allowed", () => {
     const amountInMax = parseEther("50");
@@ -714,10 +688,6 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     const under = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [ROUTER],
-        erc20NotionalCaps: {
-          [TOKEN.toLowerCase()]: parseEther("100").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: ROUTER,
@@ -730,10 +700,6 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     const over = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [ROUTER],
-        erc20NotionalCaps: {
-          [TOKEN.toLowerCase()]: parseEther("10").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: ROUTER,
@@ -759,8 +725,6 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     const under = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "1000" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -770,13 +734,11 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     });
     expect(under.allowed).toBe(true);
     expect(under.tokenNotional?.multicallExpanded).toBe(true);
-    expect(Array.isArray(under.tokenNotional?.capsApplied)).toBe(true);
+    expect(under.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
 
     const over = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "100" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -797,8 +759,6 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        requireDecodableCalldata: false,
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -832,8 +792,6 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "1000" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -845,14 +803,12 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
     expect(check.reasons).toEqual([]);
     expect(check.tokenNotional?.multicallExpanded).toBe(true);
     expect(check.tokenNotional?.movements).toHaveLength(2);
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
 
     // Same batch under a higher cap still allowed
     const under = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: { [TOKEN.toLowerCase()]: "1200" },
       },
       dailySpend: daySpend(0),
       to: TOKEN,
@@ -861,7 +817,7 @@ describe("evaluatePolicy v0.1.8 router + multicall", () => {
       destinationIsContract: true,
     });
     expect(under.allowed).toBe(true);
-    expect(Array.isArray(under.tokenNotional?.capsApplied)).toBe(true);
+    expect(under.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("native-only still PLS-only after multicall work", () => {
@@ -953,15 +909,12 @@ describe("inspectTokenNotional v0.1.9 WETH9 deposit/withdraw", () => {
 });
 
 describe("evaluatePolicy v0.1.9 WETH9 deposit/withdraw", () => {
-  const base = DEFAULT_POLICY(100, 1000);
+  const base = DEFAULT_POLICY();
 
   it("allows WPLS deposit under requireDecodableCalldata when decoded", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: { native: parseEther("10").toString() },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -972,16 +925,13 @@ describe("evaluatePolicy v0.1.9 WETH9 deposit/withdraw", () => {
     expect(check.allowed).toBe(true);
     expect(check.tokenNotional?.pattern).toBe("weth.deposit");
     expect(check.tokenNotional?.reliable).toBe(true);
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("allows WPLS deposit when erc20NotionalCaps.native exceeded (operator-trust)", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: { native: parseEther("1").toString() },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -991,7 +941,7 @@ describe("evaluatePolicy v0.1.9 WETH9 deposit/withdraw", () => {
     });
     expect(check.allowed).toBe(true); // operator-trust: not a hard gate
     expect(check.reasons).toEqual([]);
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("inspects WPLS withdraw notional vs erc20NotionalCaps[WPLS] without hard gate", () => {
@@ -1004,11 +954,6 @@ describe("evaluatePolicy v0.1.9 WETH9 deposit/withdraw", () => {
     const under = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: {
-          [WPLS_ADDRESS.toLowerCase()]: parseEther("100").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -1022,11 +967,6 @@ describe("evaluatePolicy v0.1.9 WETH9 deposit/withdraw", () => {
     const over = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: {
-          [WPLS_ADDRESS.toLowerCase()]: parseEther("10").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -1143,7 +1083,7 @@ describe("inspectTokenNotional v0.1.12 multicall outer native", () => {
 });
 
 describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
-  const base = DEFAULT_POLICY(100, 1000);
+  const base = DEFAULT_POLICY();
   const multicallBytesAbi = [
     {
       type: "function",
@@ -1164,9 +1104,6 @@ describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: { native: parseEther("1").toString() },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -1178,8 +1115,7 @@ describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
     expect(check.reasons).toEqual([]);
     expect(check.tokenNotional?.multicallExpanded).toBe(true);
     expect(check.tokenNotional?.reliable).toBe(true);
-    // capsApplied is empty under operator-trust (no hard notional gates)
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("allows multicall+deposit when outer value is under native display cap", () => {
@@ -1191,9 +1127,6 @@ describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [WPLS_ADDRESS],
-        requireDecodableCalldata: true,
-        erc20NotionalCaps: { native: parseEther("10").toString() },
       },
       dailySpend: daySpend(0),
       to: WPLS_ADDRESS,
@@ -1202,7 +1135,7 @@ describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
       destinationIsContract: true,
     });
     expect(check.allowed).toBe(true);
-    expect(Array.isArray(check.tokenNotional?.capsApplied)).toBe(true);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("zero outer value multicall token transfer still sums ERC-20 only", () => {
@@ -1230,11 +1163,6 @@ describe("evaluatePolicy v0.1.12 multicall + erc20NotionalCaps.native", () => {
     const check = evaluatePolicy({
       policy: {
         ...base,
-        contractAllowlist: [TOKEN],
-        erc20NotionalCaps: {
-          [TOKEN.toLowerCase()]: "1000",
-          native: parseEther("1").toString(),
-        },
       },
       dailySpend: daySpend(0),
       to: TOKEN,

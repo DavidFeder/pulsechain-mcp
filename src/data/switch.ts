@@ -899,7 +899,7 @@ export function prepareSwitchSwap(
       "propose_agent_tx({ walletId, to: intent.to, valuePls: intent.valuePls, data: intent.data }) — " +
       "valuePls is human PLS (e.g. \"1\" or \"100000\"), NOT wei. Do not pass valueWei as valuePls. " +
       "to MUST be intent.to from upstream (never hardcode SwitchRouter). " +
-      "Then read reviewSummary → execute_agent_tx with confirm=true. Re-quote if aged or eth_call fails.",
+      "Then read reviewSummary → execute_agent_tx. Re-quote if aged or eth_call fails.",
     note: PREPARE_NOTE,
   };
 }

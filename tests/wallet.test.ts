@@ -74,9 +74,6 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempWalletDir(),
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 10,
-    maxPlsDaily: 100,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -214,7 +211,7 @@ describe("wallet crypto", () => {
 });
 
 describe("wallet policy", () => {
-  const basePolicy = DEFAULT_POLICY(10, 100);
+  const basePolicy = DEFAULT_POLICY();
 
   it("allows EOA native transfer (display caps do not hard-deny)", () => {
     const check = evaluatePolicy({
@@ -227,7 +224,8 @@ describe("wallet policy", () => {
     });
     expect(check.allowed).toBe(true);
     expect(check.isContractInteraction).toBe(false);
-    expect(check.remainingDaily).toBe(92);
+    expect(check.projectedDailySpend).toBe(8);
+    expect(check.remainingDaily).toBeUndefined();
   });
 
   it("operator-trust: value over legacy maxPlsPerTx is still allowed", () => {
@@ -268,7 +266,7 @@ describe("wallet policy", () => {
     });
     expect(check.allowed).toBe(true);
     expect(check.isContractInteraction).toBe(true);
-    expect(check.tokenNotional?.notes.join(" ")).toMatch(/Operator-trust/i);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("allows contract interaction regardless of allowlist membership", () => {
@@ -276,7 +274,6 @@ describe("wallet policy", () => {
     const check = evaluatePolicy({
       policy: {
         ...basePolicy,
-        contractAllowlist: [wpls],
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: wpls,
@@ -306,8 +303,6 @@ describe("wallet policy", () => {
     const check = evaluatePolicy({
       policy: {
         ...basePolicy,
-        contractAllowlist: [other, token],
-        tokenAllowlist: [token],
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: other,
@@ -339,8 +334,6 @@ describe("wallet policy", () => {
     const check = evaluatePolicy({
       policy: {
         ...basePolicy,
-        contractAllowlist: [wpls],
-        allowlistExpiresAt: "2020-01-01T00:00:00.000Z",
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: wpls,
@@ -350,7 +343,7 @@ describe("wallet policy", () => {
       now: new Date("2026-07-26T12:00:00.000Z"),
     });
     expect(check.allowed).toBe(true);
-    expect(check.allowlistExpired).toBe(true);
+    expect(check.allowlistExpired).toBeUndefined();
   });
 
   it("operator-trust: tokenSpendCaps and tokenDailyCaps are not hard gates", () => {
@@ -358,8 +351,6 @@ describe("wallet policy", () => {
     const perTx = evaluatePolicy({
       policy: {
         ...basePolicy,
-        contractAllowlist: [dest as `0x${string}`],
-        tokenSpendCaps: { [dest.toLowerCase()]: 2 },
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: dest,
@@ -372,8 +363,6 @@ describe("wallet policy", () => {
     const daily = evaluatePolicy({
       policy: {
         ...basePolicy,
-        contractAllowlist: [dest as `0x${string}`],
-        tokenDailyCaps: { [dest.toLowerCase()]: 3 },
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {
@@ -392,7 +381,7 @@ describe("wallet policy", () => {
 
   it("operator-trust: allowNativeTransfers=false is not a hard gate", () => {
     const check = evaluatePolicy({
-      policy: { ...basePolicy, allowNativeTransfers: false },
+      policy: { ...basePolicy },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: "0x0000000000000000000000000000000000000001",
       valuePls: 1,
@@ -409,8 +398,8 @@ describe("wallet store + create (no key leak)", () => {
     const info = await createAgentWallet(cfg, { label: "test" });
     expect(info.id).toMatch(/^aw_[a-f0-9]{32}$/);
     expect(info.address).toMatch(/^0x[a-fA-F0-9]{40}$/);
-    expect(info.policy.maxPlsPerTx).toBe(10);
-    expect(info.policy.contractAllowlist).toEqual([]);
+    expect(info.policy).toEqual({ enabled: true, killed: false });
+    expect(info.fundingAuthorizesSpend).toBe(true);
     expect(info.label).toBe("test");
 
     const json = JSON.stringify(info);
@@ -472,20 +461,13 @@ describe("wallet store + create (no key leak)", () => {
     expect(out.data.wallets[0]!.nested.balance).toBe("1");
   });
 
-  it("kill switch disables signing and clears allowlists", async () => {
+  it("kill switch disables signing", async () => {
     const cfg = testConfig();
     const info = await createAgentWallet(cfg);
-    const wpls = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" as const;
-    const withList = await setAgentPolicy(cfg, info.id, {
-      contractAllowlist: [wpls],
-    });
-    expect(withList.policy.contractAllowlist.length).toBe(1);
 
     const killed = await killSwitch(cfg, info.id);
     expect(killed.policy.killed).toBe(true);
     expect(killed.policy.enabled).toBe(false);
-    expect(killed.policy.contractAllowlist).toEqual([]);
-    expect(killed.policy.tokenAllowlist).toEqual([]);
 
     // Idempotent re-kill
     const again = await killSwitch(cfg, info.id);
@@ -502,30 +484,20 @@ describe("wallet store + create (no key leak)", () => {
     expect(check.allowed).toBe(false);
   });
 
-  it("set_agent_policy updates allowlist and time-box", async () => {
+  it("set_agent_policy updates enabled/killed only", async () => {
     const cfg = testConfig();
     const info = await createAgentWallet(cfg);
-    const wpls = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" as const;
-    const exp = "2099-01-01T00:00:00.000Z";
-    const updated = await setAgentPolicy(cfg, info.id, {
-      maxPlsPerTx: 5,
-      contractAllowlist: [wpls],
-      allowlistExpiresAt: exp,
-      tokenSpendCaps: { [wpls]: 3 },
-    });
-    expect(updated.policy.maxPlsPerTx).toBe(5);
-    expect(updated.policy.contractAllowlist[0]!.toLowerCase()).toBe(
-      wpls.toLowerCase(),
-    );
-    expect(updated.policy.allowlistExpiresAt).toBe(exp);
-    expect(updated.policy.tokenSpendCaps[wpls.toLowerCase()]).toBe(3);
-    expect(updated.allowlistExpired).toBe(false);
+    const disabled = await setAgentPolicy(cfg, info.id, { enabled: false });
+    expect(disabled.policy.enabled).toBe(false);
+    expect(disabled.policy.killed).toBe(false);
+    const reenabled = await setAgentPolicy(cfg, info.id, { enabled: true });
+    expect(reenabled.policy.enabled).toBe(true);
   });
 
-  it("execute_agent_tx requires confirm=true (fail closed)", async () => {
+  it("execute_agent_tx without confirm still fails closed on missing proposal", async () => {
     const cfg = testConfig();
-    await expect(executeAgentTx(cfg, "prop_" + "ab".repeat(12), false)).rejects.toThrow(
-      /confirm/i,
+    await expect(executeAgentTx(cfg, "prop_" + "ab".repeat(12))).rejects.toThrow(
+      /proposal|not found|expired/i,
     );
   });
 
@@ -551,17 +523,9 @@ describe("wallet store + create (no key leak)", () => {
     expect(off.enableWarning).toBeUndefined();
   });
 
-  it("transfer_pls requires confirm; kill switch blocks without key leak", async () => {
-    const cfg = testConfig({ maxPlsPerTx: 1, maxPlsDaily: 1 });
+  it("transfer_pls is blocked by kill switch without key leak", async () => {
+    const cfg = testConfig();
     const info = await createAgentWallet(cfg);
-    await expect(
-      transferPls(cfg, {
-        walletId: info.id,
-        to: "0x0000000000000000000000000000000000000001",
-        amountPls: 50,
-        confirm: false,
-      }),
-    ).rejects.toThrow(/confirm/i);
 
     await killSwitch(cfg, info.id);
     await expect(
@@ -569,7 +533,6 @@ describe("wallet store + create (no key leak)", () => {
         walletId: info.id,
         to: "0x0000000000000000000000000000000000000001",
         amountPls: 50,
-        confirm: true,
       }),
     ).rejects.toThrow(/kill|disabled|blocked/i);
 
@@ -687,7 +650,7 @@ describe("wallet store + create (no key leak)", () => {
         walletId: "aw_" + "ab".repeat(16),
         address: account.address,
       }),
-      policy: DEFAULT_POLICY(1, 10),
+      policy: DEFAULT_POLICY(),
       dailySpend: { date: "2020-01-01", spentPls: 0 },
       tokenDailySpend: {},
     };
@@ -721,7 +684,7 @@ describe("wallet store + create (no key leak)", () => {
       address: account.address,
       createdAt: new Date().toISOString(),
       encryptedKey: legacyBlob,
-      policy: DEFAULT_POLICY(1, 10),
+      policy: DEFAULT_POLICY(),
       dailySpend: { date: "2020-01-01", spentPls: 0 },
       tokenDailySpend: {},
     };

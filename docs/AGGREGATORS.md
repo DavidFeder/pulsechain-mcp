@@ -34,7 +34,7 @@ Neither Piteas nor Switch is a **best-price oracle**. Prefer addresses over symb
 3. piteas_prepare_swap (or switch_prepare_swap)
 4. [wallets on] propose_agent_tx with prepared to/data/value
 5. Read reviewSummary + safetyHints + agentGuidance
-6. execute_agent_tx with confirm=true (or MRTR) — only after review
+6. execute_agent_tx — after reading reviewSummary (funding authorizes)
 ```
 
 **Stale-quote rule:** quotes expire; re-quote before send if delayed, market moved, prepare failed, or `quoteReady` is false. Never reuse old calldata.

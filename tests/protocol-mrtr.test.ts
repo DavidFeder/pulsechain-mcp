@@ -28,7 +28,7 @@ import {
   type ConfirmHandlerContext,
   type ConfirmRequestState,
 } from "../src/utils/confirm.js";
-import { PolicyError, ConfigError } from "../src/utils/errors.js";
+import { PolicyError } from "../src/utils/errors.js";
 import { loadConfig } from "../src/config.js";
 import { stripSecrets } from "../src/utils/safety.js";
 import { isInputRequiredResult as defineGuard } from "@modelcontextprotocol/server";
@@ -41,12 +41,10 @@ import { resetWalletLocksForTests } from "../src/wallet/lock.js";
 import { resetWalletDirOwnershipForTests } from "../src/wallet/owner.js";
 import {
   createAgentWallet,
-  killSwitch,
   proposeAgentTx,
-  setAgentPolicy,
   setTestBroadcast,
 } from "../src/wallet/service.js";
-import { loadWalletRecord, persistBroadcastBarrier } from "../src/wallet/store.js";
+import { persistBroadcastBarrier } from "../src/wallet/store.js";
 
 const PRIVATE_KEY_HEX_RE = /0x[a-fA-F0-9]{64}/;
 
@@ -106,7 +104,7 @@ describe("confirm helpers (hashing / snapshot)", () => {
   });
 
   it("policySnapshotId never embeds private key material", () => {
-    const policy = DEFAULT_POLICY(10, 100);
+    const policy = DEFAULT_POLICY();
     const id = policySnapshotId(policy);
     expect(id).toMatch(/^[a-f0-9]{32}$/);
     expect(id).not.toMatch(PRIVATE_KEY_HEX_RE);
@@ -156,7 +154,7 @@ describe("resolveConfirm dual path", () => {
       },
       ctx: modernCtx(),
       walletId: "aw_" + "ab".repeat(16),
-      policySnapshotId: policySnapshotId(DEFAULT_POLICY(10, 100)),
+      policySnapshotId: policySnapshotId(DEFAULT_POLICY()),
     });
 
     expect(r.confirmed).toBe(false);
@@ -189,7 +187,7 @@ describe("resolveConfirm dual path", () => {
       }),
     );
     expect(decoded.policySnapshotId).toBe(
-      policySnapshotId(DEFAULT_POLICY(10, 100)),
+      policySnapshotId(DEFAULT_POLICY()),
     );
     expect(Object.keys(decoded).sort()).toEqual(
       ["exp", "intentHash", "policySnapshotId", "step", "tool", "walletId"].sort(),
@@ -428,8 +426,8 @@ describe("resolveConfirm dual path", () => {
       to: "0x0000000000000000000000000000000000000001",
       amountPls: 1,
     };
-    const snapBefore = policySnapshotId(DEFAULT_POLICY(10, 100));
-    const snapAfter = policySnapshotId(DEFAULT_POLICY(1, 10));
+    const snapBefore = policySnapshotId(DEFAULT_POLICY());
+    const snapAfter = policySnapshotId(DEFAULT_POLICY());
     expect(snapBefore).not.toBe(snapAfter);
 
     const first = await resolveConfirm({
@@ -469,8 +467,8 @@ describe("resolveConfirm dual path", () => {
     const tool = "execute_agent_tx";
     const walletId = "aw_" + "44".repeat(16);
     const args = { proposalId: "prop_" + "ab".repeat(12) };
-    const snapBefore = policySnapshotId(DEFAULT_POLICY(10, 100));
-    const snapAfter = policySnapshotId(DEFAULT_POLICY(1, 10));
+    const snapBefore = policySnapshotId(DEFAULT_POLICY());
+    const snapAfter = policySnapshotId(DEFAULT_POLICY());
     expect(snapBefore).not.toBe(snapAfter);
 
     const first = await resolveConfirm({
@@ -509,7 +507,7 @@ describe("resolveConfirm dual path", () => {
     const tool = "execute_agent_tx";
     const walletId = "aw_" + "44".repeat(16);
     const args = { proposalId: "prop_" + "ab".repeat(12) };
-    const snap = policySnapshotId(DEFAULT_POLICY(10, 100));
+    const snap = policySnapshotId(DEFAULT_POLICY());
 
     const first = await resolveConfirm({
       tool,
@@ -635,9 +633,6 @@ function snapshotTestConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: dir,
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 10,
-    maxPlsDaily: 100,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -688,11 +683,6 @@ function mrtrMcpCtx(overrides?: {
   };
 }
 
-function expectInputRequired(value: unknown): InputRequiredResult {
-  expect(isInputRequiredResult(value)).toBe(true);
-  return value as InputRequiredResult;
-}
-
 function toolErrorText(value: unknown): string {
   const res = value as {
     isError?: boolean;
@@ -702,7 +692,7 @@ function toolErrorText(value: unknown): string {
   return res.content?.[0]?.text ?? JSON.stringify(value);
 }
 
-describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
+describe("wallet write tools execute immediately (no confirm/MRTR gate)", () => {
   afterEach(() => {
     setTestBroadcast(null);
     resetWalletLocksForTests();
@@ -727,103 +717,33 @@ describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
     return { wallet, proposal };
   }
 
-  it("create_agent_wallet still mints policySnapshotId none", async () => {
+  it("create_agent_wallet returns a wallet without InputRequired", async () => {
     const cfg = snapshotTestConfig();
     const handlers = captureWalletHandlers(cfg);
-    const first = expectInputRequired(
-      await handlers.get("create_agent_wallet")!({}, mrtrMcpCtx()),
-    );
-    const decoded = await getConfirmStateCodec().verify(
-      first.requestState!,
-      {} as never,
-    );
-    expect(decoded.tool).toBe("create_agent_wallet");
-    expect(decoded.policySnapshotId).toBe("none");
-    expect(decoded.walletId).toBeUndefined();
+    const first = await handlers.get("create_agent_wallet")!({}, mrtrMcpCtx());
+    expect(isInputRequiredResult(first)).toBe(false);
+    const res = first as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; data?: { id?: string; address?: string } };
+    };
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(res.structuredContent?.data?.id).toMatch(/^aw_/);
+    expect(res.structuredContent?.data?.address).toMatch(/^0x/i);
   });
 
-  it("execute_agent_tx MRTR challenge seals the current wallet policy snapshot", async () => {
-    const cfg = snapshotTestConfig();
-    const { wallet, proposal } = await pendingProposal(cfg);
-    const snap = policySnapshotId(
-      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
-    );
-    expect(snap).not.toBe("none");
-
-    const handlers = captureWalletHandlers(cfg);
-    const first = expectInputRequired(
-      await handlers.get("execute_agent_tx")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
-    );
-    const decoded = await getConfirmStateCodec().verify(
-      first.requestState!,
-      {} as never,
-    );
-    expect(decoded.tool).toBe("execute_agent_tx");
-    expect(decoded.walletId).toBe(wallet.id);
-    expect(decoded.policySnapshotId).toBe(snap);
-  });
-
-  it("execute_agent_tx MRTR resume re-challenges when policy snapshot changed after mint", async () => {
-    const cfg = snapshotTestConfig();
-    const { wallet, proposal } = await pendingProposal(cfg);
-    const snapBefore = policySnapshotId(
-      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
-    );
-    const handlers = captureWalletHandlers(cfg);
-
-    const first = expectInputRequired(
-      await handlers.get("execute_agent_tx")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
-    );
-
-    const killed = await killSwitch(cfg, wallet.id);
-    const snapAfter = policySnapshotId(killed.policy);
-    expect(snapAfter).not.toBe(snapBefore);
-
-    const second = expectInputRequired(
-      await handlers.get("execute_agent_tx")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx({
-          inputResponses: acceptConfirmResponses(true),
-          requestState: first.requestState,
-        }),
-      ),
-    );
-    const reDecoded = await getConfirmStateCodec().verify(
-      second.requestState!,
-      {} as never,
-    );
-    expect(reDecoded.policySnapshotId).toBe(snapAfter);
-    expect(reDecoded.tool).toBe("execute_agent_tx");
-  });
-
-  it("execute_agent_tx MRTR resume proceeds when policy snapshot is unchanged", async () => {
+  it("execute_agent_tx broadcasts immediately when wallets are on", async () => {
     const cfg = snapshotTestConfig();
     const { proposal } = await pendingProposal(cfg);
     const handlers = captureWalletHandlers(cfg);
     setTestBroadcast(async () => FAKE_TX_HASH);
 
-    const first = expectInputRequired(
-      await handlers.get("execute_agent_tx")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
-    );
-
-    const second = await handlers.get("execute_agent_tx")!(
+    const first = await handlers.get("execute_agent_tx")!(
       { proposalId: proposal.id },
-      mrtrMcpCtx({
-        inputResponses: acceptConfirmResponses(true),
-        requestState: first.requestState,
-      }),
+      mrtrMcpCtx(),
     );
-    expect(isInputRequiredResult(second)).toBe(false);
-    const res = second as {
+    expect(isInputRequiredResult(first)).toBe(false);
+    const res = first as {
       isError?: boolean;
       structuredContent?: { ok?: boolean; data?: { txHash?: string } };
     };
@@ -832,74 +752,18 @@ describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
     expect(res.structuredContent?.data?.txHash).toBe(FAKE_TX_HASH);
   });
 
-  it("settle_interrupted_broadcast MRTR resume re-challenges when policy snapshot changed after mint", async () => {
-    const cfg = snapshotTestConfig();
-    const { wallet, proposal } = await pendingProposal(cfg);
-    persistBroadcastBarrier(
-      cfg.agentWalletDir,
-      proposal,
-      FAKE_TX_HASH,
-    );
-    const snapBefore = policySnapshotId(
-      loadWalletRecord(cfg.agentWalletDir, wallet.id).policy,
-    );
-    const handlers = captureWalletHandlers(cfg);
-
-    const first = expectInputRequired(
-      await handlers.get("settle_interrupted_broadcast")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
-    );
-    const minted = await getConfirmStateCodec().verify(
-      first.requestState!,
-      {} as never,
-    );
-    expect(minted.policySnapshotId).toBe(snapBefore);
-
-    const updated = await setAgentPolicy(cfg, wallet.id, { maxPlsPerTx: 1 });
-    const snapAfter = policySnapshotId(updated.policy);
-    expect(snapAfter).not.toBe(snapBefore);
-
-    const second = expectInputRequired(
-      await handlers.get("settle_interrupted_broadcast")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx({
-          inputResponses: acceptConfirmResponses(true),
-          requestState: first.requestState,
-        }),
-      ),
-    );
-    const reDecoded = await getConfirmStateCodec().verify(
-      second.requestState!,
-      {} as never,
-    );
-    expect(reDecoded.policySnapshotId).toBe(snapAfter);
-    expect(reDecoded.tool).toBe("settle_interrupted_broadcast");
-  });
-
-  it("settle_interrupted_broadcast MRTR resume proceeds when policy snapshot is unchanged", async () => {
+  it("settle_interrupted_broadcast finishes local state without InputRequired", async () => {
     const cfg = snapshotTestConfig();
     const { proposal } = await pendingProposal(cfg);
     persistBroadcastBarrier(cfg.agentWalletDir, proposal, FAKE_TX_HASH);
     const handlers = captureWalletHandlers(cfg);
 
-    const first = expectInputRequired(
-      await handlers.get("settle_interrupted_broadcast")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
-    );
-
-    const second = await handlers.get("settle_interrupted_broadcast")!(
+    const first = await handlers.get("settle_interrupted_broadcast")!(
       { proposalId: proposal.id },
-      mrtrMcpCtx({
-        inputResponses: acceptConfirmResponses(true),
-        requestState: first.requestState,
-      }),
+      mrtrMcpCtx(),
     );
-    expect(isInputRequiredResult(second)).toBe(false);
-    const res = second as {
+    expect(isInputRequiredResult(first)).toBe(false);
+    const res = first as {
       isError?: boolean;
       structuredContent?: { ok?: boolean; data?: { status?: string } };
     };
@@ -908,24 +772,23 @@ describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
     expect(res.structuredContent?.data?.status).toBe("executed");
   });
 
-  it("sign_and_send MRTR challenge seals the current wallet policy snapshot", async () => {
+  it("sign_and_send broadcasts immediately", async () => {
     const cfg = snapshotTestConfig();
-    const { wallet, proposal } = await pendingProposal(cfg);
+    const { proposal } = await pendingProposal(cfg);
     const handlers = captureWalletHandlers(cfg);
-    const first = expectInputRequired(
-      await handlers.get("sign_and_send")!(
-        { proposalId: proposal.id },
-        mrtrMcpCtx(),
-      ),
+    setTestBroadcast(async () => FAKE_TX_HASH);
+    const first = await handlers.get("sign_and_send")!(
+      { proposalId: proposal.id },
+      mrtrMcpCtx(),
     );
-    const decoded = await getConfirmStateCodec().verify(
-      first.requestState!,
-      {} as never,
-    );
-    expect(decoded.tool).toBe("sign_and_send");
-    expect(decoded.policySnapshotId).toBe(
-      policySnapshotId(loadWalletRecord(cfg.agentWalletDir, wallet.id).policy),
-    );
+    expect(isInputRequiredResult(first)).toBe(false);
+    const res = first as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; data?: { txHash?: string } };
+    };
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(res.structuredContent?.data?.txHash).toBe(FAKE_TX_HASH);
   });
 
   it("execute_agent_tx fails closed when the wallet record cannot be loaded", async () => {
@@ -940,8 +803,7 @@ describe("execute/settle/sign_and_send bind real policySnapshotId", () => {
     );
     expect(isInputRequiredResult(first)).toBe(false);
     const text = toolErrorText(first);
-    expect(text).toMatch(/policy snapshot|Wallet not found/i);
-    expect(text).not.toMatch(/"policySnapshotId":\s*"none"/);
+    expect(text).toMatch(/Wallet not found|not found/i);
   });
 });
 
@@ -958,21 +820,14 @@ describe("MRTR secret: stdio fallback vs HTTP wallets-on require", () => {
     expect(a).toBe(b);
   });
 
-  it("wallets + HTTP without MRTR secret fail closed at loadConfig", () => {
-    expect(() =>
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        HTTP_TRANSPORT_PORT: "8787",
-      }),
-    ).toThrow(ConfigError);
-    expect(() =>
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        HTTP_TRANSPORT_PORT: "8787",
-      }),
-    ).toThrow(/AGENT_WALLET_MRTR_SECRET/);
+  it("wallets + HTTP without MRTR secret still load (secret unused for writes)", () => {
+    const cfg = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      HTTP_TRANSPORT_PORT: "8787",
+    });
+    expect(cfg.httpTransportPort).toBe(8787);
+    expect(cfg.agentWalletEnabled).toBe(true);
   });
 
   it("wallets + HTTP with MRTR ≥32 bytes load; stdio wallets-on without MRTR load", () => {

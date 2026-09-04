@@ -36,9 +36,6 @@ const smokeConfig: AppConfig = {
   agentWalletMasterKey: undefined,
   agentWalletDir: "./data/wallets-smoke",
   agentWalletMultiprocStrict: false,
-  agentWalletEnforceLegacyCaps: false,
-  maxPlsPerTx: 100,
-  maxPlsDaily: 1000,
   httpTransportPort: undefined,
   logLevel: "error",
   httpTimeoutMs: 5_000,
@@ -486,7 +483,7 @@ describe("smoke: tool registration (no live network)", () => {
     expect(ro).toMatch(/does not sign or broadcast/i);
     expect(wallets).toMatch(/operator-trust agent wallets/i);
     expect(wallets).toMatch(/funding authorizes/i);
-    expect(wallets).toMatch(/confirm=true \/ MRTR is host UX only/i);
+    expect(wallets).toMatch(/no spend caps/i);
   });
 
   it("lists tool names via registry export (import-only smoke)", async () => {

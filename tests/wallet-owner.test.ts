@@ -70,9 +70,6 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 100,
-    maxPlsDaily: 1000,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -224,8 +221,6 @@ describe("buildOperatorAtAGlance (shipped operator UX)", () => {
     const snap = buildOperatorAtAGlance({
       enabled: false,
       masterKeyConfigured: false,
-      maxPlsPerTx: 100,
-      maxPlsDaily: 1000,
       walletCount: 0,
       killedWalletCount: 0,
       ownership: {
@@ -238,12 +233,12 @@ describe("buildOperatorAtAGlance (shipped operator UX)", () => {
     expect(snap.headline).toMatch(/OFF|disabled/i);
     expect(snap.writesBlocked).toBe(false);
     expect(snap.safeFlow).toMatch(/inspect_tx_intent.*propose_agent_tx.*execute_agent_tx/i);
-    expect(snap.nextAction).toMatch(/Leave disabled|MASTER_KEY|unique/i);
+    expect(snap.nextAction).toMatch(/Research-only|MASTER_KEY|unique/i);
     expect(snap.nextAction).toMatch(
-      /process-local|not a distributed lock|MULTIPROC_STRICT|host-strength/i,
+      /process-local|not a distributed lock|MULTIPROC_STRICT|unique AGENT_WALLET_DIR/i,
     );
     expect(snap.bullets.join(" ")).toMatch(
-      /multi-writer|unique AGENT_WALLET_DIR|host-strength/i,
+      /multi-writer|unique AGENT_WALLET_DIR|funding/i,
     );
     expect(JSON.stringify(snap)).not.toMatch(/privateKey|0x[a-f0-9]{64}/i);
   });
@@ -252,8 +247,6 @@ describe("buildOperatorAtAGlance (shipped operator UX)", () => {
     const snap = buildOperatorAtAGlance({
       enabled: true,
       masterKeyConfigured: true,
-      maxPlsPerTx: 5,
-      maxPlsDaily: 20,
       walletCount: 1,
       killedWalletCount: 0,
       ownership: {
@@ -277,8 +270,6 @@ describe("buildOperatorAtAGlance (shipped operator UX)", () => {
     const looseNums = buildOperatorAtAGlance({
       enabled: true,
       masterKeyConfigured: true,
-      maxPlsPerTx: 5000,
-      maxPlsDaily: 50000,
       walletCount: 2,
       killedWalletCount: 0,
       ownership: baseOwnership,
@@ -291,17 +282,15 @@ describe("buildOperatorAtAGlance (shipped operator UX)", () => {
     const snap = buildOperatorAtAGlance({
       enabled: true,
       masterKeyConfigured: true,
-      maxPlsPerTx: 500,
-      maxPlsDaily: 2000,
       walletCount: 1,
       killedWalletCount: 0,
       ownership: baseOwnership,
     });
     expect(snap.policyPosture).toBe("operator_trust");
-    expect(snap.policyPostureNote).toMatch(/Operator-trust|funding the agent/i);
+    expect(snap.policyPostureNote).toMatch(/Funding the agent is authorization/i);
     expect(snap.bullets.join(" ")).toMatch(/EIP-1559|BEATS/i);
-    expect(snap.bullets.join(" ")).toMatch(/value|gas headroom|total PLS|Operator-trust/i);
-    expect(snap.nextAction).toMatch(/gas|operator-trust|propose/i);
+    expect(snap.bullets.join(" ")).toMatch(/value|gas headroom|total PLS|Funding the agent/i);
+    expect(snap.nextAction).toMatch(/gas|funding|propose/i);
   });
 });
 
@@ -326,8 +315,6 @@ describe("persistBroadcastBarrier (shipped durability)", () => {
         destinationIsContract: false,
         valuePls: 0,
         projectedDailySpend: 0,
-        remainingDaily: 1,
-        allowlistExpired: false,
       },
       status: "pending",
     };
@@ -470,13 +457,12 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
     expect(
       (st.security as { multiprocStrictDefault?: boolean }).multiprocStrictDefault,
     ).toBe(true);
-    expect(st.security.confirmHostStrengthOnly).toBe(true);
-    expect(String(st.security.confirmRequired)).toMatch(/host UX|confirm/i);
+    expect(st.security.confirmRequired).toBe(false);
     // operatorAtAGlance must make shared-dir / not-distributed-lock hard to miss
     expect(st.operatorAtAGlance!.bullets.join(" ")).toMatch(
       /process-local|not a distributed lock|multi-writer|warn-only|MULTIPROC/i,
     );
-    expect(st.operatorAtAGlance!.bullets.join(" ")).toMatch(/host UX|confirm|operator-trust/i);
+    expect(st.operatorAtAGlance!.bullets.join(" ")).toMatch(/funding|authorization|operator-trust/i);
     expect(st.security.residualCrashWindow).toMatch(
       /barrier|pending|settle_interrupted|explorer/i,
     );
@@ -484,8 +470,8 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
       /broadcasting|txHash|idempotent|settle/i,
     );
     expect(String(st.enableWarning)).toMatch(/process-local|AGENT_WALLET_DIR/i);
-    expect(String(st.security.tokenAllowlistSemantics)).toMatch(
-      /operator-trust|Legacy|funding/i,
+    expect(String(st.security.trustModel)).toMatch(
+      /funding|authorization/i,
     );
     expect(String((st.security as { executeSerialization?: string }).executeSerialization)).toMatch(
       /settle/i,
@@ -507,8 +493,8 @@ describe("agent_wallet_status multiproc fields + execute barrier (service path)"
       tokenNotional: string;
       trustModel?: string;
     };
-    expect(security.tokenNotional).toMatch(/advisory|not a hard deny/i);
-    expect(String(security.trustModel ?? "")).toMatch(/operator-trust|funding/i);
+    expect(security.tokenNotional).toMatch(/advisory|not a send gate/i);
+    expect(String(security.trustModel ?? "")).toMatch(/funding|authorization/i);
   });
 
   it("status surfaces multiproc strict mode when configured", () => {

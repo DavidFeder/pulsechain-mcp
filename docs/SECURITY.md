@@ -2,7 +2,7 @@
 
 **Setup first:** [BOOTSTRAP.md](BOOTSTRAP.md). Agent workflows: [AGENT_GUIDANCE.md](AGENT_GUIDANCE.md). Token traps: [TOKEN_IDENTITY.md](TOKEN_IDENTITY.md).
 
-This page is the **short essentials** front door only. Residual detail (launcher tables, multiproc matrices, encryption internals, crash windows, reviewSummary fields, token-notional residual) lives in **[SECURITY_DEEP.md](SECURITY_DEEP.md)** — optional, not required for first-run.
+This page is the **short essentials** front door only. Residual detail (launcher tables, multiproc matrices, encryption internals, crash windows, reviewSummary fields) lives in **[SECURITY_DEEP.md](SECURITY_DEEP.md)** — optional, not required for first-run.
 
 ---
 
@@ -28,16 +28,14 @@ Do not use `console.log` / print-then-paste key generation with agents. Lose the
 
 ## Operator-trust (when wallets on)
 
-- **Funding the agent is authorization.**
+- **Funding the agent is authorization.** If you fund an agent wallet, the agent can spend it. You accept that risk.
 - Private keys stay **AES-256-GCM** encrypted at rest; tools never return them.
-- No product spend-cap defaults. `MAX_PLS_*` / allowlists / token-notional are **display / advisory** if present — not hard custody locks. Real controls: **small balances**, **master key**, **unique dir**, **kill_switch**.
-- `AGENT_WALLET_ENFORCE_LEGACY_CAPS` is **off by default** (unset/`false`/`0`/empty). `true`/`1` is **opt-in** hard denies for those stored fields on **this process** — not a custody-policy product default.
-- `confirm=true` / MRTR is **host UX only** — not a cryptographic security product.
+- No spend caps, allowlists, confirm gates, or token-notional send blocks. Real controls: **how much you fund**, **master key**, **unique dir**, **kill_switch**.
 - Prefer: create wallet → verify address → fund (value + PulseChain gas) → inspect → propose → review → execute.
 
 ## Kill switch
 
-If something looks wrong: call **`kill_switch`** / `revoke` with `confirm=true` (or MRTR). Signing stops until carefully recovered.
+If something looks wrong: call **`kill_switch`** / `revoke`. Signing stops until you recover with `set_agent_policy` (`killed=false` and `enabled=true` together).
 
 ## Multiproc (one line)
 

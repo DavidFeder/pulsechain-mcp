@@ -41,16 +41,6 @@ const envSchema = z.object({
   AGENT_WALLET_MULTIPROC_STRICT: z
     .enum(["true", "false", "1", "0", ""])
     .optional(),
-  /**
-   * Opt-in: stored legacy wallet fields become hard denies in evaluatePolicy.
-   * Unset / false / 0 / empty → operator-trust (display-only). true / 1 → enforce.
-   * Does not change the product default (not a custody-policy product).
-   */
-  AGENT_WALLET_ENFORCE_LEGACY_CAPS: z
-    .enum(["true", "false", "1", "0", ""])
-    .optional(),
-  MAX_PLS_PER_TX: z.string().optional(),
-  MAX_PLS_DAILY: z.string().optional(),
   HTTP_TRANSPORT_PORT: z.string().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
   HTTP_TIMEOUT_MS: z.string().optional(),
@@ -319,24 +309,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     assertMasterKeyConfigured(agentWalletMasterKey);
   }
 
-  // Optional MRTR secret: when set, must be long enough for HMAC use.
-  // Wallets + HTTP require a stable secret — process-local HMAC cannot resume
-  // after restart or on a second instance. Stdio may omit it.
+  // Optional leftover MRTR secret (wallet writes no longer require confirm/MRTR).
+  // If set, still require a usable length so a typo is not silently ignored.
   const mrtr = emptyToUndefined(e.AGENT_WALLET_MRTR_SECRET?.trim());
   if (mrtr && Buffer.byteLength(mrtr, "utf8") < 32) {
     throw new ConfigError(
       "AGENT_WALLET_MRTR_SECRET must be at least 32 bytes UTF-8 when set " +
         `(got ${Buffer.byteLength(mrtr, "utf8")} bytes). ` +
-        "Stdio wallets-on may omit it to use a process-local HMAC secret; " +
-        "HTTP + wallets requires ≥32 bytes. Do not reuse AGENT_WALLET_MASTER_KEY.",
-    );
-  }
-  if (agentWalletEnabled && httpTransportPort !== undefined && !mrtr) {
-    throw new ConfigError(
-      "AGENT_WALLET_MRTR_SECRET is required when agent wallets are enabled and HTTP_TRANSPORT_PORT is set " +
-        "(≥32 bytes UTF-8). HTTP restarts and a second instance cannot resume MRTR confirmations with the " +
-        "process-local HMAC fallback used for stdio. Leave HTTP_TRANSPORT_PORT unset for stdio, or set a " +
-        "stable AGENT_WALLET_MRTR_SECRET. Do not reuse AGENT_WALLET_MASTER_KEY.",
+        "This secret is unused for wallet writes (funding authorizes). " +
+        "Do not reuse AGENT_WALLET_MASTER_KEY.",
     );
   }
 
@@ -348,15 +329,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (agentWalletEnabled && agentWalletDir.includes("\0")) {
     throw new ConfigError(
       "AGENT_WALLET_DIR contains an invalid null character. Use a normal filesystem path.",
-    );
-  }
-
-  const maxPlsPerTx = parseNonNegNumber(e.MAX_PLS_PER_TX, 100, "MAX_PLS_PER_TX");
-  const maxPlsDaily = parseNonNegNumber(e.MAX_PLS_DAILY, 1000, "MAX_PLS_DAILY");
-  if (maxPlsPerTx > maxPlsDaily) {
-    throw new ConfigError(
-      `MAX_PLS_PER_TX (${maxPlsPerTx}) cannot exceed MAX_PLS_DAILY (${maxPlsDaily}). ` +
-        `Lower per-tx or raise daily (both are default native PLS caps for new agent wallets).`,
     );
   }
 
@@ -375,19 +347,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     e.AGENT_WALLET_MULTIPROC_STRICT,
     agentWalletEnabled,
   );
-  const agentWalletEnforceLegacyCaps = parseBool(
-    e.AGENT_WALLET_ENFORCE_LEGACY_CAPS,
-  );
-
-  // Loud, fail-closed posture reminder when signing is enabled
   if (agentWalletEnabled) {
     logger.warn(AGENT_WALLET_ENABLE_WARNING, {
-      maxPlsPerTx,
-      maxPlsDaily,
       masterKeyConfigured: true,
       rpcCount: rpcUrls.length,
       multiprocStrict: agentWalletMultiprocStrict,
-      enforceLegacyCaps: agentWalletEnforceLegacyCaps,
     });
   }
 
@@ -404,9 +368,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     agentWalletMasterKey,
     agentWalletDir,
     agentWalletMultiprocStrict,
-    agentWalletEnforceLegacyCaps,
-    maxPlsPerTx,
-    maxPlsDaily,
     httpTransportPort,
     logLevel: (e.LOG_LEVEL ?? DEFAULT_LOG_LEVEL) as LogLevel,
     httpTimeoutMs,

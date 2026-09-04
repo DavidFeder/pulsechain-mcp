@@ -27,7 +27,7 @@ export function formatFatalStartupHint(options?: {
     "Fix environment variables (see .env.example and examples/README.md).",
     "Common issues: missing npm run build (dist/index.js), non-absolute args path,",
     "invalid PULSECHAIN_RPC_URLS, wallets on without/short MASTER_KEY,",
-    "MAX_PLS_PER_TX > MAX_PLS_DAILY, missing/short AGENT_WALLET_MRTR_SECRET (required for wallets+HTTP), bad LOG_LEVEL.",
+    "bad LOG_LEVEL, or HTTP_TRANSPORT_PORT set on a stdio host.",
     "Cursor / Grok Build / Claude Desktop use stdio — do not set HTTP_TRANSPORT_PORT.",
     "Agent install default: research-only (AGENT_WALLET_ENABLED=false). For signing:",
     "scripts/start-wallet-mcp.mjs + gitignored .env.wallet (generate-wallet-env.mjs write-only).",
