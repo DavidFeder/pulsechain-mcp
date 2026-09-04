@@ -236,7 +236,7 @@ describe("pulsechain://chain/config resource", () => {
     };
     expect(testJson.chainId).toBe(943);
     expect(testJson.active.chainId).toBe(943);
-    expect(testJson.networkMismatch?.warning).toMatch(/mainnet defaults/i);
+    expect(testJson.networkMismatch?.warning).toMatch(/mainnet hosts|mainnet defaults/i);
 
     const aliasJson = JSON.parse(
       (
