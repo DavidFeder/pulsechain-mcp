@@ -878,7 +878,7 @@ export function preparePiteasSwap(
     nextStep:
       "propose_agent_tx({ walletId, to: intent.to, valuePls: intent.valuePls, data: intent.data }) — " +
       "valuePls is human PLS (e.g. \"1\" or \"100000\"), NOT wei. Do not pass valueWei as valuePls. " +
-      "Then read reviewSummary (destination Piteas router, native value, gas) → execute_agent_tx with confirm=true. " +
+      "Then read reviewSummary (destination Piteas router, native value, gas) → execute_agent_tx. " +
       "Do not invent alternate calldata. Re-quote if the proposal ages or eth_call fails.",
     note: PREPARE_NOTE,
   };

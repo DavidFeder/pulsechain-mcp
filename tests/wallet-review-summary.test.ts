@@ -11,7 +11,7 @@ import {
   buildTxReviewSummary,
   categorizeDenyReason,
   formatConfirmPrompt,
-  POLICY_BACKSTOP_NOTE,
+  FUNDING_AUTHORIZES_NOTE,
   SAFE_USAGE_PATTERN,
 } from "../src/wallet/reviewSummary.js";
 import { evaluatePolicy } from "../src/wallet/policy.js";
@@ -53,9 +53,6 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     agentWalletMasterKey: randomBytes(32).toString("hex"),
     agentWalletDir: tempDir(),
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 100,
-    maxPlsDaily: 1000,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -80,9 +77,9 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
   it("categorizes common deny reasons", () => {
     expect(
       categorizeDenyReason(
-        "valueWei 1 exceeds maxPlsPerTx 0.5",
+        "valueWei is not a valid integer",
       ).category,
-    ).toBe("max_pls_per_tx");
+    ).toBe("invalid_input");
     expect(
       categorizeDenyReason(
         "Wallet kill switch is active (killed=true).",
@@ -90,14 +87,14 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
     ).toBe("kill_switch");
     expect(
       categorizeDenyReason(
-        "Contract interaction denied: contractAllowlist is empty",
+        "Wallet signing is disabled (enabled=false).",
       ).category,
-    ).toBe("contract_allowlist");
+    ).toBe("disabled");
     expect(
       categorizeDenyReason(
-        "Token notional 99 raw exceeds erc20NotionalCaps[0xab]=1",
+        "Invalid to address: not-an-address",
       ).category,
-    ).toBe("erc20_notional_cap");
+    ).toBe("invalid_input");
   });
 
   it("builds allow summary for native EOA transfer from real evaluatePolicy", () => {
@@ -105,16 +102,6 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
       policy: {
         enabled: true,
         killed: false,
-        maxPlsPerTx: 10,
-        maxPlsDaily: 100,
-        contractAllowlist: [],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {},
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -141,25 +128,17 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
     expect(summary.nativeValueWei).toBe(parseEther("1").toString());
     expect(summary.destinationKind).toBe("eoa");
     expect(summary.checksApplied).toEqual(
-      expect.arrayContaining([
-        "kill_switch",
-        "enabled",
-        "operator_trust (caps/allowlists not hard gates)",
-      ]),
+      expect.arrayContaining(["kill_switch", "enabled", "valid_input"]),
     );
     expect(summary.decisionTrace).toEqual([]);
-    expect(summary.confirmRequiredForBroadcast).toBe(true);
-    expect(summary.confirmRationale).toMatch(/confirm|host UX|Operator-trust/i);
-    expect(summary.confirmRationale).toMatch(
-      /no hard spend-cap|operator-trust|funding/i,
-    );
-    expect(summary.policyBackstop).toMatch(/Operator-trust|funding the agent/i);
-    expect(summary.nextStep).toMatch(/execute_agent_tx|confirm/i);
+    expect(summary.agentGuidance).toBe("ready");
+    expect(summary.fundingAuthorizesSpend).toBe(true);
+    expect(summary.nextStep).toMatch(/execute_agent_tx/i);
     expect(summary.tokenMovements).toEqual([]);
     // PulseChain gas-aware safetyHints (shipped guidance, not fee oracle)
     expect(summary.safetyHints.join(" ")).toMatch(/EIP-1559|BEATS|PulseChain/i);
     expect(summary.safetyHints.join(" ")).toMatch(
-      /value transferred|native value|total PLS|gas headroom|Operator-trust/i,
+      /value transferred|native value|total PLS|gas headroom|Funding the agent/i,
     );
     expect(summary.safetyHints.join(" ")).toMatch(
       /tiny-value|tiny value|substantial PLS for gas/i,
@@ -174,16 +153,6 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
       policy: {
         enabled: false,
         killed: true,
-        maxPlsPerTx: 0.5,
-        maxPlsDaily: 100,
-        contractAllowlist: [],
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {},
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -242,16 +211,6 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
       policy: {
         enabled: true,
         killed: false,
-        maxPlsPerTx: 100,
-        maxPlsDaily: 1000,
-        contractAllowlist: [], // legacy empty allowlist — not a hard gate
-        tokenAllowlist: [],
-        allowlistExpiresAt: null,
-        tokenSpendCaps: {},
-        tokenDailyCaps: {},
-        erc20NotionalCaps: {},
-        requireDecodableCalldata: false,
-        allowNativeTransfers: true,
       },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       tokenDailySpend: {},
@@ -278,12 +237,13 @@ describe("categorizeDenyReason / buildTxReviewSummary (pure shipped)", () => {
     expect(summary.tokenNotional?.pattern).toMatch(/transfer|erc20/i);
     expect(summary.tokenMovements.length).toBeGreaterThan(0);
     expect(summary.checksApplied.join(" ")).toMatch(
-      /operator_trust|tokenNotional_advisory/i,
+      /kill_switch|enabled|valid_input/i,
     );
+    expect(summary.fundingAuthorizesSpend).toBe(true);
   });
 
-  it("exports operator-trust backstop and safe usage constants", () => {
-    expect(POLICY_BACKSTOP_NOTE).toMatch(/Operator-trust|funding the agent/i);
+  it("exports funding-authorizes and safe usage constants", () => {
+    expect(FUNDING_AUTHORIZES_NOTE).toMatch(/Funding the agent is authorization/i);
     expect(SAFE_USAGE_PATTERN).toMatch(
       /inspect_tx_intent.*propose_agent_tx.*reviewSummary.*execute_agent_tx/i,
     );
@@ -313,10 +273,8 @@ describe("proposeAgentTx attaches reviewSummary (shipped service path)", () => {
     );
     expect(proposal.reviewSummary.headline).toMatch(/ALLOWED/i);
     expect(proposal.reviewSummary.checksApplied.length).toBeGreaterThan(0);
-    expect(proposal.reviewSummary.confirmRequiredForBroadcast).toBe(true);
-    expect(proposal.reviewSummary.policyBackstop).toMatch(
-      /Operator-trust|funding the agent/i,
-    );
+    expect(proposal.reviewSummary.agentGuidance).toBe("ready");
+    expect(proposal.reviewSummary.fundingAuthorizesSpend).toBe(true);
     expect(proposal.reviewSummary.simulation?.attempted).toBe(true);
 
     const json = JSON.stringify(proposal);
@@ -326,7 +284,7 @@ describe("proposeAgentTx attaches reviewSummary (shipped service path)", () => {
 
   it("killed wallet propose is denied with decisionTrace (not legacy caps)", async () => {
     mockRpcEoa();
-    const cfg = testConfig({ maxPlsPerTx: 1, maxPlsDaily: 10 });
+    const cfg = testConfig();
     const w = await createAgentWallet(cfg);
     const { killSwitch } = await import("../src/wallet/service.js");
     await killSwitch(cfg, w.id);

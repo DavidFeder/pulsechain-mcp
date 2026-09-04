@@ -38,16 +38,6 @@ export interface AppConfig {
    */
   agentWalletMultiprocStrict: boolean;
   /**
-   * Opt-in hard denies for stored legacy policy fields (maxPls*, allowlists,
-   * tokenSpendCaps/tokenDailyCaps, erc20NotionalCaps, requireDecodableCalldata,
-   * allowNativeTransfers). Unset / false / 0 / empty → false (operator-trust:
-   * those fields stay display-only). true / 1 → enforce in evaluatePolicy.
-   * Product default remains operator-trust — not a custody-policy product.
-   */
-  agentWalletEnforceLegacyCaps: boolean;
-  maxPlsPerTx: number;
-  maxPlsDaily: number;
-  /**
    * When set, start optional Streamable HTTP (dual-era createMcpHandler) on
    * this port for local testing only — `/mcp` + `/health`, not legacy SSE.
    */

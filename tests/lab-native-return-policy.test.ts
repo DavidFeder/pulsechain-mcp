@@ -4,7 +4,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "../src/wallet/policy.js";
-import { DEFAULT_POLICY } from "../src/wallet/types.js";
 import { parsePlsToWei, weiToPlsNumber } from "../src/wallet/value.js";
 
 /** Obviously fake placeholders — not live lab wallets */
@@ -19,9 +18,6 @@ describe("operator-trust native send path", () => {
     expect(weiToPlsNumber(valueWei)).toBe(10_000);
 
     const policy = {
-      ...DEFAULT_POLICY(500, 2000),
-      allowNativeTransfers: true,
-      contractAllowlist: [] as `0x${string}`[],
       enabled: true,
       killed: false,
     };
@@ -49,8 +45,6 @@ describe("operator-trust native send path", () => {
   it("allows contract interaction with empty allowlist (not deny-by-default gate)", () => {
     const check = evaluatePolicy({
       policy: {
-        ...DEFAULT_POLICY(1, 5),
-        contractAllowlist: [],
         enabled: true,
         killed: false,
       },
@@ -66,7 +60,7 @@ describe("operator-trust native send path", () => {
       destinationIsContract: true,
     });
     expect(check.allowed).toBe(true);
-    expect(check.tokenNotional?.notes.join(" ")).toMatch(/Operator-trust/i);
+    expect(check.tokenNotional?.notes.join(" ")).toMatch(/authorization|Decode only/i);
   });
 
   it("placeholder lab and funder addresses are distinct", () => {

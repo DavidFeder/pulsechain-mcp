@@ -12,7 +12,7 @@ import { getConfirmStateCodec } from "./utils/confirm.js";
 /**
  * Mode-aware `McpServer` instructions.
  * Research-only: analytics + chain reads; writes refuse; prefer RO guidance.
- * Wallets on: operator-trust agent wallets (funding authorizes; confirm/MRTR is host UX).
+ * Wallets on: funding the agent is authorization.
  */
 export function mcpServerInstructions(agentWalletEnabled: boolean): string {
   if (!agentWalletEnabled) {
@@ -24,10 +24,10 @@ export function mcpServerInstructions(agentWalletEnabled: boolean): string {
     );
   }
   return (
-    "PulseChain MCP: public analytics, chain reads, and optional operator-trust agent wallets " +
-    "(funding authorizes when enabled; confirm=true / MRTR is host UX only). " +
-    `Protocol mode ${PROTOCOL_MODE}. Wallet writes require AGENT_WALLET_ENABLED and confirm ` +
-    `(confirm=true arg or modern MRTR InputRequiredResult elicitation).`
+    "PulseChain MCP: public analytics, chain reads, and operator-trust agent wallets " +
+    "(funding authorizes spend; no spend caps). " +
+    `Protocol mode ${PROTOCOL_MODE}. Wallet writes require AGENT_WALLET_ENABLED. ` +
+    `Use kill_switch to stop signing.`
   );
 }
 

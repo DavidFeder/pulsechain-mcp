@@ -40,10 +40,7 @@ function pendingProposal(id: string): TxProposal {
       isContractInteraction: false,
       destinationIsContract: false,
       valuePls: 1e-18,
-      projectedDailySpend: 0,
-      remainingDaily: 1,
-      allowlistExpired: false,
-      legacyCapsDisplayOnly: true,
+        projectedDailySpend: 0,
     },
     status: "pending",
   };
@@ -151,7 +148,7 @@ describe("review hardening", () => {
       omittedMovementCount: 4,
       movementExplanations: [],
       decodeKnowledge: { status: "empty", pattern: "native" },
-      agentGuidance: "proceed_with_confirm",
+      agentGuidance: "ready",
     } as unknown as TxReviewSummary;
     expect(formatConfirmPrompt(summary)).toMatch(/4 more not shown/);
   });

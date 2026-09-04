@@ -185,7 +185,7 @@ describe("docs hygiene (shipped SECURITY essentials + deep residual)", () => {
     const deep = readFileSync(join(root, "docs", "SECURITY_DEEP.md"), "utf8");
     expect(security.split(/\r?\n/).length).toBeLessThan(100);
     expect(security).toMatch(/operator-trust|funding the agent is authorization/i);
-    expect(security).toMatch(/host UX only|not a cryptographic security product/i);
+    expect(security).toMatch(/no spend caps|kill_switch|Funding the agent is authorization/i);
     expect(security).toMatch(/research-only|Wallets on \(when user asks|agent install default/i);
     expect(security).toMatch(/SECURITY_DEEP\.md/);
     expect(security).not.toMatch(/Write tools gated by multiproc strict/i);

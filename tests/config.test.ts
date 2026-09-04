@@ -65,8 +65,8 @@ describe("loadConfig", () => {
     expect(cfg.network).toBe("mainnet");
     expect(cfg.explorerApi).toBe(DEFAULT_EXPLORER_API);
     expect(cfg.agentWalletDir).toBe("./data/wallets");
-    expect(cfg.maxPlsPerTx).toBe(100);
-    expect(cfg.maxPlsDaily).toBe(1000);
+    expect(cfg).not.toHaveProperty("maxPlsPerTx");
+    expect(cfg).not.toHaveProperty("maxPlsDaily");
     expect(cfg.logLevel).toBe("info");
     expect(cfg.pulseXSubgraphV1).toBe(DEFAULT_PULSEX_SUBGRAPH_V1);
     expect(cfg.pulseXSubgraphV2).toBe(DEFAULT_PULSEX_SUBGRAPH_V2);
@@ -81,7 +81,7 @@ describe("loadConfig", () => {
     expect(cfg.agentWalletMasterKey).toBeUndefined();
   });
 
-  it("parses agent wallet and optional legacy MAX_PLS display fields when master key present", () => {
+  it("ignores leftover MAX_PLS env when master key present", () => {
     const cfg = loadConfig({
       AGENT_WALLET_ENABLED: "true",
       AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
@@ -90,8 +90,8 @@ describe("loadConfig", () => {
       LOG_LEVEL: "debug",
     });
     expect(cfg.agentWalletEnabled).toBe(true);
-    expect(cfg.maxPlsPerTx).toBe(50);
-    expect(cfg.maxPlsDaily).toBe(200);
+    expect(cfg).not.toHaveProperty("maxPlsPerTx");
+    expect(cfg).not.toHaveProperty("maxPlsDaily");
     expect(cfg.logLevel).toBe("debug");
   });
 
@@ -187,13 +187,7 @@ describe("loadConfig", () => {
     expect(cfg.httpTransportPort).toBe(3100);
   });
 
-  it("rejects non-numeric legacy MAX_PLS / timeout env strings with clear ConfigError", () => {
-    expect(() =>
-      loadConfig({
-        AGENT_WALLET_ENABLED: "false",
-        MAX_PLS_PER_TX: "not-a-number",
-      }),
-    ).toThrow(/MAX_PLS_PER_TX|finite/i);
+  it("rejects non-numeric timeout env strings with clear ConfigError", () => {
     expect(() =>
       loadConfig({
         AGENT_WALLET_ENABLED: "false",
@@ -204,23 +198,7 @@ describe("loadConfig", () => {
       AGENT_WALLET_ENABLED: "false",
       MAX_PLS_DAILY: "",
     });
-    expect(cfg.maxPlsDaily).toBe(1000);
-  });
-
-  it("rejects legacy MAX_PLS_PER_TX greater than MAX_PLS_DAILY (display-field validation)", () => {
-    expect(() =>
-      loadConfig({
-        AGENT_WALLET_ENABLED: "false",
-        MAX_PLS_PER_TX: "500",
-        MAX_PLS_DAILY: "100",
-      }),
-    ).toThrow(/cannot exceed|MAX_PLS/i);
-  });
-
-  it("rejects negative legacy MAX_PLS display fields", () => {
-    expect(() =>
-      loadConfig({ AGENT_WALLET_ENABLED: "false", MAX_PLS_PER_TX: "-1" }),
-    ).toThrow(/>= 0/);
+    expect(cfg).not.toHaveProperty("maxPlsDaily");
   });
 
   it("rejects short MRTR secret when set", () => {
@@ -265,13 +243,13 @@ describe("loadConfig", () => {
     ).not.toThrow();
   });
 
-  it("rejects scientific notation / hex-looking MAX_PLS env values", () => {
+  it("rejects scientific notation / hex-looking HTTP_TIMEOUT_MS", () => {
     expect(() =>
-      loadConfig({ AGENT_WALLET_ENABLED: "false", MAX_PLS_PER_TX: "1e2" }),
-    ).toThrow(/plain decimal|scientific|MAX_PLS_PER_TX/i);
+      loadConfig({ AGENT_WALLET_ENABLED: "false", HTTP_TIMEOUT_MS: "1e2" }),
+    ).toThrow(/plain decimal|scientific|HTTP_TIMEOUT_MS/i);
     expect(() =>
-      loadConfig({ AGENT_WALLET_ENABLED: "false", MAX_PLS_DAILY: "0x10" }),
-    ).toThrow(/plain decimal|hex|MAX_PLS_DAILY/i);
+      loadConfig({ AGENT_WALLET_ENABLED: "false", HTTP_TIMEOUT_MS: "0x10" }),
+    ).toThrow(/plain decimal|hex|HTTP_TIMEOUT_MS/i);
   });
 
   it("trims empty AGENT_WALLET_DIR to default", () => {
@@ -282,51 +260,13 @@ describe("loadConfig", () => {
     expect(cfg.agentWalletDir).toBe("./data/wallets");
   });
 
-  it("AGENT_WALLET_ENFORCE_LEGACY_CAPS: unset/false/0/empty → false; true/1 → true", () => {
-    expect(
-      loadConfig({ AGENT_WALLET_ENABLED: "false" })
-        .agentWalletEnforceLegacyCaps,
-    ).toBe(false);
-    expect(
-      loadConfig({
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(false);
-    expect(
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "",
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(false);
-    expect(
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "false",
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(false);
-    expect(
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "0",
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(false);
-    expect(
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "true",
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(true);
-    expect(
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        AGENT_WALLET_ENFORCE_LEGACY_CAPS: "1",
-      }).agentWalletEnforceLegacyCaps,
-    ).toBe(true);
+  it("AGENT_WALLET_ENFORCE_LEGACY_CAPS env is ignored (no AppConfig field)", () => {
+    const cfg = loadConfig({
+      AGENT_WALLET_ENABLED: "true",
+      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
+      AGENT_WALLET_ENFORCE_LEGACY_CAPS: "true",
+    });
+    expect(cfg).not.toHaveProperty("agentWalletEnforceLegacyCaps");
   });
 
   it("AGENT_WALLET_MULTIPROC_STRICT: wallets-on unset/empty → true; explicit false/0 → false; research-only unset → false", () => {
@@ -374,29 +314,11 @@ describe("loadConfig", () => {
     ).toBe(true);
   });
 
-  it("wallets + HTTP require AGENT_WALLET_MRTR_SECRET; stdio and research-only HTTP do not", () => {
-    const secret = "m".repeat(32);
-    let httpMsg = "";
-    try {
-      loadConfig({
-        AGENT_WALLET_ENABLED: "true",
-        AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-        HTTP_TRANSPORT_PORT: "3100",
-      });
-    } catch (e) {
-      expect(e).toBeInstanceOf(ConfigError);
-      httpMsg = e instanceof Error ? e.message : String(e);
-    }
-    expect(httpMsg).toMatch(/AGENT_WALLET_MRTR_SECRET/);
-    expect(httpMsg).toMatch(/HTTP_TRANSPORT_PORT|HTTP/);
-    expect(httpMsg).toMatch(/32 bytes|≥32|at least 32/i);
-    expect(httpMsg).toMatch(/Do not reuse AGENT_WALLET_MASTER_KEY/i);
-
+  it("wallets + HTTP do not require AGENT_WALLET_MRTR_SECRET; short secret still fails", () => {
     const walletsHttp = loadConfig({
       AGENT_WALLET_ENABLED: "true",
       AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
       HTTP_TRANSPORT_PORT: "3100",
-      AGENT_WALLET_MRTR_SECRET: secret,
     });
     expect(walletsHttp.httpTransportPort).toBe(3100);
     expect(walletsHttp.agentWalletEnabled).toBe(true);
@@ -407,13 +329,6 @@ describe("loadConfig", () => {
     });
     expect(walletsStdio.httpTransportPort).toBeUndefined();
     expect(walletsStdio.agentWalletEnabled).toBe(true);
-
-    const walletsEmptyHttp = loadConfig({
-      AGENT_WALLET_ENABLED: "true",
-      AGENT_WALLET_MASTER_KEY: TEST_MASTER_KEY,
-      HTTP_TRANSPORT_PORT: "",
-    });
-    expect(walletsEmptyHttp.httpTransportPort).toBeUndefined();
 
     const researchHttp = loadConfig({
       AGENT_WALLET_ENABLED: "false",

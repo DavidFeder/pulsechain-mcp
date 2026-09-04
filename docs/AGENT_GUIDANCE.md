@@ -91,8 +91,7 @@ node scripts/generate-wallet-env.mjs
 | **Wallets on (user asked to sign)** | `start-wallet-mcp.mjs` + `.env.wallet` | Create/fund wallet → signing tools |
 
 - Private keys stay AES-256-GCM encrypted; tools never return them.
-- **Funding the agent is authorization** (operator-trust). No product spend-cap defaults; `MAX_PLS_*` / allowlists are **display / advisory** only if set, not hard custody locks.
-- Confirm / MRTR is **host UX only**.
+- **Funding the agent is authorization** (operator-trust). If you fund a wallet, the agent can spend it. There are no spend caps, allowlists, or confirm gates.
 - Unique `AGENT_WALLET_DIR` per process; multiproc strict recommended.
 - Details: [SECURITY.md](SECURITY.md). Gas funding ranges and launcher tables: [SECURITY_DEEP.md](SECURITY_DEEP.md).
 
@@ -150,7 +149,7 @@ quote (piteas_quote preferred keyless)
   → prepare (piteas_prepare_swap | switch_prepare_swap)
   → propose_agent_tx   (wallets enabled)
   → review reviewSummary + safetyHints + agentGuidance
-  → execute_agent_tx with confirm=true (or MRTR)
+  → execute_agent_tx
 ```
 
 | Step | Rule |
@@ -158,7 +157,7 @@ quote (piteas_quote preferred keyless)
 | Quote | Prefer **`piteas_quote`** (keyless). **`switch_quote`** needs operator `SWITCH_API_KEY`. Neither is a best-price oracle. |
 | Prepare | Builds reviewable `to` / `data` / `value` — **does not broadcast**. |
 | Propose | Read **`reviewSummary`** (destination, native value, token movements, gas hints). |
-| Execute | Only after human/operator confirm path; re-check deny/`refuse` guidance. |
+| Execute | `agentGuidance` `ready` means the wallet can sign (not killed/disabled/invalid). Funding authorizes the spend. |
 
 Details: [AGGREGATORS.md](AGGREGATORS.md). Wallets: [SECURITY.md](SECURITY.md).
 
@@ -177,17 +176,15 @@ Details: [AGGREGATORS.md](AGGREGATORS.md). Wallets: [SECURITY.md](SECURITY.md).
 
 When wallets are enabled and something looks wrong (wrong destination, runaway agent, compromise suspicion):
 
-1. Call **`kill_switch`** (or `revoke`) with **`confirm=true`** (or MRTR).
-2. Expect wallet `enabled=false`, `killed=true` — further signing refused until operator recovers carefully.
-3. Do **not** treat display `MAX_PLS_*` as a substitute for kill switch.
+1. Call **`kill_switch`** (or `revoke`).
+2. Expect wallet `enabled=false`, `killed=true` — further signing refused until operator recovers carefully (`set_agent_policy` with `killed=false` and `enabled=true`).
+3. Funding is the spend authorization. Kill switch is the emergency stop.
 
 ---
 
 ## Operator-trust (when wallets on)
 
-- **Funding the agent is authorization.**
-- No product spend-cap defaults. `MAX_PLS_*`, allowlists, and token-notional are **advisory / display** only if present, not hard spend locks.
-- Confirm/MRTR is **host UX only**.
+- **Funding the agent is authorization.** There are no spend caps or allowlists.
 - Prefer order once funded: **native transfer → approve/token → swap-class**.
 - Separate **value**, **gas cost (PLS)**, and **total PLS available**.
 
@@ -202,7 +199,7 @@ Security essentials: [SECURITY.md](SECURITY.md). Residual detail: [SECURITY_DEEP
 | On-chain reads by **address**, catalog origin labels, `pulsechain_health` | High confidence when tools succeed |
 | Aggregator quotes, gas estimates, USD notionals | Advisory — re-check before send; re-quote if stale |
 | DexScreener **search by ticker**, scam scores, ranking heuristics | Noisy / discovery-only — never settle identity on ticker alone |
-| Display `MAX_PLS_*` | Not a hard spend lock under operator-trust |
+| Funding a wallet | Authorization to spend that balance |
 
 **Best tools for careful work:** address-first `get_token_info` / balances / DexScreener-by-address; `piteas_quote` + prepare for swaps; `hex_global_state` only on **pHEX** for stake global state.
 

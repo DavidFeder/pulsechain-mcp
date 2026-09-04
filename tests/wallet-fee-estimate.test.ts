@@ -73,9 +73,6 @@ describe("enrichSimulationWithApproxFee (shipped, fee failure non-blocking)", ()
     agentWalletMasterKey: "a".repeat(64),
     agentWalletDir: "/tmp/unused",
     agentWalletMultiprocStrict: false,
-    agentWalletEnforceLegacyCaps: false,
-    maxPlsPerTx: 100,
-    maxPlsDaily: 1000,
     httpTransportPort: undefined,
     logLevel: "error",
     httpTimeoutMs: 5000,
@@ -113,11 +110,11 @@ describe("enrichSimulationWithApproxFee (shipped, fee failure non-blocking)", ()
   });
 });
 
-describe("reviewSummary carries fee + display-only cap labels", () => {
-  it("surfaces estimatedFeePlsApprox and legacyCapsDisplayOnly on allow path", () => {
+describe("reviewSummary carries fee estimate on allow path", () => {
+  it("surfaces estimatedFeePlsApprox without leftover cap labels", () => {
     const valueWei = parsePlsToWei(1);
     const check = evaluatePolicy({
-      policy: DEFAULT_POLICY(100, 1000),
+      policy: DEFAULT_POLICY(),
       dailySpend: {
         date: new Date().toISOString().slice(0, 10),
         spentPls: 0,
@@ -130,7 +127,7 @@ describe("reviewSummary carries fee + display-only cap labels", () => {
       destinationIsContract: false,
     });
     expect(check.allowed).toBe(true);
-    expect(check.legacyCapsDisplayOnly).toBe(true);
+    expect(check.legacyCapsDisplayOnly).toBeUndefined();
 
     const summary = buildTxReviewSummary({
       to: "0x00000000000000000000000000000000000000f1",
@@ -151,9 +148,8 @@ describe("reviewSummary carries fee + display-only cap labels", () => {
     });
 
     expect(summary.decision).toBe("allow");
-    expect(summary.remainingDailyIsDisplayOnly).toBe(true);
-    expect(summary.legacyCapsDisplayOnly).toBe(true);
-    expect(summary.legacyCapsNote).toMatch(/display-only/i);
+    expect(summary.agentGuidance).toBe("ready");
+    expect(summary.fundingAuthorizesSpend).toBe(true);
     expect(summary.simulation?.gasEstimate).toBe("21000");
     expect(summary.simulation?.estimatedFeePlsApprox).toBe(7.5);
     expect(summary.simulation?.feeBasis).toBe("maxFeePerGas");

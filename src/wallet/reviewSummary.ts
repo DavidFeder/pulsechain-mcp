@@ -1,9 +1,8 @@
 /**
  * Operator- and AI-readable transaction review summaries.
  *
- * Pure helpers: build from existing PolicyCheckResult + proposal fields.
- * Operator-trust (v0.1.38+): funding the agent is authorization; confirm is
- * host UX only. Hard blocks are kill/disabled/invalid input (see docs/SECURITY.md).
+ * Decode + destination + value + gas hints. Funding authorizes spend.
+ * Hard blocks are kill/disabled/invalid input only.
  */
 
 import type {
@@ -25,11 +24,8 @@ export interface ReviewTokenMovement {
   explanation?: string;
 }
 
-/** How an agent should treat the action after reading the summary. */
-export type AgentGuidance =
-  | "proceed_with_confirm"
-  | "review_carefully"
-  | "refuse";
+/** Whether the wallet can sign this intent (kill/disabled/invalid only). */
+export type AgentGuidance = "ready" | "blocked";
 
 /** Calldata / decode knowledge for agents (honest about limits). */
 export interface DecodeKnowledge {
@@ -43,30 +39,11 @@ export interface DecodeKnowledge {
   confidence: string;
   reliable: boolean;
   pattern: string;
-  /** True when policy may still allow unknown calldata (unless requireDecodable) */
-  unknownMayBypassNotionalCaps: boolean;
 }
 
 /** Structured deny reason with actionable category. */
 export interface DecisionReason {
-  /** Machine-friendly category for clients */
-  category:
-    | "kill_switch"
-    | "disabled"
-    | "max_pls_per_tx"
-    | "max_pls_daily"
-    | "contract_allowlist"
-    | "token_allowlist"
-    | "allowlist_expired"
-    | "native_transfers_disabled"
-    | "token_spend_cap"
-    | "token_daily_cap"
-    | "token_notional"
-    | "erc20_notional_cap"
-    | "require_decodable"
-    | "invalid_input"
-    | "other";
-  /** Human-readable reason (same as policy reasons, actionable) */
+  category: "kill_switch" | "disabled" | "invalid_input" | "other";
   message: string;
 }
 
@@ -86,18 +63,8 @@ export interface TxReviewSummary {
   calldataPreview?: string;
   nativeValuePls: number;
   nativeValueWei: string;
-  /**
-   * Headroom vs stored legacy maxPlsDaily. Display-only under operator-trust
-   * (product default). Hard when this process set AGENT_WALLET_ENFORCE_LEGACY_CAPS.
-   */
-  remainingDailyPls?: number;
+  /** Native PLS already spent today plus this value (accounting, not a limit). */
   projectedDailySpendPls?: number;
-  /** True when remainingDaily / maxPls* are non-blocking display fields. */
-  remainingDailyIsDisplayOnly: boolean;
-  /** True when legacy maxPls* / allowlist fields are not hard gates. */
-  legacyCapsDisplayOnly: boolean;
-  /** Short note for agents reading remainingDaily / maxPls* fields. */
-  legacyCapsNote: string;
   tokenMovements: ReviewTokenMovement[];
   /** How many decoded movements were omitted from tokenMovements (cap 12). */
   omittedMovementCount: number;
@@ -109,33 +76,18 @@ export interface TxReviewSummary {
     reliable: boolean;
     knownPulsexRouter: boolean;
     multicallExpanded: boolean;
-    capsApplied: TokenNotionalPolicyView["capsApplied"];
   };
-  /** Known vs unknown decode posture */
   decodeKnowledge: DecodeKnowledge;
-  /**
-   * Agent posture hint (not a guarantee):
-   * refuse = policy deny or low/unknown risk-relevant decode under fail-closed posture
-   * review_carefully = allow but unknown/low-confidence or large surface
-   * proceed_with_confirm = allow + high-confidence empty/known path
-   */
+  /** ready = wallet can sign; blocked = kill/disabled/invalid */
   agentGuidance: AgentGuidance;
-  /** Short reasons for agentGuidance */
   safetyHints: string[];
-  /** Which policy checks were in scope for this decision */
+  /** Which real checks were applied */
   checksApplied: string[];
-  /** Explicit allow/deny reasons (empty when allow with no notes) */
   reasons: string[];
-  /** Categorized deny reasons (empty when allowed) */
   decisionTrace: DecisionReason[];
-  /** Always true for broadcast paths — host must still honor confirm/MRTR */
-  confirmRequiredForBroadcast: true;
-  /** Why an extra confirm step exists (host-strength only) */
-  confirmRationale: string;
-  /** Safe usage next step */
   nextStep: string;
-  /** Honest reminder: confirm is not the main security boundary */
-  policyBackstop: string;
+  /** Funding this wallet authorizes the agent to spend it. */
+  fundingAuthorizesSpend: true;
   simulation?: {
     attempted: boolean;
     ok: boolean;
@@ -148,42 +100,14 @@ export interface TxReviewSummary {
   };
   proposalId?: string;
   walletId?: string;
-  /**
-   * Chain sealed on the proposal at propose time (369 mainnet / 943 testnet).
-   * Missing on legacy on-disk proposals — execute refuses those.
-   */
   chainId?: number;
-  /** Network name sealed at propose time when present. */
   network?: "mainnet" | "testnet";
 }
 
-/** Honest label for remainingDaily / maxPls* under operator-trust. */
-export const LEGACY_CAPS_DISPLAY_ONLY_NOTE =
-  "Legacy maxPlsPerTx / maxPlsDaily / remainingDailyPls are display-only under " +
-  "operator-trust (v0.1.38+). They do not hard-block sends. Funding the agent is authorization.";
-
-/** This-process note when stored legacy fields are hard denies (opt-in env). */
-export const LEGACY_CAPS_ENFORCED_NOTE =
-  "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS enabled: stored maxPlsPerTx/daily, " +
-  "allowlists, tokenSpendCaps/tokenDailyCaps, erc20NotionalCaps (when decode is reliable), " +
-  "requireDecodableCalldata, and allowNativeTransfers are hard denies. " +
-  "Product default remains operator-trust (display-only) when that env is unset/false/0/empty.";
-
-export const POLICY_BACKSTOP_NOTE =
-  "Operator-trust model (v0.1.38+): funding the agent is authorization. " +
-  "There is no hard spend-cap / allowlist / token-notional policy backstop. " +
-  "confirm=true / MRTR is host UX only (a careless host can rubber-stamp). " +
-  "Real controls: keep wallets disabled until needed, protect MASTER_KEY, " +
-  "fund only what you accept losing, use kill_switch in emergencies, " +
-  "and do not share AGENT_WALLET_DIR across processes. " +
-  LEGACY_CAPS_DISPLAY_ONLY_NOTE;
-
-export const POLICY_ENFORCE_LEGACY_CAPS_NOTE =
-  "This process opted into AGENT_WALLET_ENFORCE_LEGACY_CAPS (not the product default). " +
-  "Stored legacy fields are hard denies here. Product default remains operator-trust " +
-  "(display-only) when the env is unset/false/0/empty. " +
-  "confirm=true / MRTR is still host UX only. " +
-  LEGACY_CAPS_ENFORCED_NOTE;
+export const FUNDING_AUTHORIZES_NOTE =
+  "Funding the agent is authorization. There are no spend caps or allowlists. " +
+  "Use kill_switch to stop signing. Protect AGENT_WALLET_MASTER_KEY. " +
+  "Do not share AGENT_WALLET_DIR across processes.";
 
 /**
  * PulseChain fee reality for operators and agents (not a live fee oracle).
@@ -198,25 +122,20 @@ export const PULSECHAIN_GAS_OPERATOR_NOTE =
 
 /**
  * Value vs gas vs wallet total — agents must not assume tiny value ⇒ tiny balance.
- * MAX_PLS_* caps native value only; gas is paid on top.
  */
 export const PLS_VALUE_VS_GAS_HINT =
   "Separate three numbers: (1) native value transferred, (2) estimated gas cost in PLS, " +
   "(3) total PLS that must be available in-wallet (value + gas headroom). " +
   "A tiny-value tx can still require substantial PLS for gas on PulseChain.";
 
-/** Recommended order of operations once funded (operator-trust wallet mode). */
+/** Recommended order of operations once funded. */
 export const WALLET_TX_ORDER_HINT =
   "Prefer native transfer first, then approve/token transfer, then swap-class.";
 /** @deprecated Use WALLET_TX_ORDER_HINT — same product guidance. */
 export const LAB_TX_ORDER_HINT = WALLET_TX_ORDER_HINT;
 
-/**
- * Recommended careful day-to-day flow (operator + agent).
- * inspect is optional but preferred when calldata is non-empty / unclear.
- */
 export const SAFE_USAGE_PATTERN =
-  "inspect_tx_intent (when calldata unclear) → propose_agent_tx → read reviewSummary + agentGuidance → execute_agent_tx with confirm=true (or MRTR)";
+  "inspect_tx_intent (when calldata unclear) → propose_agent_tx → read reviewSummary → execute_agent_tx";
 
 function shortAddr(addr: string): string {
   const a = addr.toLowerCase();
@@ -232,61 +151,21 @@ function calldataPreview(data: string | undefined): string | undefined {
   if (isEmptyData(data)) return undefined;
   const d = data!;
   if (d.length <= 12) return d;
-  // selector (10 chars) + note
   return `${d.slice(0, 10)}…(${Math.max(0, (d.length - 2) / 2)} bytes)`;
 }
 
-/**
- * Categorize a policy deny reason for decision traces.
- * Pure string heuristics over shipped reason text.
- */
 export function categorizeDenyReason(message: string): DecisionReason {
   const m = message;
   let category: DecisionReason["category"] = "other";
   if (/kill switch|killed=true/i.test(m)) category = "kill_switch";
   else if (/enabled=false/i.test(m)) category = "disabled";
-  else if (/maxPlsPerTx/i.test(m)) category = "max_pls_per_tx";
-  else if (/maxPlsDaily|projected daily spend/i.test(m))
-    category = "max_pls_daily";
-  else if (/allowlist expired/i.test(m)) category = "allowlist_expired";
-  else if (/contractAllowlist|not on contractAllowlist/i.test(m))
-    category = "contract_allowlist";
-  else if (/tokenAllowlist|not on tokenAllowlist/i.test(m))
-    category = "token_allowlist";
-  else if (/Native PLS transfers are disabled/i.test(m))
-    category = "native_transfers_disabled";
-  else if (/tokenSpendCaps/i.test(m)) category = "token_spend_cap";
-  else if (/tokenDailyCaps/i.test(m)) category = "token_daily_cap";
-  else if (/requireDecodableCalldata/i.test(m)) category = "require_decodable";
-  else if (/erc20NotionalCaps/i.test(m)) category = "erc20_notional_cap";
-  else if (/Token-notional|Token notional/i.test(m))
-    category = "token_notional";
   else if (/Invalid |parse|valuePls|valueWei/i.test(m))
     category = "invalid_input";
   return { category, message: m };
 }
 
-function listChecksApplied(check: PolicyCheckResult): string[] {
-  const enforcing = check.legacyCapsDisplayOnly === false;
-  const checks: string[] = ["kill_switch", "enabled"];
-  if (enforcing) {
-    checks.push(
-      "legacy_caps_enforced (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS)",
-    );
-  } else {
-    checks.push("operator_trust (caps/allowlists not hard gates)");
-  }
-  const tn = check.tokenNotional;
-  if (tn?.considered) {
-    checks.push(
-      enforcing && tn.riskRelevant
-        ? `tokenNotional(${tn.pattern}, confidence=${tn.confidence}, reliable=${tn.reliable})`
-        : tn.riskRelevant
-          ? `tokenNotional_advisory(${tn.pattern}, confidence=${tn.confidence})`
-          : "tokenNotional_advisory(inspected)",
-    );
-  }
-  return checks;
+function listChecksApplied(): string[] {
+  return ["kill_switch", "enabled", "valid_input"];
 }
 
 function explainMovement(m: {
@@ -331,7 +210,6 @@ function compactMovements(
   tn: TokenNotionalPolicyView | undefined,
 ): ReviewTokenMovement[] {
   if (!tn?.movements?.length) return [];
-  // Cap list for operator readability; callers should also surface omitted count.
   return tn.movements.slice(0, 12).map((m) => ({
     token: m.token,
     amountRaw: m.amountRaw,
@@ -360,7 +238,6 @@ function buildDecodeKnowledge(
       confidence: "high",
       reliable: true,
       pattern: "empty",
-      unknownMayBypassNotionalCaps: false,
     };
   }
   if (!tn) {
@@ -369,7 +246,6 @@ function buildDecodeKnowledge(
       confidence: "none",
       reliable: false,
       pattern: "none",
-      unknownMayBypassNotionalCaps: true,
     };
   }
   const p = tn.pattern;
@@ -379,7 +255,6 @@ function buildDecodeKnowledge(
       confidence: tn.confidence,
       reliable: false,
       pattern: p,
-      unknownMayBypassNotionalCaps: false,
     };
   }
   if (p === "unknown") {
@@ -388,7 +263,6 @@ function buildDecodeKnowledge(
       confidence: tn.confidence,
       reliable: false,
       pattern: p,
-      unknownMayBypassNotionalCaps: !tn.requireDecodableCalldata,
     };
   }
   if (p === "empty") {
@@ -397,7 +271,6 @@ function buildDecodeKnowledge(
       confidence: tn.confidence,
       reliable: tn.reliable,
       pattern: p,
-      unknownMayBypassNotionalCaps: false,
     };
   }
   return {
@@ -405,73 +278,18 @@ function buildDecodeKnowledge(
     confidence: tn.confidence,
     reliable: tn.reliable,
     pattern: p,
-    unknownMayBypassNotionalCaps: false,
   };
 }
 
-/** Always-on PulseChain gas / funding hints (not a fee oracle). */
 function pulsechainGasSafetyHints(nativeValuePls: number): string[] {
   return [
     PULSECHAIN_GAS_OPERATOR_NOTE,
     PLS_VALUE_VS_GAS_HINT,
-    `Native value in this review: ${nativeValuePls} PLS (policy value only). ` +
+    `Native value in this review: ${nativeValuePls} PLS (value only). ` +
       "Ensure wallet holds value + gas; simulation.gasEstimate is gas units when present, not PLS cost.",
     WALLET_TX_ORDER_HINT,
+    FUNDING_AUTHORIZES_NOTE,
   ];
-}
-
-function buildAgentGuidance(params: {
-  decision: "allow" | "deny";
-  decode: DecodeKnowledge;
-  hasCalldata: boolean;
-  nativeValuePls: number;
-  legacyCapsDisplayOnly: boolean;
-}): { agentGuidance: AgentGuidance; safetyHints: string[] } {
-  const hints: string[] = [];
-  if (params.decision === "deny") {
-    hints.push(
-      params.legacyCapsDisplayOnly
-        ? "Write blocked (kill switch, disabled wallet, or invalid input) — do not broadcast"
-        : "Write blocked (kill/disabled/invalid, or opt-in legacy caps on this process) — do not broadcast",
-    );
-    hints.push(...pulsechainGasSafetyHints(params.nativeValuePls));
-    return { agentGuidance: "refuse", safetyHints: hints };
-  }
-  // Decode quality is advisory only in operator-trust mode (not a hard refuse gate).
-  if (params.decode.status === "truncated_or_invalid") {
-    hints.push(
-      "Calldata looks truncated/invalid — operator-trust still allows propose/execute; verify carefully",
-    );
-  } else if (params.decode.status === "unknown") {
-    hints.push("Unknown selector — advisory only; no hard token-notional deny");
-  } else if (params.decode.status === "known_priority" && !params.decode.reliable) {
-    hints.push("Known pattern family but unreliable decode — amounts may be incomplete");
-  } else if (
-    params.decode.status === "known_priority" &&
-    params.decode.confidence === "low"
-  ) {
-    hints.push("Low-confidence decode — do not assume amounts are complete");
-  }
-  if (!params.hasCalldata) {
-    hints.push("Native transfer path — verify destination and PLS amount");
-  } else {
-    hints.push("Contract/calldata path — verify destination, value, and calldata intent");
-  }
-  hints.push(
-    params.legacyCapsDisplayOnly
-      ? "Operator-trust: funding the agent is authorization; confirm=true is host UX only"
-      : "This process enforces stored legacy fields (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS); confirm=true is still host UX only",
-  );
-  hints.push(...pulsechainGasSafetyHints(params.nativeValuePls));
-  if (
-    params.decode.status === "unknown" ||
-    params.decode.status === "truncated_or_invalid" ||
-    (params.decode.status === "known_priority" &&
-      (params.decode.confidence === "low" || !params.decode.reliable))
-  ) {
-    return { agentGuidance: "review_carefully", safetyHints: hints };
-  }
-  return { agentGuidance: "proceed_with_confirm", safetyHints: hints };
 }
 
 /**
@@ -495,9 +313,9 @@ export interface AgentIntentView {
   movements: ReviewTokenMovement[];
   movementExplanations: string[];
   decodeKnowledge: DecodeKnowledge;
-  agentGuidance: AgentGuidance;
+  /** Decode quality only — never blocks propose/execute. */
+  decodeComplete: boolean;
   safetyHints: string[];
-  /** What the agent still cannot know without simulation */
   residualUncertainty: string[];
 }
 
@@ -524,28 +342,25 @@ export function buildAgentIntentView(params: {
     innerUnreliableCount: params.inspection.innerUnreliableCount,
     movements: params.inspection.movements,
     notes: params.inspection.notes,
-    capsApplied: [],
-    requireDecodableCalldata: false,
   };
   const movements = compactMovements(tnLike);
   const decodeKnowledge = buildDecodeKnowledge(tnLike, hasCalldata);
-  // Operator-trust: inspect is advisory only — never hard-refuse ordinary sends.
-  let agentGuidance: AgentGuidance = "proceed_with_confirm";
+  const decodeComplete =
+    decodeKnowledge.status === "empty" ||
+    (decodeKnowledge.status === "known_priority" &&
+      decodeKnowledge.reliable &&
+      decodeKnowledge.confidence !== "low");
   const safetyHints: string[] = [
-    "Local decode only — not full EVM simulation",
-    "Operator-trust: inspect_tx_intent does not block propose/execute",
+    "Local decode only — not full EVM simulation and not a send gate",
+    FUNDING_AUTHORIZES_NOTE,
   ];
   if (decodeKnowledge.status === "truncated_or_invalid") {
-    agentGuidance = "review_carefully";
-    safetyHints.push("Calldata looks truncated/invalid — verify before confirm");
+    safetyHints.push("Calldata looks truncated/invalid — amounts may be wrong");
   } else if (decodeKnowledge.status === "unknown") {
-    agentGuidance = "review_carefully";
     safetyHints.push("Unknown selector — amounts not fully decoded");
   } else if (!params.inspection.reliable && params.inspection.riskRelevant) {
-    agentGuidance = "review_carefully";
     safetyHints.push("Risk-relevant but unreliable decode");
   } else if (params.inspection.confidence === "low") {
-    agentGuidance = "review_carefully";
     safetyHints.push("Low confidence decode");
   }
   safetyHints.push(...params.inspection.notes.slice(0, 4));
@@ -554,7 +369,6 @@ export function buildAgentIntentView(params: {
     "No on-chain simulation in this tool (slippage, taxes, reverts unknown)",
     "Fee-on-transfer tokens may move less than decoded amountIn",
     "Unknown/custom routers and aggregators are not fully covered",
-    "Operator-trust: no hard allowlist/cap gate on propose/execute",
     "PulseChain gas cost in PLS is not estimated here — fees can be large in PLS terms " +
       "(transfers tens, approvals tens–hundreds, swaps ~250+); fund value + gas",
   ];
@@ -578,7 +392,7 @@ export function buildAgentIntentView(params: {
       .map((m) => m.explanation)
       .filter((x): x is string => Boolean(x)),
     decodeKnowledge,
-    agentGuidance,
+    decodeComplete,
     safetyHints,
     residualUncertainty,
   };
@@ -594,14 +408,11 @@ export interface BuildTxReviewSummaryInput {
   simulation?: SimulationResult;
   proposalId?: string;
   walletId?: string;
-  /** Sealed chain at propose time (shown so operators can tell 369 vs 943). */
   chainId?: number;
   network?: "mainnet" | "testnet";
-  /** Where this summary is attached (affects nextStep wording) */
   context?: "propose" | "check" | "execute" | "transfer";
 }
 
-/** Operator-visible sealed chain (369 vs 943) for headlines and confirm prompts. */
 export function formatSealedChainLabel(
   chainId?: number,
   network?: string,
@@ -612,10 +423,6 @@ export function formatSealedChainLabel(
   return "unsealed — re-propose before execute";
 }
 
-/**
- * Build a concise operator-readable review summary from shipped policy output.
- * Pure — no I/O, no secrets.
- */
 export function buildTxReviewSummary(
   input: BuildTxReviewSummaryInput,
 ): TxReviewSummary {
@@ -624,7 +431,6 @@ export function buildTxReviewSummary(
   const valueWei =
     input.valueWei ?? check.valueWei ?? String(Math.floor(check.valuePls * 1e18));
   const valuePls = input.valuePls ?? check.valuePls;
-  // Contract interaction (calldata or code at to) vs pure EOA native transfer
   const destinationKind: TxReviewSummary["destinationKind"] =
     check.isContractInteraction || check.destinationIsContract
       ? "contract"
@@ -661,7 +467,7 @@ export function buildTxReviewSummary(
         (movements.length ? `; tokens: ${movementHint}` : "") +
         chainSuffix
       : `DENIED: ${valuePls} PLS → ${shortAddr(input.to)} — ${
-          check.reasons[0] ?? "policy rejected"
+          check.reasons[0] ?? "wallet write blocked"
         }` +
         chainSuffix;
 
@@ -669,67 +475,57 @@ export function buildTxReviewSummary(
     decision === "deny" ? check.reasons.map(categorizeDenyReason) : [];
 
   const decodeKnowledge = buildDecodeKnowledge(check.tokenNotional, hasCalldata);
-  const displayOnly = check.legacyCapsDisplayOnly !== false;
-  const { agentGuidance, safetyHints: baseHints } = buildAgentGuidance({
-    decision,
-    decode: decodeKnowledge,
-    hasCalldata,
-    nativeValuePls: valuePls,
-    legacyCapsDisplayOnly: displayOnly,
-  });
-  const safetyHints =
-    omitted > 0
-      ? [
-          ...baseHints,
-          `Review truncated: ${omitted} additional decoded movement(s) not shown`,
-        ]
-      : baseHints;
+  const agentGuidance: AgentGuidance = decision === "deny" ? "blocked" : "ready";
+  const safetyHints: string[] = [];
+  if (decision === "deny") {
+    safetyHints.push(
+      "Write blocked (kill switch, disabled wallet, or invalid input) — do not broadcast",
+    );
+  } else {
+    if (decodeKnowledge.status === "truncated_or_invalid") {
+      safetyHints.push("Calldata looks truncated/invalid — amounts may be wrong");
+    } else if (decodeKnowledge.status === "unknown") {
+      safetyHints.push("Unknown selector — amounts not fully decoded");
+    } else if (
+      decodeKnowledge.status === "known_priority" &&
+      !decodeKnowledge.reliable
+    ) {
+      safetyHints.push("Known pattern family but unreliable decode — amounts may be incomplete");
+    } else if (
+      decodeKnowledge.status === "known_priority" &&
+      decodeKnowledge.confidence === "low"
+    ) {
+      safetyHints.push("Low-confidence decode — do not assume amounts are complete");
+    }
+    if (!hasCalldata) {
+      safetyHints.push("Native transfer path — verify destination and PLS amount");
+    } else {
+      safetyHints.push("Contract/calldata path — verify destination, value, and calldata intent");
+    }
+  }
+  safetyHints.push(...pulsechainGasSafetyHints(valuePls));
+  if (omitted > 0) {
+    safetyHints.push(
+      `Review truncated: ${omitted} additional decoded movement(s) not shown`,
+    );
+  }
 
   const ctx = input.context ?? "propose";
   let nextStep: string;
-  if (decision === "deny" || agentGuidance === "refuse") {
-    nextStep = displayOnly
-      ? "Do not execute. Clear kill switch / re-enable wallet, or fix invalid address/value. " +
-        "Caps and allowlists are not hard gates in operator-trust mode."
-      : "Do not execute. This process is enforcing stored legacy fields (AGENT_WALLET_ENFORCE_LEGACY_CAPS). " +
-        "Product default remains operator-trust when that env is unset.";
-  } else if (agentGuidance === "review_carefully") {
+  if (decision === "deny") {
     nextStep =
-      "Optional careful review of destination/calldata, then execute_agent_tx with confirm=true. " +
-      (displayOnly
-        ? "Operator-trust: funding authorizes; still verify value + gas headroom."
-        : "This process enforces stored legacy fields (opt-in); still verify value + gas headroom.");
+      "Do not execute. Clear kill switch / re-enable wallet, or fix invalid address/value.";
   } else if (ctx === "execute" || ctx === "transfer") {
     nextStep =
-      "Broadcast path after confirm. Re-read headline + destination + value vs gas. " +
-      (displayOnly
-        ? "Operator-trust model — no hard policy cap backstop."
-        : "This process enforces stored legacy fields (opt-in AGENT_WALLET_ENFORCE_LEGACY_CAPS).");
+      "Broadcast path. Re-read headline + destination + value vs gas. Funding authorizes this spend.";
   } else if (ctx === "check") {
     nextStep =
-      "propose_agent_tx → read reviewSummary → execute_agent_tx with confirm=true / MRTR. " +
-      (displayOnly
-        ? "Fund value + PulseChain gas; operator-trust mode."
-        : "Fund value + PulseChain gas; this process is enforcing stored legacy caps (opt-in).");
+      "propose_agent_tx → read reviewSummary → execute_agent_tx. Fund value + PulseChain gas.";
   } else {
     nextStep =
-      "Read reviewSummary (destination, value, gas hints), then execute_agent_tx with " +
-      "proposalId + confirm=true (or MRTR). " +
-      (displayOnly
-        ? "Operator-trust: funding the agent is authorization."
-        : "This process enforces stored legacy fields (opt-in); product default remains operator-trust.");
+      "Read reviewSummary (destination, value, decode, gas hints), then execute_agent_tx.";
   }
 
-  const confirmRationale = displayOnly
-    ? "Broadcast requires confirm=true or modern MRTR InputRequiredResult (host UX only). " +
-      "Operator-trust model: there is no hard spend-cap/allowlist policy backstop. " +
-      "Always read destination, native PLS value, gas headroom, and decoded movements before confirming. " +
-      PLS_VALUE_VS_GAS_HINT
-    : "Broadcast requires confirm=true or modern MRTR InputRequiredResult (host UX only). " +
-      "This process has AGENT_WALLET_ENFORCE_LEGACY_CAPS on (opt-in hard denies for stored fields). " +
-      "Product default remains operator-trust (display-only) when that env is unset. " +
-      "Always read destination, native PLS value, gas headroom, and decoded movements before confirming. " +
-      PLS_VALUE_VS_GAS_HINT;
   const tn = check.tokenNotional;
   return {
     headline,
@@ -741,13 +537,7 @@ export function buildTxReviewSummary(
     calldataPreview: calldataPreview(input.data),
     nativeValuePls: valuePls,
     nativeValueWei: valueWei,
-    remainingDailyPls: check.remainingDaily,
     projectedDailySpendPls: check.projectedDailySpend,
-    remainingDailyIsDisplayOnly: displayOnly,
-    legacyCapsDisplayOnly: displayOnly,
-    legacyCapsNote: displayOnly
-      ? LEGACY_CAPS_DISPLAY_ONLY_NOTE
-      : LEGACY_CAPS_ENFORCED_NOTE,
     tokenMovements: movements,
     omittedMovementCount: omitted,
     movementExplanations,
@@ -758,21 +548,16 @@ export function buildTxReviewSummary(
           reliable: tn.reliable,
           knownPulsexRouter: tn.knownPulsexRouter,
           multicallExpanded: tn.multicallExpanded,
-          capsApplied: tn.capsApplied,
         }
       : undefined,
     decodeKnowledge,
     agentGuidance,
     safetyHints,
-    checksApplied: listChecksApplied(check),
+    checksApplied: listChecksApplied(),
     reasons: check.reasons,
     decisionTrace,
-    confirmRequiredForBroadcast: true,
-    confirmRationale,
     nextStep,
-    policyBackstop: displayOnly
-      ? POLICY_BACKSTOP_NOTE
-      : POLICY_ENFORCE_LEGACY_CAPS_NOTE,
+    fundingAuthorizesSpend: true,
     simulation: input.simulation
       ? {
           attempted: input.simulation.attempted,
@@ -792,7 +577,6 @@ export function buildTxReviewSummary(
   };
 }
 
-/** Build review summary from a stored/returned proposal. */
 export function buildProposalReviewSummary(
   proposal: TxProposal,
   context: BuildTxReviewSummaryInput["context"] = "propose",
@@ -813,10 +597,7 @@ export function buildProposalReviewSummary(
   });
 }
 
-/**
- * Short confirm prompt for MRTR / tool message (no secrets).
- * Prefer attaching full reviewSummary in the tool result after confirm.
- */
+/** Short operator/agent prompt (no secrets). */
 export function formatConfirmPrompt(summary: TxReviewSummary): string {
   const chainLabel =
     typeof summary.chainId === "number" && Number.isInteger(summary.chainId)
@@ -827,7 +608,7 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
   const lines = [
     summary.headline,
     `Decision: ${summary.decision.toUpperCase()}`,
-    `AgentGuidance: ${summary.agentGuidance}`,
+    `Guidance: ${summary.agentGuidance}`,
     `To: ${summary.destination} (${summary.destinationKind})`,
     ...(chainLabel ? [`Chain: ${chainLabel}`] : []),
     `Native value: ${summary.nativeValuePls} PLS (${summary.nativeValueWei} wei) — value only, not gas`,
@@ -854,24 +635,12 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
         ? ` (+${summary.omittedMovementCount + Math.max(0, summary.movementExplanations.length - 3)} more not shown)`
         : "";
     lines.push(`Moves: ${shown.join("; ")}${extra}`);
-  } else if (summary.tokenMovements.length) {
-    lines.push(
-      `Tokens: ${summary.tokenMovements
-        .slice(0, 4)
-        .map((m) => `${m.role} ${m.amountRaw}@${shortAddr(m.token)}`)
-        .join("; ")}` +
-        (summary.omittedMovementCount > 0
-          ? ` (+${summary.omittedMovementCount} more not shown)`
-          : ""),
-    );
+  } else if (summary.omittedMovementCount > 0) {
+    lines.push(`Moves: ${summary.omittedMovementCount} more not shown`);
   }
   if (summary.decision === "deny" && summary.reasons[0]) {
     lines.push(`Deny: ${summary.reasons[0]}`);
   }
-  lines.push(
-    summary.legacyCapsDisplayOnly
-      ? "Confirm only after reviewing value + gas + destination. Operator-trust: funding authorizes; confirm is host UX only."
-      : "Confirm only after reviewing value + gas + destination. This process is enforcing stored legacy caps (opt-in); product default remains operator-trust.",
-  );
+  lines.push(FUNDING_AUTHORIZES_NOTE);
   return lines.join(" | ");
 }

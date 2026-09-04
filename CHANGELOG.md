@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Operator-trust without security theatre.** Funding an agent wallet is authorization to spend it. Removed non-functional caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields that confused agents.
+
+### Removed
+
+- `AGENT_WALLET_ENFORCE_LEGACY_CAPS`, `MAX_PLS_PER_TX` / `MAX_PLS_DAILY` config, and send-time allowlist / token-notional / `requireDecodableCalldata` gates
+- Required `confirm=true` / MRTR elicitation on wallet writes (create, policy, execute, transfer, settle, kill, revoke)
+- HTTP + wallets requiring `AGENT_WALLET_MRTR_SECRET`
+- Review/status fields that looked like remaining limits (`remainingDaily`, `legacyCapsDisplayOnly`, `capsApplied`, `proceed_with_confirm` / `refuse`)
+
+### Changed
+
+- Send-time blocks are kill switch, `enabled=false`, and invalid address/value only
+- `inspect_tx_intent` reports `decodeComplete` (visibility only; never a send gate)
+- `agentGuidance` is `ready` | `blocked`
+- Docs and env templates tell operators: if you fund the wallet, the agent can use it
+
 ## [1.0.6] - 2026-09-03
 
 **Agent-surface, correctness, reliability, and packaging patch** on the 1.0.5 tree (PRs #3–#16). Operator-trust wallet model, dual-era MCP (`2026-07-28` + `2025-11-25`), and research-first agent install are unchanged. Version surfaces **1.0.6**. Tool counts stay **96** (wallets-on) / **87** (research-only).

@@ -2,6 +2,10 @@
 
 Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.
 
+## Unreleased
+
+Operator-trust without security theatre: if you fund an agent wallet, the agent can spend it. Removed fake spend caps, allowlists, confirm/MRTR write gates, and leftover “display-only limit” fields. Real controls remain AES-256-GCM keys, kill_switch / enabled=false, unique `AGENT_WALLET_DIR`, and how much you fund.
+
 ## What shipped (1.0.6)
 
 Agent-surface, chain/policy correctness, reliability, and packaging from PRs #3–#16 on the 1.0.5 tree. **Not** a protocol or wallet-model change.

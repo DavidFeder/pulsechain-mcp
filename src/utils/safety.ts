@@ -63,14 +63,12 @@ export function redact(value: string | undefined, keep = 4): string {
 
 /**
  * Standard warning attached to any write / signing tool description or result.
- * Confirm / MRTR is host UX only (not a cryptographic lock) — matches confirm.ts.
  */
 export const WRITE_TOOL_WARNING =
   "WRITE OPERATION: This tool may submit transactions or mutate wallet state. " +
-  "Requires AGENT_WALLET_ENABLED=true. Authorize with confirm=true, or omit confirm " +
-  "on a capable client for modern MRTR elicitation (InputRequiredResult). " +
-  "confirm=true / MRTR is host UX only — not a cryptographic lock. " +
-  "Double-check recipient, amount, and gas before confirming.";
+  "Requires AGENT_WALLET_ENABLED=true. Funding the agent is authorization — " +
+  "there are no spend caps or allowlists. Check recipient, amount, and gas. " +
+  "Use kill_switch to stop signing.";
 
 /** Object keys that must never leave the process boundary. */
 const SECRET_KEY_NAMES = new Set([

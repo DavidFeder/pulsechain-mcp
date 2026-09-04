@@ -51,7 +51,7 @@ describe("v0.1.2 polish", () => {
 
   it("operator-trust allows contract calldata; kill switch still blocks", () => {
     const open = evaluatePolicy({
-      policy: DEFAULT_POLICY(1, 10),
+      policy: DEFAULT_POLICY(),
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
       valuePls: 0,
@@ -61,7 +61,7 @@ describe("v0.1.2 polish", () => {
     expect(open.allowed).toBe(true);
 
     const killed = evaluatePolicy({
-      policy: { ...DEFAULT_POLICY(1, 10), killed: true, enabled: false },
+      policy: { ...DEFAULT_POLICY(), killed: true, enabled: false },
       dailySpend: { date: new Date().toISOString().slice(0, 10), spentPls: 0 },
       to: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27",
       valuePls: 0,
