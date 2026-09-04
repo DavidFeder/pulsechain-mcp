@@ -444,7 +444,7 @@ Path: `{AGENT_WALLET_DIR}/audit.jsonl` (append-only JSON lines).
 
 Wallet writes no longer require `confirm=true` or MRTR elicitation. `AGENT_WALLET_MRTR_SECRET` is unused for send gates.
 
-If the env is set, `loadConfig` still requires ≥32 bytes UTF-8 so a typo is not silently ignored. A **process-local random secret** is used when unset (stdio wallets-on). Do **not** reuse `AGENT_WALLET_MASTER_KEY`. HTTP + wallets does **not** require this secret.
+If the env is set, `loadConfig` still requires ≥32 bytes UTF-8 so a typo is not silently ignored. A **process-local random secret** is used when unset (**stdio wallets-on**). Do **not** reuse `AGENT_WALLET_MASTER_KEY`. Setting `HTTP_TRANSPORT_PORT` with wallets on does **not** require this secret.
 
 ---
 

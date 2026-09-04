@@ -4,7 +4,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { evaluatePolicy } from "../src/wallet/policy.js";
-import { DEFAULT_POLICY } from "../src/wallet/types.js";
 import { parsePlsToWei, weiToPlsNumber } from "../src/wallet/value.js";
 
 /** Obviously fake placeholders — not live lab wallets */

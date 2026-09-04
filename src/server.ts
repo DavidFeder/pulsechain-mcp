@@ -25,7 +25,7 @@ export function mcpServerInstructions(agentWalletEnabled: boolean): string {
   }
   return (
     "PulseChain MCP: public analytics, chain reads, and operator-trust agent wallets " +
-    "(funding the agent is authorization; no spend caps). " +
+    "(funding authorizes spend; no spend caps). " +
     `Protocol mode ${PROTOCOL_MODE}. Wallet writes require AGENT_WALLET_ENABLED. ` +
     `Use kill_switch to stop signing.`
   );

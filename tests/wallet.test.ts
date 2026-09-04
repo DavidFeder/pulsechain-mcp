@@ -298,7 +298,6 @@ describe("wallet policy", () => {
   });
 
   it("operator-trust: token allowlist does not hard-deny destination", () => {
-    const token = "0x95B303987A60C71504D99Aa1b13B4DA07b0790ab" as const;
     const other = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" as const;
     const check = evaluatePolicy({
       policy: {

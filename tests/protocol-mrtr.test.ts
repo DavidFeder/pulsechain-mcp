@@ -427,7 +427,7 @@ describe("resolveConfirm dual path", () => {
       amountPls: 1,
     };
     const snapBefore = policySnapshotId(DEFAULT_POLICY());
-    const snapAfter = policySnapshotId(DEFAULT_POLICY());
+    const snapAfter = policySnapshotId({ enabled: false, killed: true });
     expect(snapBefore).not.toBe(snapAfter);
 
     const first = await resolveConfirm({
@@ -468,7 +468,7 @@ describe("resolveConfirm dual path", () => {
     const walletId = "aw_" + "44".repeat(16);
     const args = { proposalId: "prop_" + "ab".repeat(12) };
     const snapBefore = policySnapshotId(DEFAULT_POLICY());
-    const snapAfter = policySnapshotId(DEFAULT_POLICY());
+    const snapAfter = policySnapshotId({ enabled: false, killed: true });
     expect(snapBefore).not.toBe(snapAfter);
 
     const first = await resolveConfirm({

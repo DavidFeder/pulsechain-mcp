@@ -635,6 +635,8 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
         ? ` (+${summary.omittedMovementCount + Math.max(0, summary.movementExplanations.length - 3)} more not shown)`
         : "";
     lines.push(`Moves: ${shown.join("; ")}${extra}`);
+  } else if (summary.omittedMovementCount > 0) {
+    lines.push(`Moves: ${summary.omittedMovementCount} more not shown`);
   }
   if (summary.decision === "deny" && summary.reasons[0]) {
     lines.push(`Deny: ${summary.reasons[0]}`);
