@@ -14,6 +14,10 @@ import {
   getHexGlobalState,
   getHexStakesForAddress,
 } from "../../data/hexStake.js";
+import {
+  getHexStakeSummary,
+  HEX_STAKE_SUMMARY_TOOL_DESCRIPTION,
+} from "../../data/hexStakeSummary.js";
 import type { AppConfig } from "../../types.js";
 import { ok } from "../../utils/result.js";
 import { registerTool } from "../define.js";
@@ -176,6 +180,40 @@ export function registerTierBTools(
       const result = await getHexStakesForAddress(cfg, String(args.staker), {
         contract: (args.contract as string | undefined) ?? "phex",
         limit: (args.limit as number | undefined) ?? 25,
+      });
+      return ok(result);
+    },
+  });
+
+  // ── HEX stake summary (read-only intelligence) ─────────────────────────
+  registerTool(server, config, {
+    name: "hex_stake_summary",
+    description: HEX_STAKE_SUMMARY_TOOL_DESCRIPTION,
+    category: "analytics",
+    inputSchema: {
+      address: addressSchema.describe(
+        "Staker address. PulseChain pHEX stakes only, not Ethereum eHEX stakes.",
+      ),
+      endingWithinDays: z
+        .number()
+        .int()
+        .min(0)
+        .max(5555)
+        .default(30)
+        .describe(
+          "Stakes with daysLeft from 0 through this many days count as ending soon (default 30).",
+        ),
+      includeEnded: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Include stakes already ended on-chain (unlockedDay != 0). Default false.",
+        ),
+    },
+    handler: async (args, cfg) => {
+      const result = await getHexStakeSummary(cfg, String(args.address), {
+        endingWithinDays: (args.endingWithinDays as number | undefined) ?? 30,
+        includeEnded: args.includeEnded === true,
       });
       return ok(result);
     },

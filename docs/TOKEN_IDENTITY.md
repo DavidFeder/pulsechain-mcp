@@ -86,5 +86,6 @@ Resource: `pulsechain://tokens/core` embeds dual-DAI and token-origin guidance.
 |------|------|------|
 | `hex_global_state` | On-chain globals | Soft-fail (ERC-20 only, not stake contract) |
 | `hex_stakes_for_address` | stakeCount / stakeLists | Soft-fail / non-stake |
+| `hex_stake_summary` | Days left, ending-soon, share-rate estimate | Not included (pHEX stakes only) |
 
 pHEX is stakeable state-fork HEX. eHEX is bridged ERC-20 exposure without those stake views.
