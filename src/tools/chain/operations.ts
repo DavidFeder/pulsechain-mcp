@@ -85,8 +85,9 @@ export function resolveTokenAddress(tokenOrSymbol: string): Address {
   const core = resolveCoreToken(raw);
   if (core) return core.address;
   throw new AppError(
-    `Unknown token "${tokenOrSymbol}". Use a 0x address or core symbol (${Object.keys(CORE_TOKENS).join(", ")}, PDAI, EHEX, FUSDT, FWETH). ` +
-      `Note: DAI/USDT/WETH = bridged; PDAI/FUSDT/FWETH = state-fork; HEX/PHEX = pHEX fork; EHEX = bridged HEX.`,
+    `Unknown token "${tokenOrSymbol}". Use a 0x address or core symbol (${Object.keys(CORE_TOKENS).join(", ")}, PDAI, EHEX, FUSDT, FWETH, USDL, LOAN). ` +
+      `Note: DAI/USDT/WETH = bridged; PDAI/FUSDT/FWETH = state-fork; HEX/PHEX = pHEX fork; EHEX = bridged HEX. ` +
+      `USDL and LOAN are explicit Liquid Loans symbols, not aliases of DAI or USD.`,
     "VALIDATION_ERROR",
   );
 }
@@ -109,6 +110,8 @@ export function coreTokenByAddress(address: string): TokenInfo | undefined {
     if (label.isEhex) return resolveCoreToken("EHEX");
     if (label.isForkUsdt) return resolveCoreToken("FUSDT");
     if (label.isForkWeth) return resolveCoreToken("FWETH");
+    if (label.symbol === "USDL") return resolveCoreToken("USDL");
+    if (label.symbol === "LOAN") return resolveCoreToken("LOAN");
   }
   return Object.values(CORE_TOKENS).find(
     (t) => t.address.toLowerCase() === lower,

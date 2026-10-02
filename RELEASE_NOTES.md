@@ -1,3 +1,15 @@
+# Release notes — pulsechain-mcp 1.0.8
+
+## What shipped (1.0.8)
+
+- Default RPC list leads with canonical PublicNode (`https://pulsechain-rpc.publicnode.com`). Legacy `pulsechain.publicnode.com` still answers chain id 369 and stays in the fallback list. RPC posts send `User-Agent: pulsechain-mcp`.
+- `piteas_prepare_swap` reads ERC-20 allowance when `owner` is set and returns unsigned approve calldata when it is short. Pass `proposalQuoteReview` into `propose_agent_tx` so review shows the quote even when the router selector is unknown. Stale quotes are labeled and do not block the send.
+- `transfer_token` proposes an ERC-20 transfer (no broadcast). `USDL` and `LOAN` are explicit catalog symbols, not aliases of DAI or USD.
+- `liquid_loans_system` and `liquid_loans_vault` are read-only.
+- Tool profile defaults to **slim** (86 wallets-on / 76 research-only). `PULSECHAIN_TOOL_PROFILE=full` restores 15 legacy `pulsechain_*` aliases.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.8**.
+
 # Release notes — pulsechain-mcp 1.0.7
 
 Public package: **[pulsechain-mcp](https://github.com/DavidFeder/pulsechain-mcp)**.

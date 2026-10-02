@@ -179,7 +179,10 @@ describe("pulsechain_health / pulsechain_chain_id tools", () => {
   it("pulsechain_chain_id follows config.network", async () => {
     const main = mockToolServer();
     resetToolRegistry();
-    registerChainTools(main.server as never, testAppConfig({ network: "mainnet" }));
+    registerChainTools(
+      main.server as never,
+      testAppConfig({ network: "mainnet", toolProfile: "full" }),
+    );
     const mainRes = await main.handlers.get("pulsechain_chain_id")!({});
     const mainBody = JSON.parse(mainRes.content[0]!.text) as {
       ok: boolean;
@@ -189,7 +192,10 @@ describe("pulsechain_health / pulsechain_chain_id tools", () => {
 
     const test = mockToolServer();
     resetToolRegistry();
-    registerChainTools(test.server as never, testAppConfig({ network: "testnet" }));
+    registerChainTools(
+      test.server as never,
+      testAppConfig({ network: "testnet", toolProfile: "full" }),
+    );
     expect(getRegisteredTools().some((t) => t.name === "pulsechain_chain_id")).toBe(
       true,
     );

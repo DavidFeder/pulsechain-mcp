@@ -35,6 +35,7 @@ export function buildHealth(cfg: AppConfig): HealthStatus {
     pulseXSubgraphV2Configured: Boolean(cfg.pulseXSubgraphV2),
     agentWalletEnabled: cfg.agentWalletEnabled,
     httpTransportEnabled: cfg.httpTransportPort !== undefined,
+    toolProfile: cfg.toolProfile ?? "slim",
     ...(networkMismatch ? { networkMismatch } : {}),
   };
 }

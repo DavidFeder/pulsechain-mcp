@@ -73,6 +73,7 @@ export const healthStatusDataSchema = z.object({
   pulseXSubgraphV2Configured: z.boolean(),
   agentWalletEnabled: z.boolean(),
   httpTransportEnabled: z.boolean(),
+  toolProfile: z.enum(["slim", "full"]),
   networkMismatch: networkMismatchSchema.optional(),
   subgraphHosts: z
     .object({

@@ -31,11 +31,14 @@ Neither Piteas nor Switch is a **best-price oracle**. Prefer addresses over symb
 ```text
 1. piteas_quote (or switch_quote if operator key present)
 2. Confirm quoteReady / amounts look sane
-3. piteas_prepare_swap (or switch_prepare_swap)
-4. [wallets on] propose_agent_tx with prepared to/data/value
-5. Read reviewSummary + safetyHints + agentGuidance
-6. execute_agent_tx — after reading reviewSummary (funding authorizes)
+3. piteas_prepare_swap (pass owner for an ERC-20 sell)
+4. If allowance.allowanceSufficient is false, propose suggestedApprove first (separate tx, not auto-broadcast)
+5. [wallets on] propose_agent_tx with prepared to/data/value AND quoteReview: proposalQuoteReview
+6. Read reviewSummary.aggregatorQuote + quoteAgeSec + safetyHints
+7. execute_agent_tx — after reading reviewSummary (funding authorizes)
 ```
+
+`get_token_allowance` reads `allowance(owner, spender)` without approving. For Piteas the spender is the Piteas router. A stale `quoteAgeSec` is a warning, not a send block.
 
 **Stale-quote rule:** quotes expire; re-quote before send if delayed, market moved, prepare failed, or `quoteReady` is false. Never reuse old calldata.
 

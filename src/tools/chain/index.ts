@@ -21,6 +21,7 @@ import {
   batchErc20Balances,
   getErc20Metadata,
   knownCoreToken,
+  readErc20Allowance,
 } from "../../data/multicall.js";
 import {
   getAccountTokenTransfers,
@@ -51,6 +52,7 @@ import {
   opPrepareTransaction,
   opPulsexQuote,
   opReadContract,
+  resolveTokenAddress,
 } from "./operations.js";
 
 const addressSchema = z
@@ -421,6 +423,43 @@ export function registerChainTools(
         [...PREPARE_SWAP_WARNINGS],
       ),
   });
+
+  registerTool(server, config, {
+    name: "get_token_allowance",
+    description:
+      "Read ERC-20 allowance(owner, spender). Does not approve or broadcast. " +
+      "Token may be a 0x address or an explicit catalog symbol. " +
+      "USDL and LOAN are Liquid Loans symbols, not aliases of DAI or USD. " +
+      "For Piteas swaps the spender is the Piteas router.",
+    category: "chain",
+    inputSchema: {
+      token: z
+        .string()
+        .min(1)
+        .describe("Token address or explicit catalog symbol (USDL, LOAN, WPLS, …)"),
+      owner: addressSchema.describe("Token holder"),
+      spender: addressSchema.describe("Approved spender, such as a router"),
+    },
+    handler: async (args, cfg) => {
+      const token = resolveTokenAddress(String(args.token));
+      const data = await readErc20Allowance(
+        cfg,
+        token,
+        String(args.owner),
+        String(args.spender),
+      );
+      return ok({
+        ...data,
+        ...(tokenLabelFields(token) ?? {}),
+      });
+    },
+  });
+
+  // Slim (default) hides the 15 deprecated pulsechain_* aliases.
+  // PULSECHAIN_TOOL_PROFILE=full registers them for older prompts.
+  if ((config.toolProfile ?? "slim") !== "full") {
+    return;
+  }
 
   // -------------------------------------------------------------------------
   // Legacy scaffold tools (pulsechain_* names — kept for compatibility)

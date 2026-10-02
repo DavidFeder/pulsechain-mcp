@@ -20,6 +20,7 @@ import { registerPhiatDashboardTool } from "./phiatDashboard.js";
 import { registerPiteasAccumulationPlanTool } from "./piteasAccumulationPlan.js";
 import { registerTierATools } from "./tierA.js";
 import { registerTierBTools } from "./tierB.js";
+import { registerLiquidLoansTools } from "./liquidLoans.js";
 import {
   labelSubgraphPairRow,
   labelSubgraphSwapRow,
@@ -77,6 +78,8 @@ export function registerAnalyticsTools(
   registerTierATools(server, config);
   // Tier B: PulseX factory/day/LP gaps + HEX stake reads (bridge flows skipped)
   registerTierBTools(server, config);
+  // Liquid Loans USDL vault/system reads (no vault writes)
+  registerLiquidLoansTools(server, config);
 
   // Low-level subgraph access (kept for power users / debugging)
   registerTool(server, config, {

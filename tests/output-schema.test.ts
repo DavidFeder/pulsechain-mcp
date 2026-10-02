@@ -155,7 +155,7 @@ describe("outputSchema registration", () => {
     expect(walletJson).not.toContain("ciphertext");
   });
 
-  it("research-only still lists 88 tools with health/wallet-read schemas", () => {
+  it("research-only slim list keeps health/wallet-read schemas", () => {
     const configs = captureRegisterConfigs(researchConfig);
     expect(configs.size).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(configs.get("pulsechain_health")?.outputSchema).toBeDefined();

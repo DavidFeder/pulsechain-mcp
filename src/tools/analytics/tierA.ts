@@ -26,6 +26,7 @@ import {
   preparePiteasSwap,
   type PiteasQuoteData,
 } from "../../data/piteas.js";
+import { buildPiteasAllowanceHint } from "../../data/piteasAllowance.js";
 import {
   getSwitchQuote,
   prepareSwitchSwap,
@@ -335,9 +336,11 @@ export function registerTierATools(
       "Turn a **successful** piteas_quote payload into an agent-ready **non-broadcast** tx intent: " +
       "to = PiteasRouter, data = exact upstream methodParameters.calldata, " +
       "intent.valueWei (wei) + intent.valuePls (human PLS for propose_agent_tx — never pass wei as valuePls). " +
-      "Includes review fields (tokenIn/out, amountIn, amountOutMin, recipient, slippage). " +
-      "Does NOT sign or broadcast — use propose_agent_tx({ valuePls: intent.valuePls, data, to }) → review → execute. " +
-      "Local decode may show unknown selector; that is expected. Never invents routes/calldata.",
+      "Includes review fields (tokenIn/out, amountIn, amountOutMin, recipient, slippage) and " +
+      "proposalQuoteReview to pass into propose_agent_tx quoteReview. " +
+      "When owner is set and the sell is an ERC-20, reads allowance for the Piteas router and " +
+      "may include unsigned suggestedApprove calldata. Does NOT sign or broadcast. " +
+      "Local decode may show unknown selector; use the stamped quote fields. Never invents routes/calldata.",
     category: "analytics",
     inputSchema: {
       quote: z
@@ -348,6 +351,11 @@ export function registerTierATools(
       account: addressSchema
         .optional()
         .describe("Optional recipient override for review fields only (does not rewrite calldata)"),
+      owner: addressSchema
+        .optional()
+        .describe(
+          "Token holder to check ERC-20 allowance against the Piteas router. Defaults to account when omitted. Native PLS sells skip the check.",
+        ),
     },
     handler: async (args, cfg) => {
       const raw = args.quote as unknown;
@@ -377,7 +385,21 @@ export function registerTierATools(
       const prepared = preparePiteasSwap(data, {
         account: args.account as string | undefined,
       });
-      return ok(prepared, mainnetOnlyAggregatorWarnings(cfg));
+      if (!prepared.ok) {
+        return ok(prepared, mainnetOnlyAggregatorWarnings(cfg));
+      }
+      const owner =
+        (args.owner as string | undefined) ??
+        (args.account as string | undefined) ??
+        data.account;
+      const allowance = await buildPiteasAllowanceHint(cfg, prepared, owner);
+      const nextStep = allowance.allowanceSufficient
+        ? prepared.nextStep
+        : `${allowance.note} ${prepared.nextStep}`;
+      return ok(
+        { ...prepared, allowance, nextStep },
+        mainnetOnlyAggregatorWarnings(cfg),
+      );
     },
   });
 

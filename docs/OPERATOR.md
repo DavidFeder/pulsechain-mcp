@@ -7,7 +7,7 @@ Security / wallets: [SECURITY.md](SECURITY.md) (essentials) · [SECURITY_DEEP.md
 
 ## Multi-RPC
 
-Ordered failover. Put preferred URL first: local → LAN → g4mm4 → official → publicnode → PulseChainStats.
+Ordered failover. Put preferred URL first: local → LAN → canonical PublicNode → g4mm4 → official → legacy PublicNode host → PulseChainStats.
 
 1. Requests try RPCs in list order.  
 2. On timeout / connection / HTTP 429·5xx / transport failure → next URL.  
@@ -19,14 +19,14 @@ Ordered failover. Put preferred URL first: local → LAN → g4mm4 → official 
 | `primaryRpcUrl` | First URL in configured list — not auto-picked by latency |
 | `activeRpcUrl` | Last success/probe — **not sticky**; does not reorder failover |
 
-**Defaults (mainnet 369)** when unset: g4mm4 → `rpc.pulsechain.com` → publicnode → `rpc.pulsechainstats.com`.
+**Defaults (mainnet 369)** when unset: `pulsechain-rpc.publicnode.com` → g4mm4 → `rpc.pulsechain.com` → `pulsechain.publicnode.com` → `rpc.pulsechainstats.com`.
 
 ```bash
 # Local + public
-PULSECHAIN_RPC_URLS=http://127.0.0.1:8545,https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com
+PULSECHAIN_RPC_URLS=http://127.0.0.1:8545,https://pulsechain-rpc.publicnode.com,https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com
 
 # Public only
-PULSECHAIN_RPC_URLS=https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com
+PULSECHAIN_RPC_URLS=https://pulsechain-rpc.publicnode.com,https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com
 
 # Testnet
 PULSECHAIN_NETWORK=testnet
@@ -45,6 +45,7 @@ Copy [`.env.example`](../.env.example) → `.env`. Dedicated wallet process: [`.
 | `PULSECHAIN_RPC_URLS` | multi public | Ordered list |
 | `PULSECHAIN_RPC_URL` | merged | Legacy single; prepended when set |
 | `PULSECHAIN_NETWORK` | `mainnet` | or `testnet` |
+| `PULSECHAIN_TOOL_PROFILE` | `slim` | `full` also registers 15 deprecated `pulsechain_*` chain aliases |
 | `PULSECHAIN_EXPLORER_API` | mainnet: scan.pulsechain.com API; testnet: api.scan.v4.testnet.pulsechain.com/api | BlockScout-compatible |
 | `PULSEX_SUBGRAPH_V1` / `V2` | mainnet: graph.pulsechain.com; testnet: graph.v4.testnet.pulsechain.com | PulseX |
 | `HTTP_TIMEOUT_MS` | `30000` | Explorer/subgraph/per-RPC |
@@ -112,8 +113,8 @@ Containers default to **research-only** (`AGENT_WALLET_ENABLED=false`) so the im
 One container → one unique volume/dir. Never share with another writer. Never bake `AGENT_WALLET_MASTER_KEY` into the image.
 
 ```bash
-docker build -t pulsechain-mcp:1.0.7 .
-docker run --rm -it -e AGENT_WALLET_ENABLED=false pulsechain-mcp:1.0.7
+docker build -t pulsechain-mcp:1.0.8 .
+docker run --rm -it -e AGENT_WALLET_ENABLED=false pulsechain-mcp:1.0.8
 ```
 
 ---

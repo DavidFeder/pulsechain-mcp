@@ -61,20 +61,23 @@ describe("parseRpcUrlList / resolveRpcUrls", () => {
     expect(urls[0]).toBe(DEFAULT_RPC_URL);
     expect(urls).toContain("https://rpc-pulsechain.g4mm4.io");
     expect(urls).toContain("https://rpc.pulsechain.com");
+    expect(urls).toContain("https://pulsechain-rpc.publicnode.com");
     expect(urls).toContain("https://pulsechain.publicnode.com");
     expect(urls).toContain("https://rpc.pulsechainstats.com");
   });
 
-  it("orders PulseChainStats after preferred public nodes in defaults", () => {
+  it("orders canonical PublicNode first and PulseChainStats last", () => {
     const urls = [...DEFAULT_RPC_URLS];
+    const canonical = urls.indexOf("https://pulsechain-rpc.publicnode.com");
     const g4 = urls.indexOf("https://rpc-pulsechain.g4mm4.io");
     const official = urls.indexOf("https://rpc.pulsechain.com");
-    const publicnode = urls.indexOf("https://pulsechain.publicnode.com");
+    const legacyPublic = urls.indexOf("https://pulsechain.publicnode.com");
     const pcs = urls.indexOf("https://rpc.pulsechainstats.com");
-    expect(g4).toBe(0);
+    expect(canonical).toBe(0);
+    expect(g4).toBeGreaterThan(canonical);
     expect(official).toBeGreaterThan(g4);
-    expect(publicnode).toBeGreaterThan(official);
-    expect(pcs).toBeGreaterThan(publicnode);
+    expect(legacyPublic).toBeGreaterThan(official);
+    expect(pcs).toBeGreaterThan(legacyPublic);
     expect(pcs).toBe(urls.length - 1);
   });
 

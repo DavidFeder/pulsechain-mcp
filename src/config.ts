@@ -47,6 +47,11 @@ const envSchema = z.object({
   HTTP_TRANSPORT_PORT: z.string().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
   HTTP_TIMEOUT_MS: z.string().optional(),
+  /**
+   * slim (default) omits the 15 deprecated pulsechain_* chain aliases.
+   * full registers them for older prompts.
+   */
+  PULSECHAIN_TOOL_PROFILE: z.enum(["slim", "full"]).optional(),
 });
 
 function parseBool(value: string | undefined): boolean {
@@ -383,5 +388,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     httpTransportPort,
     logLevel: (e.LOG_LEVEL ?? DEFAULT_LOG_LEVEL) as LogLevel,
     httpTimeoutMs,
+    toolProfile: e.PULSECHAIN_TOOL_PROFILE ?? "slim",
   };
 }
