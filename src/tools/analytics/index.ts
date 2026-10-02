@@ -78,7 +78,7 @@ export function registerAnalyticsTools(
   registerTierATools(server, config);
   // Tier B: PulseX factory/day/LP gaps + HEX stake reads (bridge flows skipped)
   registerTierBTools(server, config);
-  // Liquid Loans USDL vault/system reads (no vault writes)
+  // Liquid Loans USDL system, vault, and position reads (no writes)
   registerLiquidLoansTools(server, config);
 
   // Low-level subgraph access (kept for power users / debugging)

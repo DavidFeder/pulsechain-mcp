@@ -1,3 +1,14 @@
+# Release notes — pulsechain-mcp 1.0.9
+
+## What shipped (1.0.9)
+
+- Liquid Loans nominal ICR is PLS per USDL, not a percent. Vault debt and collateral are the entire amounts used for ICR, and `netDebtUsdl` subtracts the gas reserve.
+- Price reads simulate `fetchPrice` and report oracle status. `lastGoodPrice` is the fallback.
+- `liquid_loans_position` reads a compounded stability-pool deposit, LOAN stake, and collateral surplus. The system snapshot adds pool debt share and the lowest-ICR vault.
+- Tool counts **87** / **77** slim. Full profile **102** / **92**.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.9**.
+
 # Release notes — pulsechain-mcp 1.0.8
 
 ## What shipped (1.0.8)
@@ -33,17 +44,17 @@ git pull
 npm install
 npm run build
 # Prefer: node scripts/install-for-host.mjs --host <host> --mode research
-# reload the MCP host so pulsechain_health.version shows 1.0.8
+# reload the MCP host so pulsechain_health.version shows 1.0.9
 ```
 
 Optional smoke after reload:
 
-1. `pulsechain_health` → version `1.0.8`, `toolProfile` `slim`
+1. `pulsechain_health` → version `1.0.9`, `toolProfile` `slim`
 2. Research-only: write tools are absent from `tools/list` while `AGENT_WALLET_ENABLED` is unset or `false`
 3. Wallets-on: `agent_wallet_status` shows `fundingAuthorizesSpend: true`; no spend-cap / confirm write gates
 4. Legacy `pulsechain_*` aliases stay off unless `PULSECHAIN_TOOL_PROFILE=full`
 
-Tags **v1.0.0**–**v1.0.7** remain historical; **v1.0.8** is this release.
+Tags **v1.0.0**–**v1.0.8** remain historical; **v1.0.9** is this release.
 
 ## What shipped earlier
 
@@ -72,5 +83,5 @@ Funding the agent is authorization. Fund only what you accept the agent may spen
 
 ## Tag / about topics
 
-1. Confirm tags: **`v1.0.0`**–**`v1.0.7`** untouched; **`v1.0.8`** on this release commit.
+1. Confirm tags: **`v1.0.0`**–**`v1.0.8`** untouched; **`v1.0.9`** on this release commit.
 2. About / topics: pulsechain, mcp, web3, defi, phiat, piteas (operator choice).

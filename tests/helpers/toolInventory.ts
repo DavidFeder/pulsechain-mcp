@@ -46,9 +46,9 @@ export const OUTPUT_SCHEMA_TOOL_NAMES = [
 /**
  * Default slim surface when AGENT_WALLET_ENABLED=true.
  * 97 historical tools, minus 15 legacy chain aliases, plus allowance,
- * transfer_token, and two Liquid Loans reads.
+ * transfer_token, and three Liquid Loans reads.
  */
-export const REGISTERED_TOOL_COUNT_WALLETS_ON = 86;
+export const REGISTERED_TOOL_COUNT_WALLETS_ON = 87;
 
 /** Research-only slim: wallets-on minus write tools. */
 export const REGISTERED_TOOL_COUNT_RESEARCH_ONLY =

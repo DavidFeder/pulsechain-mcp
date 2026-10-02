@@ -111,7 +111,7 @@ export const DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2 =
 export const DEFAULT_LOG_LEVEL = "info" as const;
 
 export const SERVER_NAME = "pulsechain-mcp";
-export const SERVER_VERSION = "1.0.8";
+export const SERVER_VERSION = "1.0.9";
 
 /** Sent on JSON-RPC posts. PublicNode returns 403 without a user agent. */
 export const RPC_CLIENT_USER_AGENT = "pulsechain-mcp" as const;
@@ -200,6 +200,11 @@ export const LIQUID_LOANS = {
   vaultManager: "0xD79bfb86fA06e8782b401bC0197d92563602D2Ab",
   stabilityPool: "0x7bFD406632483ad00c6EdF655E04De91A96f84bc",
   priceFeed: "0xc65Abc8B9B4B3cEE03430f6fc3d8A4760221A113",
+  sortedVaults: "0xE1246517c3eCa1e2a198fc927296d8ff87BaBD3c",
+  loanStaking: "0x853F0CD4B0083eDf7cFf5Ad9A296f02Ffb71C995",
+  collSurplusPool: "0x88742a6Fd16A00Fc671fff371E4CC8ff58378596",
+  activePool: "0x3983f040916681085D7949F7ee78BfA12c5CB119",
+  defaultPool: "0x717A736b34308d97EeFb5bd91539E0D3B9142dBE",
   /** Older PLSX-collateral trove manager — do not read as the USDL vault. */
   legacyPlsxTroveManager: "0x118b7CF595F6476a18538EAF4Fbecbf594338B39",
 } as const;
