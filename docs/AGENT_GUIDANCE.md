@@ -136,6 +136,7 @@ Prefer canonical `get_*` names for chain reads; `pulsechain_*` chain tools are c
 | Ranking | `get_top_tokens` / `get_top_pairs` (origin labels when catalogued) |
 | HEX stake state | `hex_global_state` / `hex_stakes_for_address` on **pHEX** (eHEX soft-fails). `hex_stake_summary` adds days left, ending-soon, approximate T-shares, and a labeled share-rate estimate (not an endStake payout or financial advice) |
 | PulseX buy and burn | `pulsex_buy_and_burn` reads chain 369 only. Ask: "Is PulseX buy and burn running, and how much PLSX is in the dead address?" Contract read, not financial advice. It does not call `buyAndBurn` or `convertLps` |
+| Pump.tires coin | `pump_tires_coin` reads chain 369 only. Ask: "Is this Pump.tires coin still on the curve, or has it graduated?" Read-only, meme, not financial advice. It does not create, buy, or burn a coin. The platform PUMP token is not a launched coin. Address is identity |
 
 `phiat_dashboard` is research-only. It reports aggregate and primary-pair market values separately, with source/timestamp labels. Liquidity reliability thresholds are critical below $10,000, high below $50,000, medium below $250,000, and low at or above $250,000.
 

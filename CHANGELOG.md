@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.12] - 2026-10-02
+Read-only `pump_tires_coin` on chain 369. Slim counts **90** / **80** (full **105** / **95**). Phase comes from the verified token template `launched()` view. Progress is documented 200,000,000 PLS bid liquidity only when the factory exposes `plsReceived`. The platform PUMP token is not a launched coin. An address the creation-tx factory does not list is not marked graduated. Does not create, buy, or burn a coin. Meme coin, not financial advice.
+
 ## [1.0.11] - 2026-10-02
 Read-only `pulsex_buy_and_burn` on chain 369. Slim counts **89** / **79** (full **104** / **94**). `running` comes from `paused()` or `enabled()` when that view exists, otherwise unknown. Dead-address PLSX is separate from buyback PLSX. Does not call `buyAndBurn` or `convertLps`. Contract read, not financial advice.
 
