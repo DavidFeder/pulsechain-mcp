@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2026-10-02
+
+Liquid Loans reads now match the vault the protocol liquidates. Slim tool counts **87** (wallets-on) / **77** (research-only). Full profile **102** / **92**.
+
+### Fixed
+
+- Nominal ICR is PLS per USDL (`collateral * 1e20 / debt`), not a percent
+- Vault collateral and debt are entire amounts (recorded plus pending redistribution). `netDebtUsdl` subtracts the USDL gas reserve
+- Price prefers a simulated `fetchPrice` and falls back to `lastGoodPrice`, with the oracle status attached
+
+### Added
+
+- `liquid_loans_position`: compounded stability-pool USDL, LOAN stake, and claimable collateral surplus
+- System snapshot adds the stability-pool share of debt, active versus default pools, fee bounds, and the lowest-ICR vault
+- `debtInFront` sums entire debt of vaults with a lower nominal ICR when the active list is at most 400 and matches the sorted list
+
 ## [1.0.8] - 2026-10-02
 
 Canonical PublicNode RPC first, Piteas allowance and quote stamps, ERC-20 `transfer_token`, Liquid Loans reads, and a slim tool profile. Slim tool counts **86** (wallets-on) / **76** (research-only). `PULSECHAIN_TOOL_PROFILE=full` restores the 15 legacy `pulsechain_*` aliases (**101** / **91**).

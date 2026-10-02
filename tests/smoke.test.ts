@@ -152,7 +152,7 @@ describe("smoke: tool registration (no live network)", () => {
 
     const meta = getRegisteredTools();
     expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(76);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(77);
     expect(names.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(names.length).toBe(meta.length);
 
@@ -175,6 +175,7 @@ describe("smoke: tool registration (no live network)", () => {
     expect(byName.has("get_token_allowance")).toBe(true);
     expect(byName.has("liquid_loans_system")).toBe(true);
     expect(byName.has("liquid_loans_vault")).toBe(true);
+    expect(byName.has("liquid_loans_position")).toBe(true);
     expect(byName.has("pulsechain_chain_id")).toBe(false);
     expect(meta.filter((t) => t.write)).toEqual([]);
     expect(new Set(meta.map((t) => t.name)).size).toBe(meta.length);
@@ -244,7 +245,7 @@ describe("smoke: tool registration (no live network)", () => {
       expect(byName.has(n)).toBe(true);
     }
 
-    // Exact family counts (slim): 3 health + 14 chain + 54 analytics + 15 wallet = 86
+    // Exact family counts (slim): 3 health + 14 chain + 55 analytics + 15 wallet = 87
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
     expect(byCat("chain").length).toBe(14);
@@ -253,7 +254,7 @@ describe("smoke: tool registration (no live network)", () => {
     // free + advanced + PulseX + DexScreener + phiat/accumulation + Tier A (11) + Tier B + Liquid Loans
     // PulseX: 8 low-level + 3 Tier B factory/day/lp = 11 starting with pulsex_
     // + 2 hex_* Tier B; Tier A: 7 prior + 2 Piteas + 2 Switch
-    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5 + 2);
+    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5 + 3);
     expect(FREE_ANALYTICS).toHaveLength(11);
     expect(ADVANCED_ANALYTICS).toHaveLength(9);
     expect(WALLET_TOOL_NAMES).toHaveLength(15);

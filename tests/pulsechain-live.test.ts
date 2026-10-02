@@ -3,12 +3,17 @@
  * PublicNode answers eth_chainId only when a user agent is set.
  */
 import { describe, expect, it } from "vitest";
+import type { Address } from "viem";
 import {
   CANONICAL_PUBLICNODE_RPC_URL,
   LEGACY_PUBLICNODE_RPC_URL,
   RPC_CLIENT_USER_AGENT,
 } from "../src/constants.js";
-import { readLiquidLoansSystem } from "../src/data/liquidLoans.js";
+import {
+  readLiquidLoansPosition,
+  readLiquidLoansSystem,
+  readLiquidLoansVault,
+} from "../src/data/liquidLoans.js";
 import { testAppConfig } from "./helpers/appConfig.js";
 
 async function ethChainId(url: string): Promise<number> {
@@ -40,18 +45,48 @@ describe("live PulseChain eth_chainId", () => {
 
 describe("live Liquid Loans system read", () => {
   it("reads a positive PLS price and system debt from mainnet", async () => {
-    const data = await readLiquidLoansSystem(
-      testAppConfig({
-        rpcUrl: CANONICAL_PUBLICNODE_RPC_URL,
-        rpcUrls: [CANONICAL_PUBLICNODE_RPC_URL, "https://rpc.pulsechain.com"],
-        network: "mainnet",
-        httpTimeoutMs: 20_000,
-      }),
-    );
+    const cfg = testAppConfig({
+      rpcUrl: CANONICAL_PUBLICNODE_RPC_URL,
+      rpcUrls: [CANONICAL_PUBLICNODE_RPC_URL, "https://rpc.pulsechain.com"],
+      network: "mainnet",
+      httpTimeoutMs: 20_000,
+    });
+    const data = await readLiquidLoansSystem(cfg);
     expect(data.ok, JSON.stringify(data)).toBe(true);
-    const price = data.price as { raw: string };
+    const price = data.price as { raw: string; source: string; simulated: boolean };
     expect(BigInt(price.raw)).toBeGreaterThan(0n);
+    expect(["fetchPrice", "lastGoodPrice"]).toContain(price.source);
+    if (price.source === "fetchPrice") expect(price.simulated).toBe(true);
     const debt = data.systemDebtUsdl as { raw: string };
     expect(BigInt(debt.raw)).toBeGreaterThan(0n);
-  }, 40_000);
+    expect(data.minimumCollateralRatio).toMatchObject({ percent: "110.00%" });
+    expect(data.criticalCollateralRatio).toMatchObject({ percent: "150.00%" });
+    expect(data.usdlGasCompensation).toMatchObject({ formatted: "200" });
+    const borrowing = data.borrowingRate as { percent: string };
+    expect(borrowing.percent).toMatch(/^\d+\.\d{4}%$/);
+    const lowest = data.lowestIcrVault as {
+      address: Address;
+      collateralRatio: { percent: string | null };
+    };
+    expect(lowest.address).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    expect(lowest.collateralRatio.percent).toMatch(/%$/);
+
+    const vault = await readLiquidLoansVault(cfg, lowest.address);
+    expect(vault.ok, JSON.stringify(vault)).toBe(true);
+    const nominal = vault.nominalIcr as { plsPerUsdl: string };
+    expect(nominal.plsPerUsdl).toMatch(/^\d+\.\d+$/);
+    expect(nominal).not.toHaveProperty("percent");
+    expect(vault.liquidation).toMatchObject({ advisory: true });
+    expect(vault.debtInFront).toMatchObject({
+      computed: true,
+      vaultsAhead: 0,
+      usdl: { raw: "0" },
+    });
+
+    const position = await readLiquidLoansPosition(cfg, lowest.address);
+    expect(position.ok, JSON.stringify(position)).toBe(true);
+    expect(position.stabilityPool).toMatchObject({
+      compoundedUsdl: { raw: expect.any(String) },
+    });
+  }, 60_000);
 });

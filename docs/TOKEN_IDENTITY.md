@@ -40,6 +40,15 @@ Bridged stables (DAI / eUSDC / eUSDT) are the dollar-oriented assets. Forked “
 
 They are catalog entries, not core-portfolio defaults, and they have no silent aliases.
 
+`liquid_loans_system`, `liquid_loans_vault`, and `liquid_loans_position` are mainnet read-only tools for the current PLS-collateral vault. They are not the older PLSX TroveManager.
+
+- ICR and TCR are percents (`1e18` = 100%).
+- Nominal ICR is `collateral * 1e20 / debt`. The tools report PLS per USDL, not a percent.
+- `debtUsdl` is entire composite debt (recorded plus pending redistribution) and includes the 200 USDL gas reserve. `netDebtUsdl` subtracts that reserve.
+- `fetchPrice` is an `eth_call` simulation, not a transaction.
+- The liquidation field is advisory. `debtInFront` sums entire debt of vaults with a lower nominal ICR when the list is at most 400 vaults and matches the sorted list. It is not a redemption quote.
+- These tools do not open, adjust, redeem, or liquidate.
+
 ---
 
 ## DexScreener usage
