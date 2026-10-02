@@ -1,3 +1,14 @@
+# Release notes — pulsechain-mcp 1.0.10
+
+## What shipped (1.0.10)
+
+- `hex_stake_summary` is a read-only PulseChain pHEX stake summary: days left, ending-soon, approximate T-shares, principal, and a share-rate yield estimate.
+- Yield is omitted when current day or share rate is missing. It is not an endStake payout, an audit, or financial advice.
+- pHEX and eHEX USD context comes from existing PulseX or DexScreener reads. No Ethereum RPC.
+- Tool counts **88** / **78** slim. Full profile **103** / **93**.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.10**.
+
 # Release notes — pulsechain-mcp 1.0.9
 
 ## What shipped (1.0.9)

@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-10-02
+
+Read-only `hex_stake_summary` for PulseChain pHEX stakes. Slim tool counts **88** (wallets-on) / **78** (research-only). Full profile **103** / **93**.
+
+### Added
+
+- Days left, ending-soon, approximate T-shares, principal, and a share-rate yield estimate
+- Yield is labeled as an estimate and omitted when current day or share rate is missing. It is not an endStake payout, an audit, or financial advice
+- pHEX and eHEX USD context from existing PulseX or DexScreener reads when both exist. No Ethereum RPC
+
 ## [1.0.9] - 2026-10-02
 
 Liquid Loans reads now match the vault the protocol liquidates. Slim tool counts **87** (wallets-on) / **77** (research-only). Full profile **102** / **92**.

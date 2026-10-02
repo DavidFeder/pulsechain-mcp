@@ -310,7 +310,7 @@ describe("PulseX soft helpers (shipped)", () => {
 // ── Registration ─────────────────────────────────────────────────────────
 
 describe("Tier B tool registration", () => {
-  it("registers five Tier B tools", () => {
+  it("registers six Tier B tools", () => {
     const names: string[] = [];
     const server = {
       registerTool: (name: string) => {
@@ -326,6 +326,7 @@ describe("Tier B tool registration", () => {
       "pulsex_lp_events",
       "hex_global_state",
       "hex_stakes_for_address",
+      "hex_stake_summary",
     ];
     for (const n of tierB) {
       expect(names).toContain(n);

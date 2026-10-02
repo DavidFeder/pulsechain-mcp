@@ -124,6 +124,20 @@ export {
 } from "./hexStake.js";
 
 export {
+  HEX_HEARTS_PER_HEX,
+  HEX_SHARE_RATE_SCALE,
+  HEX_STAKE_SUMMARY_TOOL_DESCRIPTION,
+  formatHexFromHearts,
+  formatScaledUnits,
+  buildHexPriceContext,
+  summarizeHexStakes,
+  getHexStakeSummary,
+  type HexStakeSummaryData,
+  type HexStakeSummaryStake,
+  type HexPriceContext,
+} from "./hexStakeSummary.js";
+
+export {
   buildExplorerUrl,
   explorerGet,
   explorerV2Get,

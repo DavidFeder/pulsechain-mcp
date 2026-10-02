@@ -152,7 +152,7 @@ describe("smoke: tool registration (no live network)", () => {
 
     const meta = getRegisteredTools();
     expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(77);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(78);
     expect(names.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(names.length).toBe(meta.length);
 
@@ -241,11 +241,12 @@ describe("smoke: tool registration (no live network)", () => {
       "pulsex_lp_events",
       "hex_global_state",
       "hex_stakes_for_address",
+      "hex_stake_summary",
     ]) {
       expect(byName.has(n)).toBe(true);
     }
 
-    // Exact family counts (slim): 3 health + 14 chain + 55 analytics + 15 wallet = 87
+    // Exact family counts (slim): 3 health + 14 chain + 56 analytics + 15 wallet = 88
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
     expect(byCat("chain").length).toBe(14);
@@ -253,8 +254,8 @@ describe("smoke: tool registration (no live network)", () => {
     const analytics = byCat("analytics");
     // free + advanced + PulseX + DexScreener + phiat/accumulation + Tier A (11) + Tier B + Liquid Loans
     // PulseX: 8 low-level + 3 Tier B factory/day/lp = 11 starting with pulsex_
-    // + 2 hex_* Tier B; Tier A: 7 prior + 2 Piteas + 2 Switch
-    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5 + 3);
+    // + 3 hex_* Tier B; Tier A: 7 prior + 2 Piteas + 2 Switch
+    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 3 + 11 + 5 + 3);
     expect(FREE_ANALYTICS).toHaveLength(11);
     expect(ADVANCED_ANALYTICS).toHaveLength(9);
     expect(WALLET_TOOL_NAMES).toHaveLength(15);

@@ -6,7 +6,7 @@ You can give your AI agent its own PLS and other tokens in a local wallet it con
 
 Sending PLS and swaps on PulseX/Piteas have been successful.
 
-**Version `1.0.9`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
+**Version `1.0.10`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
 
 ## Features
 
@@ -43,6 +43,10 @@ git clone https://github.com/DavidFeder/pulsechain-mcp.git && cd pulsechain-mcp 
 (ordered checklist: clone → **mode fork research-first** → secrets write-only if wallets → install-for-host → pre-reload doctor → user reload → post-reload smoke)
 
 Default install intent is **research-only**. Promote to wallets-on only when the user asks to sign. Never print or paste master keys.
+
+## HEX stake summary
+
+Ask: "Which of my pHEX stakes end in the next 30 days, and how does pHEX's price compare with eHEX?" `hex_stake_summary` is a read-only estimate for PulseChain pHEX only. It is not an endStake payout and not financial advice.
 
 ## License
 
