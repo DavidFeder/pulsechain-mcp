@@ -70,7 +70,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.10");
+    expect(pkg.version).toBe("1.0.11");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
