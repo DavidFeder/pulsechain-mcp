@@ -21,6 +21,7 @@ import { registerPiteasAccumulationPlanTool } from "./piteasAccumulationPlan.js"
 import { registerTierATools } from "./tierA.js";
 import { registerTierBTools } from "./tierB.js";
 import { registerLiquidLoansTools } from "./liquidLoans.js";
+import { registerPulsexBuyAndBurnTool } from "./pulsexBuyAndBurn.js";
 import {
   labelSubgraphPairRow,
   labelSubgraphSwapRow,
@@ -80,6 +81,8 @@ export function registerAnalyticsTools(
   registerTierBTools(server, config);
   // Liquid Loans USDL system, vault, and position reads (no writes)
   registerLiquidLoansTools(server, config);
+  // PulseX buy-and-burn status (read-only; does not call buyAndBurn or convertLps)
+  registerPulsexBuyAndBurnTool(server, config);
 
   // Low-level subgraph access (kept for power users / debugging)
   registerTool(server, config, {

@@ -5,6 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] - 2026-10-02
+Read-only `pulsex_buy_and_burn` on chain 369. Slim counts **89** / **79** (full **104** / **94**). `running` comes from `paused()` or `enabled()` when that view exists, otherwise unknown. Dead-address PLSX is separate from buyback PLSX. Does not call `buyAndBurn` or `convertLps`. Contract read, not financial advice.
+
 ## [1.0.10] - 2026-10-02
 
 Read-only `hex_stake_summary` for PulseChain pHEX stakes. Slim tool counts **88** (wallets-on) / **78** (research-only). Full profile **103** / **93**.

@@ -1,3 +1,13 @@
+# Release notes — pulsechain-mcp 1.0.11
+
+## What shipped (1.0.11)
+
+- `pulsex_buy_and_burn` is a read-only chain 369 status check for the PulseX buyback proxy. It reports whether `paused()` or `enabled()` says the contract is running, and how much PLSX sits at the dead address versus inside the buyback.
+- If those views are missing, `running` is unknown. The tool does not guess from admin gates, and it does not call `buyAndBurn` or `convertLps`.
+- Tool counts **89** / **79** slim. Full profile **104** / **94**.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.11**.
+
 # Release notes — pulsechain-mcp 1.0.10
 
 ## What shipped (1.0.10)

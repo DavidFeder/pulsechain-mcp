@@ -110,10 +110,10 @@ describe("legacy pulsechain_* chain aliases (deprecated descriptions)", () => {
   });
 
   it("slim is the default count and full adds the 15 aliases", () => {
-    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(88);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(78);
-    expect(REGISTERED_TOOL_COUNT_WALLETS_ON_FULL).toBe(103);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY_FULL).toBe(93);
+    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(89);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(79);
+    expect(REGISTERED_TOOL_COUNT_WALLETS_ON_FULL).toBe(104);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY_FULL).toBe(94);
 
     resetToolRegistry();
     registerAllTools(
