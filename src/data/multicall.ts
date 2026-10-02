@@ -496,12 +496,12 @@ export async function readErc20Allowance(
       abi: erc20Abi,
       functionName: "decimals",
     });
-    decimals = typeof dec === "number" ? dec : Number(dec);
-    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
-      decimals = null;
+    const parsed = typeof dec === "number" ? dec : Number(dec);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 255) {
+      decimals = parsed;
     }
   } catch {
-    decimals = null;
+    // decimals stay null; allowanceRaw is still returned
   }
   return {
     token,
