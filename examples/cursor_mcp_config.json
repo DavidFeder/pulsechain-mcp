@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["REPLACE_WITH_ABSOLUTE_PATH/dist/index.js"],
       "env": {
-        "PULSECHAIN_RPC_URLS": "https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com",
+        "PULSECHAIN_RPC_URLS": "https://pulsechain-rpc.publicnode.com,https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com",
         "PULSECHAIN_EXPLORER_API": "https://api.scan.pulsechain.com/api",
         "PULSEX_SUBGRAPH_V1": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex",
         "PULSEX_SUBGRAPH_V2": "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2",

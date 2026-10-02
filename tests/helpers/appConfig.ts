@@ -23,5 +23,8 @@ export function testAppConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     httpTransportPort: overrides.httpTransportPort,
     logLevel: overrides.logLevel ?? "error",
     httpTimeoutMs: overrides.httpTimeoutMs ?? 5_000,
+    ...(overrides.toolProfile !== undefined
+      ? { toolProfile: overrides.toolProfile }
+      : {}),
   };
 }

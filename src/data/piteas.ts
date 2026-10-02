@@ -192,6 +192,24 @@ export interface PiteasPrepareSwapResult {
   };
   /** Exact methodParameters from quote (calldata never rewritten). */
   methodParameters: PiteasMethodParameters;
+  /**
+   * Pass this object as propose_agent_tx quoteReview so the wallet review
+   * shows token in/out and amounts when the router selector is unknown.
+   */
+  proposalQuoteReview: {
+    source: "piteas";
+    quotedAt: string;
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+    amountOut: string;
+    amountOutMin?: string;
+    recipient?: string;
+    router: typeof PITEAS_ROUTER;
+    sellingNativePls: boolean;
+    routeSignature?: string;
+    allowedSlippage: number;
+  };
   nextStep: string;
   note: string;
 }
@@ -844,6 +862,8 @@ export function preparePiteasSwap(
   const valuePls = weiToHumanPls(valueWei);
 
   const recipient = opts?.account ?? quote.account;
+  const tokenIn = quote.srcToken.address || quote.tokenInParam;
+  const tokenOut = quote.destToken.address || quote.tokenOutParam;
 
   return {
     ok: true,
@@ -857,8 +877,8 @@ export function preparePiteasSwap(
       valuePls,
     },
     review: {
-      tokenIn: quote.srcToken.address || quote.tokenInParam,
-      tokenOut: quote.destToken.address || quote.tokenOutParam,
+      tokenIn,
+      tokenOut,
       tokenInParam: quote.tokenInParam,
       tokenOutParam: quote.tokenOutParam,
       amountIn: quote.amountIn,
@@ -875,10 +895,26 @@ export function preparePiteasSwap(
       calldata: quote.methodParameters.calldata,
       value: quote.methodParameters.value,
     },
+    proposalQuoteReview: {
+      source: "piteas",
+      quotedAt: new Date().toISOString(),
+      tokenIn,
+      tokenOut,
+      amountIn: quote.amountIn,
+      amountOut: quote.amountOut,
+      ...(quote.amountOutMin ? { amountOutMin: quote.amountOutMin } : {}),
+      ...(recipient ? { recipient } : {}),
+      router: PITEAS_ROUTER,
+      sellingNativePls,
+      ...(quote.route?.signature ? { routeSignature: quote.route.signature } : {}),
+      allowedSlippage: quote.allowedSlippage,
+    },
     nextStep:
-      "propose_agent_tx({ walletId, to: intent.to, valuePls: intent.valuePls, data: intent.data }) — " +
+      "propose_agent_tx({ walletId, to: intent.to, valuePls: intent.valuePls, data: intent.data, quoteReview: proposalQuoteReview }) — " +
       "valuePls is human PLS (e.g. \"1\" or \"100000\"), NOT wei. Do not pass valueWei as valuePls. " +
-      "Then read reviewSummary (destination Piteas router, native value, gas) → execute_agent_tx. " +
+      "quoteReview stamps token in/out and amounts onto the proposal when the router selector is unknown. " +
+      "Then read reviewSummary.aggregatorQuote (and quoteAgeSec) → execute_agent_tx. " +
+      "If allowance.allowanceSufficient is false, propose suggestedApprove first. " +
       "Do not invent alternate calldata. Re-quote if the proposal ages or eth_call fails.",
     note: PREPARE_NOTE,
   };

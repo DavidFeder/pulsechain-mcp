@@ -7,7 +7,9 @@ import { registerAllTools } from "../src/tools/registry.js";
 import { testAppConfig } from "./helpers/appConfig.js";
 import {
   REGISTERED_TOOL_COUNT_RESEARCH_ONLY,
+  REGISTERED_TOOL_COUNT_RESEARCH_ONLY_FULL,
   REGISTERED_TOOL_COUNT_WALLETS_ON,
+  REGISTERED_TOOL_COUNT_WALLETS_ON_FULL,
 } from "./helpers/toolInventory.js";
 
 /** Legacy chain scaffold names → canonical replacement (item 6). */
@@ -57,9 +59,23 @@ afterEach(() => {
 });
 
 describe("legacy pulsechain_* chain aliases (deprecated descriptions)", () => {
-  it("keeps all 15 aliases registered with DEPRECATED descriptions naming replacements", () => {
+  it("hides all 15 aliases on the default slim profile", () => {
     resetToolRegistry();
     registerAllTools(mockServer() as never, testAppConfig());
+    const names = new Set(getRegisteredTools().map((t) => t.name));
+    for (const name of Object.keys(LEGACY_CHAIN_ALIASES)) {
+      expect(names.has(name), name).toBe(false);
+    }
+    expect(names.has("get_balance")).toBe(true);
+    expect(names.has("get_token_allowance")).toBe(true);
+  });
+
+  it("keeps all 15 aliases registered with DEPRECATED descriptions when profile is full", () => {
+    resetToolRegistry();
+    registerAllTools(
+      mockServer() as never,
+      testAppConfig({ toolProfile: "full" }),
+    );
 
     const meta = getRegisteredTools();
     const byName = new Map(meta.map((t) => [t.name, t]));
@@ -93,9 +109,11 @@ describe("legacy pulsechain_* chain aliases (deprecated descriptions)", () => {
     }
   });
 
-  it("does not change registered tool counts", () => {
-    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(97);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(88);
+  it("slim is the default count and full adds the 15 aliases", () => {
+    expect(REGISTERED_TOOL_COUNT_WALLETS_ON).toBe(86);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(76);
+    expect(REGISTERED_TOOL_COUNT_WALLETS_ON_FULL).toBe(101);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY_FULL).toBe(91);
 
     resetToolRegistry();
     registerAllTools(
@@ -107,8 +125,8 @@ describe("legacy pulsechain_* chain aliases (deprecated descriptions)", () => {
     resetToolRegistry();
     registerAllTools(
       mockServer() as never,
-      testAppConfig({ agentWalletEnabled: true }),
+      testAppConfig({ agentWalletEnabled: true, toolProfile: "full" }),
     );
-    expect(getRegisteredTools().length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON);
+    expect(getRegisteredTools().length).toBe(REGISTERED_TOOL_COUNT_WALLETS_ON_FULL);
   });
 });

@@ -146,17 +146,18 @@ Prefer canonical `get_*` names for chain reads; `pulsechain_*` chain tools are c
 
 ```text
 quote (piteas_quote preferred keyless)
-  → prepare (piteas_prepare_swap | switch_prepare_swap)
-  → propose_agent_tx   (wallets enabled)
-  → review reviewSummary + safetyHints + agentGuidance
+  → prepare (piteas_prepare_swap with owner | switch_prepare_swap)
+  → if allowance is short, propose suggestedApprove (separate tx)
+  → propose_agent_tx with quoteReview: proposalQuoteReview
+  → review reviewSummary.aggregatorQuote + quoteAgeSec + safetyHints
   → execute_agent_tx
 ```
 
 | Step | Rule |
 |------|------|
 | Quote | Prefer **`piteas_quote`** (keyless). **`switch_quote`** needs operator `SWITCH_API_KEY`. Neither is a best-price oracle. |
-| Prepare | Builds reviewable `to` / `data` / `value` — **does not broadcast**. |
-| Propose | Read **`reviewSummary`** (destination, native value, token movements, gas hints). |
+| Prepare | Builds reviewable `to` / `data` / `value` and `proposalQuoteReview`. ERC-20 sells with `owner` also return an allowance hint. **Does not broadcast.** |
+| Propose | Pass `quoteReview`. Read **`reviewSummary`**, including `aggregatorQuote` when the router selector is unknown. |
 | Execute | `agentGuidance` `ready` means the wallet can sign (not killed/disabled/invalid). Funding authorizes the spend. |
 
 Details: [AGGREGATORS.md](AGGREGATORS.md). Wallets: [SECURITY.md](SECURITY.md).

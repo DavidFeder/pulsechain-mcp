@@ -6,12 +6,14 @@
  */
 
 import type {
+  AggregatorQuoteReview,
   PolicyCheckResult,
   SimulationResult,
   TokenNotionalPolicyView,
   TxProposal,
 } from "./types.js";
 import type { TokenNotionalInspection } from "./tokenNotional.js";
+import { QUOTE_STALE_AFTER_SEC, quoteAgeSec } from "./quoteReview.js";
 
 /** Concise movement line for operators (no secrets). */
 export interface ReviewTokenMovement {
@@ -102,6 +104,32 @@ export interface TxReviewSummary {
   walletId?: string;
   chainId?: number;
   network?: "mainnet" | "testnet";
+  /**
+   * Piteas quote stamp copied onto the proposal. Present even when
+   * calldata decode is `unknown`. Advisory — does not block the send.
+   */
+  aggregatorQuote?: AggregatorQuoteReviewView;
+}
+
+/** Review view of a stamped Piteas quote, including age at review time. */
+export interface AggregatorQuoteReviewView {
+  source: "piteas";
+  quotedAt: string;
+  quoteAgeSec: number;
+  /** True when quoteAgeSec is greater than QUOTE_STALE_AFTER_SEC. */
+  stale: boolean;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+  amountOutMin?: string;
+  recipient?: string;
+  router: string;
+  sellingNativePls: boolean;
+  routeSignature?: string;
+  /** False when the stamped router is not the transaction destination. */
+  routerMatchesDestination: boolean;
+  note: string;
 }
 
 export const FUNDING_AUTHORIZES_NOTE =
@@ -411,6 +439,10 @@ export interface BuildTxReviewSummaryInput {
   chainId?: number;
   network?: "mainnet" | "testnet";
   context?: "propose" | "check" | "execute" | "transfer";
+  /** Stamped Piteas quote, when the caller passed quoteReview into propose. */
+  quoteReview?: AggregatorQuoteReview;
+  /** Review clock. Defaults to Date.now(). */
+  nowMs?: number;
 }
 
 export function formatSealedChainLabel(
@@ -458,6 +490,36 @@ export function buildTxReviewSummary(
         : undefined;
   const chainSuffix = chainLabel ? ` · chain ${chainLabel}` : "";
 
+  const nowMs = input.nowMs ?? Date.now();
+  const stamped = input.quoteReview;
+  const age = stamped ? quoteAgeSec(stamped.quotedAt, nowMs) : 0;
+  const stale = Boolean(stamped && age > QUOTE_STALE_AFTER_SEC);
+  const aggregatorQuote: AggregatorQuoteReviewView | undefined = stamped
+    ? {
+        source: "piteas",
+        quotedAt: stamped.quotedAt,
+        quoteAgeSec: age,
+        stale,
+        tokenIn: stamped.tokenIn,
+        tokenOut: stamped.tokenOut,
+        amountIn: stamped.amountIn,
+        amountOut: stamped.amountOut,
+        amountOutMin: stamped.amountOutMin,
+        recipient: stamped.recipient,
+        router: stamped.router,
+        sellingNativePls: stamped.sellingNativePls,
+        routeSignature: stamped.routeSignature,
+        routerMatchesDestination:
+          stamped.router.toLowerCase() === input.to.toLowerCase(),
+        note:
+          "Stamped from the Piteas quote. Local calldata decode may still be unknown. " +
+          "This does not block the send.",
+      }
+    : undefined;
+  const quoteSuffix = aggregatorQuote
+    ? ` · Piteas ${shortAddr(aggregatorQuote.tokenIn)}→${shortAddr(aggregatorQuote.tokenOut)} in ${aggregatorQuote.amountIn}`
+    : "";
+
   const headline =
     decision === "allow"
       ? `ALLOWED: ${valuePls} PLS → ${shortAddr(input.to)}` +
@@ -465,16 +527,28 @@ export function buildTxReviewSummary(
           ? ` (contract/calldata; ${check.tokenNotional?.pattern ?? "interaction"})`
           : " (native EOA transfer)") +
         (movements.length ? `; tokens: ${movementHint}` : "") +
+        quoteSuffix +
         chainSuffix
       : `DENIED: ${valuePls} PLS → ${shortAddr(input.to)} — ${
           check.reasons[0] ?? "wallet write blocked"
         }` +
+        quoteSuffix +
         chainSuffix;
 
   const decisionTrace =
     decision === "deny" ? check.reasons.map(categorizeDenyReason) : [];
 
   const decodeKnowledge = buildDecodeKnowledge(check.tokenNotional, hasCalldata);
+  if (
+    aggregatorQuote &&
+    movements.length === 0 &&
+    decodeKnowledge.status === "unknown"
+  ) {
+    movementExplanations.unshift(
+      `Piteas quote (not a local selector decode): ${aggregatorQuote.amountIn} raw of ${aggregatorQuote.tokenIn} → ` +
+        `${aggregatorQuote.amountOutMin ?? aggregatorQuote.amountOut} raw of ${aggregatorQuote.tokenOut}`,
+    );
+  }
   const agentGuidance: AgentGuidance = decision === "deny" ? "blocked" : "ready";
   const safetyHints: string[] = [];
   if (decision === "deny") {
@@ -485,7 +559,11 @@ export function buildTxReviewSummary(
     if (decodeKnowledge.status === "truncated_or_invalid") {
       safetyHints.push("Calldata looks truncated/invalid — amounts may be wrong");
     } else if (decodeKnowledge.status === "unknown") {
-      safetyHints.push("Unknown selector — amounts not fully decoded");
+      safetyHints.push(
+        aggregatorQuote
+          ? "Unknown selector — amounts not fully decoded. Use aggregatorQuote (tokenIn, tokenOut, amountIn, amountOutMin) as the review source."
+          : "Unknown selector — amounts not fully decoded",
+      );
     } else if (
       decodeKnowledge.status === "known_priority" &&
       !decodeKnowledge.reliable
@@ -501,6 +579,19 @@ export function buildTxReviewSummary(
       safetyHints.push("Native transfer path — verify destination and PLS amount");
     } else {
       safetyHints.push("Contract/calldata path — verify destination, value, and calldata intent");
+    }
+  }
+  if (aggregatorQuote) {
+    if (!aggregatorQuote.routerMatchesDestination) {
+      safetyHints.push(
+        "Stamped Piteas router does not match this transaction destination.",
+      );
+    }
+    if (aggregatorQuote.stale) {
+      safetyHints.push(
+        `Piteas quote is ${aggregatorQuote.quoteAgeSec}s old (stale after ${QUOTE_STALE_AFTER_SEC}s). ` +
+          "Re-quote before send if the market moved. This does not block the send.",
+      );
     }
   }
   safetyHints.push(...pulsechainGasSafetyHints(valuePls));
@@ -574,6 +665,7 @@ export function buildTxReviewSummary(
     walletId: input.walletId,
     chainId: input.chainId,
     network: input.network,
+    ...(aggregatorQuote ? { aggregatorQuote } : {}),
   };
 }
 
@@ -593,6 +685,7 @@ export function buildProposalReviewSummary(
     walletId: proposal.walletId,
     chainId: proposal.chainId,
     network: proposal.network,
+    quoteReview: proposal.quoteReview,
     context,
   });
 }
@@ -614,6 +707,13 @@ export function formatConfirmPrompt(summary: TxReviewSummary): string {
     `Native value: ${summary.nativeValuePls} PLS (${summary.nativeValueWei} wei) — value only, not gas`,
     `Decode: ${summary.decodeKnowledge.status}/${summary.decodeKnowledge.pattern}`,
   ];
+  if (summary.aggregatorQuote) {
+    const q = summary.aggregatorQuote;
+    lines.push(
+      `Piteas quote: ${q.amountIn} raw ${q.tokenIn} → ${q.amountOutMin ?? q.amountOut} raw ${q.tokenOut}` +
+        ` (age ${q.quoteAgeSec}s${q.stale ? ", stale" : ""})`,
+    );
+  }
   if (summary.simulation?.gasEstimate) {
     const feeApprox = summary.simulation.estimatedFeePlsApprox;
     lines.push(

@@ -107,6 +107,47 @@ export interface TxProposalRequest {
   data?: `0x${string}`;
   /** Optional gas limit override */
   gas?: string;
+  /**
+   * Optional Piteas quote fields to stamp onto the proposal.
+   * Local router decode often stays unknown; review uses this stamp.
+   * Does not block the send and does not rewrite calldata.
+   */
+  quoteReview?: AggregatorQuoteReviewInput;
+}
+
+/**
+ * Parsed Piteas quote fields stored on a proposal.
+ * `quotedAt` is an ISO timestamp from prepare (or propose, if omitted).
+ */
+export interface AggregatorQuoteReview {
+  source: "piteas";
+  quotedAt: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+  amountOutMin?: string;
+  recipient?: string;
+  router: string;
+  sellingNativePls: boolean;
+  routeSignature?: string;
+  allowedSlippage?: number;
+}
+
+/** Caller-supplied stamp. `quotedAt` and `router` are filled when omitted. */
+export interface AggregatorQuoteReviewInput {
+  source: "piteas";
+  quotedAt?: string;
+  tokenIn: string;
+  tokenOut: string;
+  amountIn: string;
+  amountOut: string;
+  amountOutMin?: string;
+  recipient?: string;
+  router?: string;
+  sellingNativePls?: boolean;
+  routeSignature?: string;
+  allowedSlippage?: number;
 }
 
 export interface SimulationResult {
@@ -212,6 +253,11 @@ export interface TxProposal {
   txHash?: `0x${string}`;
   /** ISO time when broadcasting+txHash barrier was persisted (operator recovery). */
   broadcastAcceptedAt?: string;
+  /**
+   * Piteas quote fields copied at propose time. Advisory review only —
+   * unknown router selectors stay unknown. Does not gate execute.
+   */
+  quoteReview?: AggregatorQuoteReview;
 }
 
 export interface AuditEntry {

@@ -29,7 +29,16 @@ PulseChain is a **full-state fork of Ethereum**. Many contracts exist at the **s
 
 Bridged stables (DAI / eUSDC / eUSDT) are the dollar-oriented assets. Forked “stables” and pWBTC are not.
 
-**Agents must never confuse:** pHEX vs eHEX; bridged DAI vs pDAI; eUSDC vs spoof “USDC” tickers.
+**Agents must never confuse:** pHEX vs eHEX; bridged DAI vs pDAI; eUSDC vs spoof “USDC” tickers; USDL vs bridged DAI.
+
+## Liquid Loans symbols
+
+| Symbol | Address | Rule |
+|--------|---------|------|
+| **USDL** | `0x0dEEd1486bc52aA0d3E6f8849cEC5adD6598A162` | Explicit only. Not DAI, not USD, not eUSDC. |
+| **LOAN** | `0x9159f1D2a9f51998Fc9Ab03fbd8f265ab14A1b3B` | Explicit only. Not a stablecoin. |
+
+They are catalog entries, not core-portfolio defaults, and they have no silent aliases.
 
 ---
 

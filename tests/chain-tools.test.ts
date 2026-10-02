@@ -650,6 +650,27 @@ describe("registerChainTools exports interactive names", () => {
       "prepare_transaction",
       "pulsex_quote",
       "prepare_swap",
+      "get_token_allowance",
+    ];
+    for (const name of expected) {
+      expect(tools).toContain(name);
+    }
+    expect(tools).not.toContain("pulsechain_chain_id");
+    expect(tools).not.toContain("pulsechain_get_balance");
+  });
+
+  it("full profile still registers deprecated pulsechain_* aliases", async () => {
+    const tools: string[] = [];
+    const server = {
+      registerTool: (name: string) => {
+        tools.push(name);
+      },
+    };
+    const { registerChainTools } = await import("../src/tools/chain/index.js");
+    const { resetToolRegistry } = await import("../src/tools/define.js");
+    resetToolRegistry();
+    registerChainTools(server as never, { ...baseConfig, toolProfile: "full" });
+    for (const name of [
       "pulsechain_chain_id",
       "pulsechain_block_number",
       "pulsechain_get_block",
@@ -665,8 +686,7 @@ describe("registerChainTools exports interactive names", () => {
       "pulsechain_token_transfers",
       "pulsechain_token_info",
       "pulsechain_get_logs",
-    ];
-    for (const name of expected) {
+    ]) {
       expect(tools).toContain(name);
     }
   });
@@ -679,7 +699,10 @@ describe("registerChainTools exports interactive names", () => {
       "../src/tools/define.js"
     );
     resetToolRegistry();
-    registerChainTools({ registerTool: () => undefined } as never, baseConfig);
+    registerChainTools(
+      { registerTool: () => undefined } as never,
+      { ...baseConfig, toolProfile: "full" },
+    );
     const byName = new Map(getRegisteredTools().map((t) => [t.name, t]));
     expect(byName.get("get_token_transfers")?.description).toMatch(/tokentx|ERC-20/i);
     expect(byName.get("pulsechain_token_transfers")?.description).toMatch(

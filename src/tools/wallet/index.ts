@@ -27,6 +27,7 @@ import {
   setAgentPolicy,
   settleInterruptedBroadcast,
 } from "../../wallet/index.js";
+import { proposeTokenTransfer } from "../../wallet/tokenTransfer.js";
 import { evaluatePolicy } from "../../wallet/policy.js";
 import { loadWalletRecord } from "../../wallet/store.js";
 import { PolicyError } from "../../utils/errors.js";
@@ -352,6 +353,25 @@ export function registerWalletTools(
         .regex(/^0x[a-fA-F0-9]*$/)
         .optional()
         .describe("Optional calldata hex (contract call)"),
+      quoteReview: z
+        .object({
+          source: z.literal("piteas"),
+          quotedAt: z.string().optional(),
+          tokenIn: z.string().min(1),
+          tokenOut: z.string().min(1),
+          amountIn: z.string().regex(/^\d+$/),
+          amountOut: z.string().regex(/^\d+$/),
+          amountOutMin: z.string().regex(/^\d+$/).optional(),
+          recipient: addressSchema.optional(),
+          router: addressSchema.optional(),
+          sellingNativePls: z.boolean().optional(),
+          routeSignature: z.string().max(500).optional(),
+          allowedSlippage: z.number().min(0).max(100).optional(),
+        })
+        .optional()
+        .describe(
+          "Piteas proposalQuoteReview from piteas_prepare_swap. Stamped onto the proposal for review when the router selector is unknown. Does not block the send.",
+        ),
     },
     handler: async (args, cfg) => {
       const proposal = await proposeAgentTx(cfg, {
@@ -359,6 +379,22 @@ export function registerWalletTools(
         to: args.to as `0x${string}`,
         valuePls: (args.valuePls as number | string | undefined) ?? 0,
         data: args.data as `0x${string}` | undefined,
+        quoteReview: args.quoteReview as
+          | {
+              source: "piteas";
+              quotedAt?: string;
+              tokenIn: string;
+              tokenOut: string;
+              amountIn: string;
+              amountOut: string;
+              amountOutMin?: string;
+              recipient?: string;
+              router?: string;
+              sellingNativePls?: boolean;
+              routeSignature?: string;
+              allowedSlippage?: number;
+            }
+          | undefined,
       });
       return ok(
         neverReturnPrivateKey({
@@ -461,6 +497,54 @@ export function registerWalletTools(
           valueWei: proposal.valueWei,
           policyCheck: proposal.policyCheck,
           reviewSummary: summary,
+        }),
+      );
+    },
+  });
+
+  registerWalletTool(server, config, {
+    name: "transfer_token",
+    description: withWalletSecurity(
+      "Propose an ERC-20 transfer (simulate + reviewSummary). Does NOT broadcast — " +
+        "call execute_agent_tx with the returned proposalId after reading the review. " +
+        "Pass amount in human units (\"1.5\") or amountRaw in smallest units, not both. " +
+        "Token may be a 0x address or an explicit catalog symbol. " +
+        "USDL and LOAN are Liquid Loans symbols, not aliases of DAI or USD.",
+    ),
+    category: "wallet",
+    write: true,
+    inputSchema: {
+      walletId: walletIdSchema,
+      token: z
+        .string()
+        .min(1)
+        .describe("Token address or explicit symbol (USDL, LOAN, WPLS, DAI, …)"),
+      to: addressSchema.describe("Recipient address"),
+      amount: z
+        .string()
+        .regex(/^\d+(\.\d+)?$/)
+        .optional()
+        .describe('Human token units, e.g. "1.5". Omit when using amountRaw.'),
+      amountRaw: z
+        .string()
+        .regex(/^\d+$/)
+        .optional()
+        .describe("Amount in smallest units. Omit when using amount."),
+    },
+    handler: async (args, cfg) => {
+      const proposal = await proposeTokenTransfer(cfg, {
+        walletId: args.walletId as string,
+        token: args.token as string,
+        to: args.to as string,
+        amount: args.amount as string | undefined,
+        amountRaw: args.amountRaw as string | undefined,
+      });
+      return ok(
+        neverReturnPrivateKey({
+          ...proposal,
+          broadcast: false,
+          nextStep:
+            "Read reviewSummary, then execute_agent_tx with this proposalId. This tool does not broadcast.",
         }),
       );
     },

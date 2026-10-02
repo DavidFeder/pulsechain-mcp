@@ -11,6 +11,13 @@ export type ToolCategory =
 
 export type PulseNetwork = "mainnet" | "testnet";
 
+/**
+ * slim (default): canonical tools only — the 15 deprecated `pulsechain_*`
+ * chain aliases are not registered.
+ * full: also register those aliases for older prompts.
+ */
+export type ToolProfile = "slim" | "full";
+
 export interface AppConfig {
   /**
    * Ordered RPC endpoints (local → LAN → g4mm4 → public when user-configured).
@@ -44,6 +51,11 @@ export interface AppConfig {
   httpTransportPort: number | undefined;
   logLevel: LogLevel;
   httpTimeoutMs: number;
+  /**
+   * Which tool surface to register. Omitted on partial test configs means slim
+   * (legacy `pulsechain_*` aliases hidden). `loadConfig` always sets this.
+   */
+  toolProfile?: ToolProfile;
 }
 
 /**
@@ -149,6 +161,8 @@ export interface HealthStatus {
   pulseXSubgraphV2Configured: boolean;
   agentWalletEnabled: boolean;
   httpTransportEnabled: boolean;
+  /** slim hides deprecated pulsechain_* chain aliases; full registers them. */
+  toolProfile: ToolProfile;
   /**
    * Present only when `network === "testnet"` and explorer and/or PulseX
    * subgraph URLs still use the shipped mainnet defaults.

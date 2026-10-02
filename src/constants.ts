@@ -17,21 +17,31 @@ export const PULSECHAIN_NATIVE_SYMBOL = "PLS" as const;
 export const PULSECHAIN_NATIVE_DECIMALS = 18 as const;
 
 /**
- * Default ordered mainnet RPC list (priority: community g4mm4 → official →
- * publicnode → PulseChainStats public fallback).
+ * Default ordered mainnet RPC list.
+ * Canonical PublicNode (`pulsechain-rpc.publicnode.com`) is first: OpenChainBench
+ * measured it as the fastest keyless endpoint, and it answers `eth_chainId` 369.
+ * The older `pulsechain.publicnode.com` host also answers chain id 369, so it
+ * stays as a later fallback. g4mm4, the foundation RPC, and PulseChainStats follow.
  * Users should prepend local (`http://127.0.0.1:8545`) or LAN nodes via
  * `PULSECHAIN_RPC_URLS` / `PULSECHAIN_RPC_URL` — we do not put loopback in the
  * default list (unreachable locals would only add latency on every cold start).
  *
+ * PublicNode (canonical): https://pulsechain-rpc.publicnode.com
  * g4mm4.io: https://rpc-pulsechain.g4mm4.io
  * Official: https://rpc.pulsechain.com
- * PublicNode: https://pulsechain.publicnode.com
- * PulseChainStats: https://rpc.pulsechainstats.com (additional public fallback)
+ * PublicNode (legacy host): https://pulsechain.publicnode.com
+ * PulseChainStats: https://rpc.pulsechainstats.com
  */
+export const CANONICAL_PUBLICNODE_RPC_URL =
+  "https://pulsechain-rpc.publicnode.com" as const;
+export const LEGACY_PUBLICNODE_RPC_URL =
+  "https://pulsechain.publicnode.com" as const;
+
 export const DEFAULT_RPC_URLS = [
+  CANONICAL_PUBLICNODE_RPC_URL,
   "https://rpc-pulsechain.g4mm4.io",
   "https://rpc.pulsechain.com",
-  "https://pulsechain.publicnode.com",
+  LEGACY_PUBLICNODE_RPC_URL,
   "https://rpc.pulsechainstats.com",
 ] as const;
 
@@ -101,7 +111,10 @@ export const DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2 =
 export const DEFAULT_LOG_LEVEL = "info" as const;
 
 export const SERVER_NAME = "pulsechain-mcp";
-export const SERVER_VERSION = "1.0.7";
+export const SERVER_VERSION = "1.0.8";
+
+/** Sent on JSON-RPC posts. PublicNode returns 403 without a user agent. */
+export const RPC_CLIENT_USER_AGENT = "pulsechain-mcp" as const;
 
 /**
  * Achieved wire protocol mode for dual-era serving:
@@ -160,6 +173,36 @@ export const PLSX_ADDRESS =
 /** Incentive (INC) — PulseX farm reward token */
 export const INC_ADDRESS =
   "0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d" as const;
+
+/**
+ * Liquid Loans USDL — PLS-collateralized stable minted by the protocol.
+ * Not bridged DAI, not eUSDC. Explicit symbol `USDL` only (no silent aliases).
+ * https://docs.liquidloans.io/pulsechain/contracts
+ */
+export const USDL_ADDRESS =
+  "0x0dEEd1486bc52aA0d3E6f8849cEC5adD6598A162" as const;
+
+/**
+ * Liquid Loans LOAN — protocol fee-capture token. Explicit symbol `LOAN` only.
+ */
+export const LOAN_ADDRESS =
+  "0x9159f1D2a9f51998Fc9Ab03fbd8f265ab14A1b3B" as const;
+
+/**
+ * Current Liquid Loans USDL deployment (PLS collateral).
+ * Distinct from the older PLSX-collateral TroveManager at
+ * 0x118b7CF595F6476a18538EAF4Fbecbf594338B39.
+ */
+export const LIQUID_LOANS = {
+  usdlToken: USDL_ADDRESS,
+  loanToken: LOAN_ADDRESS,
+  borrowerOperations: "0xa09bB56B39D652988C7E7d3665aA7EC7308BbF09",
+  vaultManager: "0xD79bfb86fA06e8782b401bC0197d92563602D2Ab",
+  stabilityPool: "0x7bFD406632483ad00c6EdF655E04De91A96f84bc",
+  priceFeed: "0xc65Abc8B9B4B3cEE03430f6fc3d8A4760221A113",
+  /** Older PLSX-collateral trove manager — do not read as the USDL vault. */
+  legacyPlsxTroveManager: "0x118b7CF595F6476a18538EAF4Fbecbf594338B39",
+} as const;
 
 /**
  * How a known token exists on PulseChain.
@@ -531,6 +574,44 @@ export const FORK_DAI_TOKEN: TokenInfo = {
   warning: FORK_DAI_WARNING,
 };
 
+/**
+ * Liquid Loans USDL. Explicit symbol USDL only — not an alias of DAI, USD, or eUSDC.
+ * Not in CORE_TOKENS, so default portfolios do not silently include it.
+ */
+export const USDL_TOKEN: TokenInfo = {
+  symbol: "USDL",
+  displaySymbol: "USDL",
+  name: "USDL (Liquid Loans)",
+  address: USDL_ADDRESS,
+  decimals: 18,
+  source: "docs.liquidloans.io PulseChain contracts",
+  origin: "pulsechain",
+  isRealStablecoin: false,
+  identityNote:
+    "USDL is the Liquid Loans stable minted against PLS. It is not bridged DAI and not eUSDC.",
+  warning:
+    "USDL (0x0dEE…) is a Liquid Loans CDP stable. Do not treat it as bridged DAI (0xefD7…) or eUSDC.",
+};
+
+/**
+ * Liquid Loans LOAN token. Explicit symbol LOAN only — no silent aliases.
+ * Not in CORE_TOKENS.
+ */
+export const LOAN_TOKEN: TokenInfo = {
+  symbol: "LOAN",
+  displaySymbol: "LOAN",
+  name: "LOAN (Liquid Loans)",
+  address: LOAN_ADDRESS,
+  decimals: 18,
+  source: "docs.liquidloans.io PulseChain contracts",
+  origin: "pulsechain",
+  isRealStablecoin: false,
+  identityNote:
+    "LOAN is the Liquid Loans fee-capture token. It is not a dollar stable.",
+  warning:
+    "LOAN (0x9159…) is the Liquid Loans protocol token, not USDL and not a bridged stable.",
+};
+
 /** Bridged eHEX — not a default core portfolio key; resolve via EHEX / BRIDGED_HEX. */
 export const EHEX_TOKEN: TokenInfo = {
   symbol: "eHEX",
@@ -642,6 +723,8 @@ export const KNOWN_TOKENS_BY_ADDRESS: Record<string, TokenInfo> = (() => {
   }
   map[FORK_DAI_ADDRESS.toLowerCase()] = FORK_DAI_TOKEN;
   map[EHEX_ADDRESS.toLowerCase()] = EHEX_TOKEN;
+  map[USDL_ADDRESS.toLowerCase()] = USDL_TOKEN;
+  map[LOAN_ADDRESS.toLowerCase()] = LOAN_TOKEN;
   map[FORK_USDT_ADDRESS.toLowerCase()] = FORK_USDT_TOKEN;
   map[FORK_WETH_ADDRESS.toLowerCase()] = FORK_WETH_TOKEN;
   map[PWBTC_ADDRESS.toLowerCase()] = PWBTC_TOKEN;
@@ -751,6 +834,7 @@ export function tokenLabelFields(
 ): Record<string, unknown> | null {
   const label = getTokenIdentityLabel(address);
   if (!label) return null;
+  const lower = address.trim().toLowerCase();
   const out: Record<string, unknown> = {
     token_origin: label.origin,
     display_symbol: label.displaySymbol,
@@ -830,6 +914,18 @@ export function tokenLabelFields(
     out.ewbtc_address = EWBTC_ADDRESS;
     out.ep_naming_note =
       "pWBTC: p* = state-fork copy (typically useless). Prefer eWBTC 0xb17D….";
+  }
+  if (lower === USDL_ADDRESS.toLowerCase()) {
+    out.is_usdl = true;
+    out.protocol = "liquid_loans";
+    out.not_bridged_dai = true;
+    out.bridged_dai_address = BRIDGED_DAI_ADDRESS;
+  }
+  if (lower === LOAN_ADDRESS.toLowerCase()) {
+    out.is_loan = true;
+    out.protocol = "liquid_loans";
+    out.not_a_stablecoin = true;
+    out.usdl_address = USDL_ADDRESS;
   }
   return out;
 }
@@ -911,6 +1007,20 @@ export const POPULAR_CONTRACTS: PopularContract[] = [
     address: INC_ADDRESS,
     category: "token",
     description: "PulseX Incentive reward token",
+  },
+  {
+    name: "USDL (Liquid Loans)",
+    address: USDL_ADDRESS,
+    category: "token",
+    description:
+      "Liquid Loans USDL — PLS-collateral stable. Not bridged DAI. Symbol USDL only",
+  },
+  {
+    name: "LOAN (Liquid Loans)",
+    address: LOAN_ADDRESS,
+    category: "token",
+    description:
+      "Liquid Loans protocol token. Not a stablecoin. Symbol LOAN only",
   },
   {
     name: "DAI (bridged)",
@@ -1020,9 +1130,12 @@ export const POPULAR_CONTRACTS_BY_ADDRESS: Record<string, PopularContract> =
  * - "FUSDT" / "FORK_USDT" → forked USDT
  * - "WETH" → bridged WETH; "FWETH" / "FORK_WETH" → forked WETH
  * - "WBTC" / "EWBTC" → bridged eWBTC; "PWBTC" / "FORK_WBTC" → bad fork pWBTC
+ * - "USDL" and "LOAN" are explicit Liquid Loans symbols only (not aliases of DAI/USD)
  */
 export function resolveCoreToken(symbol: string): TokenInfo | undefined {
   const key = symbol.toUpperCase().trim();
+  if (key === "USDL") return USDL_TOKEN;
+  if (key === "LOAN") return LOAN_TOKEN;
   if ((FORK_DAI_SYMBOLS as readonly string[]).includes(key)) {
     return FORK_DAI_TOKEN;
   }

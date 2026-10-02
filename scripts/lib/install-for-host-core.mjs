@@ -19,7 +19,7 @@ export const HOSTS = ["grok", "cursor", "claude", "codex"];
 export const MODES = ["research", "wallets"];
 
 const COMMON_RPC =
-  "https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com";
+  "https://pulsechain-rpc.publicnode.com,https://rpc-pulsechain.g4mm4.io,https://rpc.pulsechain.com,https://pulsechain.publicnode.com,https://rpc.pulsechainstats.com";
 const EXPLORER = "https://api.scan.pulsechain.com/api";
 const SUB_V1 = "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsex";
 const SUB_V2 = "https://graph.pulsechain.com/subgraphs/name/pulsechain/pulsexv2";

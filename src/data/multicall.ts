@@ -462,3 +462,54 @@ export async function batchNativeBalances(
   );
   return results;
 }
+
+/**
+ * Read ERC-20 allowance(owner, spender). Decimals are best-effort for formatting.
+ */
+export async function readErc20Allowance(
+  config: AppConfig,
+  tokenAddress: string,
+  ownerAddress: string,
+  spenderAddress: string,
+): Promise<{
+  token: Address;
+  owner: Address;
+  spender: Address;
+  allowanceRaw: string;
+  decimals: number | null;
+  allowanceFormatted: string | null;
+}> {
+  const token = assertAddress(tokenAddress);
+  const owner = assertAddress(ownerAddress);
+  const spender = assertAddress(spenderAddress);
+  const client = getPublicClient(config);
+  const allowance = await client.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [owner, spender],
+  });
+  let decimals: number | null = null;
+  try {
+    const dec = await client.readContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "decimals",
+    });
+    const parsed = typeof dec === "number" ? dec : Number(dec);
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 255) {
+      decimals = parsed;
+    }
+  } catch {
+    // decimals stay null; allowanceRaw is still returned
+  }
+  return {
+    token,
+    owner,
+    spender,
+    allowanceRaw: allowance.toString(),
+    decimals,
+    allowanceFormatted:
+      decimals === null ? null : formatUnits(allowance, decimals),
+  };
+}

@@ -10,6 +10,7 @@ import { custom, type Transport } from "viem";
 import {
   PULSECHAIN_CHAIN_ID,
   PULSECHAIN_TESTNET_CHAIN_ID,
+  RPC_CLIENT_USER_AGENT,
   RPC_UNHEALTHY_COOLDOWN_MS,
 } from "../constants.js";
 import { logger } from "../logger.js";
@@ -275,7 +276,7 @@ export function getRpcStatusSnapshot(options: {
     summary,
     checkedAt: new Date(t).toISOString(),
     priorityNote:
-      "primaryRpcUrl = configured first-priority endpoint (list order only; not auto-selected by latency). activeRpcUrl = last endpoint that successfully answered a request or probe — not sticky and not a permanent primary; probe=true can leave active on the last probed URL even when traffic would prefer an earlier healthy node. Requests always try RPCs in configured list order (put local/LAN first), skipping cooldown endpoints. Failed endpoints cool down briefly then return to the pool. Defaults: g4mm4 → official → publicnode → PulseChainStats.",
+      "primaryRpcUrl = configured first-priority endpoint (list order only; not auto-selected by latency). activeRpcUrl = last endpoint that successfully answered a request or probe — not sticky and not a permanent primary; probe=true can leave active on the last probed URL even when traffic would prefer an earlier healthy node. Requests always try RPCs in configured list order (put local/LAN first), skipping cooldown endpoints. Failed endpoints cool down briefly then return to the pool. Defaults: canonical PublicNode → g4mm4 → official → legacy PublicNode host → PulseChainStats.",
   };
 }
 
@@ -361,7 +362,10 @@ async function postJsonRpc(
   try {
     const res = await fetchImpl(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": RPC_CLIENT_USER_AGENT,
+      },
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,

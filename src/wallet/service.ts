@@ -25,6 +25,7 @@ import {
   getRpcTransport,
 } from "../data/rpc.js";
 import { enrichSimulationWithApproxFee } from "./feeEstimate.js";
+import { normalizeAggregatorQuoteReview } from "./quoteReview.js";
 import { AppError, ConfigError, PolicyError, RpcError } from "../utils/errors.js";
 import { assertAddress } from "../utils/safety.js";
 import { logger } from "../logger.js";
@@ -704,6 +705,9 @@ export async function proposeAgentTx(
 
   const now = Date.now();
   const chainId = chainIdForConfig(config);
+  const quoteReview = req.quoteReview
+    ? normalizeAggregatorQuoteReview(req.quoteReview, now)
+    : undefined;
   const proposal: TxProposal = {
     id: generateProposalId(),
     walletId: record.id,
@@ -719,6 +723,7 @@ export async function proposeAgentTx(
     simulation,
     policyCheck,
     status: policyCheck.allowed ? "pending" : "rejected",
+    ...(quoteReview ? { quoteReview } : {}),
   };
 
   saveProposal(config.agentWalletDir, proposal);

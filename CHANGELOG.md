@@ -5,7 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.8] - 2026-10-02
+
+Canonical PublicNode RPC first, Piteas allowance and quote stamps, ERC-20 `transfer_token`, Liquid Loans reads, and a slim tool profile. Slim tool counts **86** (wallets-on) / **76** (research-only). `PULSECHAIN_TOOL_PROFILE=full` restores the 15 legacy `pulsechain_*` aliases (**101** / **91**).
+
+### Added
+
+- `get_token_allowance` and a Piteas prepare allowance hint with unsigned `suggestedApprove` (not broadcast)
+- `propose_agent_tx` `quoteReview` so unknown Piteas selectors stay reviewable, including `quoteAgeSec`
+- `transfer_token` (propose only) plus explicit `USDL` / `LOAN` catalog entries (not aliases of DAI or USD)
+- `liquid_loans_system` and `liquid_loans_vault` (read-only; current PLS-collateral vault, not the older PLSX trove)
+
+### Changed
+
+- Default RPC list starts with `https://pulsechain-rpc.publicnode.com`. The older PublicNode host stays as a fallback after a live chain-id check. JSON-RPC posts send a user agent (PublicNode returns 403 without one).
+- Default tool profile is `slim`. Set `PULSECHAIN_TOOL_PROFILE=full` to register deprecated chain aliases.
 
 ## [1.0.7] - 2026-09-04
 

@@ -152,7 +152,7 @@ describe("smoke: tool registration (no live network)", () => {
 
     const meta = getRegisteredTools();
     expect(meta.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
-    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(88);
+    expect(REGISTERED_TOOL_COUNT_RESEARCH_ONLY).toBe(76);
     expect(names.length).toBe(REGISTERED_TOOL_COUNT_RESEARCH_ONLY);
     expect(names.length).toBe(meta.length);
 
@@ -170,8 +170,12 @@ describe("smoke: tool registration (no live network)", () => {
 
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
-    expect(byCat("chain").length).toBe(28);
+    expect(byCat("chain").length).toBe(14);
     expect(byCat("wallet").length).toBe(WALLET_READ_TOOL_NAMES.length);
+    expect(byName.has("get_token_allowance")).toBe(true);
+    expect(byName.has("liquid_loans_system")).toBe(true);
+    expect(byName.has("liquid_loans_vault")).toBe(true);
+    expect(byName.has("pulsechain_chain_id")).toBe(false);
     expect(meta.filter((t) => t.write)).toEqual([]);
     expect(new Set(meta.map((t) => t.name)).size).toBe(meta.length);
   });
@@ -240,20 +244,22 @@ describe("smoke: tool registration (no live network)", () => {
       expect(byName.has(n)).toBe(true);
     }
 
-    // Exact family counts: 3 health + 28 chain + 52 analytics + 14 wallet = 97
+    // Exact family counts (slim): 3 health + 14 chain + 54 analytics + 15 wallet = 86
     const byCat = (c: string) => meta.filter((t) => t.category === c);
     expect(byCat("health").length).toBe(3);
-    expect(byCat("chain").length).toBe(28);
+    expect(byCat("chain").length).toBe(14);
     expect(byCat("wallet").length).toBe(WALLET_TOOL_NAMES.length);
     const analytics = byCat("analytics");
-    // free + advanced + PulseX + DexScreener + Tier A (11) + Tier B
+    // free + advanced + PulseX + DexScreener + phiat/accumulation + Tier A (11) + Tier B + Liquid Loans
     // PulseX: 8 low-level + 3 Tier B factory/day/lp = 11 starting with pulsex_
     // + 2 hex_* Tier B; Tier A: 7 prior + 2 Piteas + 2 Switch
-    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5);
+    expect(analytics.length).toBe(11 + 9 + 8 + 6 + 2 + 11 + 5 + 2);
     expect(FREE_ANALYTICS).toHaveLength(11);
     expect(ADVANCED_ANALYTICS).toHaveLength(9);
-    expect(WALLET_TOOL_NAMES).toHaveLength(14);
-    expect(WALLET_WRITE_TOOL_NAMES).toHaveLength(9);
+    expect(WALLET_TOOL_NAMES).toHaveLength(15);
+    expect(WALLET_WRITE_TOOL_NAMES).toHaveLength(10);
+    expect(byName.has("transfer_token")).toBe(true);
+    expect(byName.has("pulsechain_get_balance")).toBe(false);
     const pulsexSubgraph = analytics.filter((t) =>
       t.name.startsWith("pulsex_"),
     );
@@ -714,11 +720,15 @@ describe("smoke: resources independence (no live network)", () => {
   });
 
   it("defaults point only at public PulseChain infrastructure hosts", () => {
-    expect(DEFAULT_RPC_URL).toBe("https://rpc-pulsechain.g4mm4.io");
+    expect(DEFAULT_RPC_URL).toBe("https://pulsechain-rpc.publicnode.com");
+    expect(DEFAULT_RPC_URLS[0]).toBe("https://pulsechain-rpc.publicnode.com");
     expect(DEFAULT_RPC_URLS).toContain("https://rpc-pulsechain.g4mm4.io");
     expect(DEFAULT_RPC_URLS).toContain("https://rpc.pulsechain.com");
     expect(DEFAULT_RPC_URLS).toContain("https://pulsechain.publicnode.com");
     expect(DEFAULT_RPC_URLS).toContain("https://rpc.pulsechainstats.com");
+    expect(DEFAULT_RPC_URLS.indexOf("https://pulsechain-rpc.publicnode.com")).toBeLessThan(
+      DEFAULT_RPC_URLS.indexOf("https://pulsechain.publicnode.com"),
+    );
     expect(DEFAULT_RPC_URLS.indexOf("https://rpc.pulsechainstats.com")).toBeGreaterThan(
       DEFAULT_RPC_URLS.indexOf("https://pulsechain.publicnode.com"),
     );

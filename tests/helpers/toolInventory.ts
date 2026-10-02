@@ -27,6 +27,7 @@ export const WALLET_WRITE_TOOL_NAMES = [
   "sign_and_send",
   "settle_interrupted_broadcast",
   "transfer_pls",
+  "transfer_token",
   "kill_switch",
   "revoke",
 ] as const;
@@ -42,9 +43,20 @@ export const OUTPUT_SCHEMA_TOOL_NAMES = [
   ...WALLET_TOOL_NAMES,
 ] as const;
 
-/** Full surface when AGENT_WALLET_ENABLED=true. */
-export const REGISTERED_TOOL_COUNT_WALLETS_ON = 97;
+/**
+ * Default slim surface when AGENT_WALLET_ENABLED=true.
+ * 97 historical tools, minus 15 legacy chain aliases, plus allowance,
+ * transfer_token, and two Liquid Loans reads.
+ */
+export const REGISTERED_TOOL_COUNT_WALLETS_ON = 86;
 
-/** Research-only: 97 minus the 9 write tools. */
+/** Research-only slim: wallets-on minus write tools. */
 export const REGISTERED_TOOL_COUNT_RESEARCH_ONLY =
   REGISTERED_TOOL_COUNT_WALLETS_ON - WALLET_WRITE_TOOL_NAMES.length;
+
+/** slim + the 15 deprecated pulsechain_* chain aliases. */
+export const REGISTERED_TOOL_COUNT_WALLETS_ON_FULL =
+  REGISTERED_TOOL_COUNT_WALLETS_ON + 15;
+
+export const REGISTERED_TOOL_COUNT_RESEARCH_ONLY_FULL =
+  REGISTERED_TOOL_COUNT_WALLETS_ON_FULL - WALLET_WRITE_TOOL_NAMES.length;
