@@ -111,7 +111,7 @@ export const DEFAULT_TESTNET_PULSEX_SUBGRAPH_V2 =
 export const DEFAULT_LOG_LEVEL = "info" as const;
 
 export const SERVER_NAME = "pulsechain-mcp";
-export const SERVER_VERSION = "1.0.11";
+export const SERVER_VERSION = "1.0.12";
 
 /** Sent on JSON-RPC posts. PublicNode returns 403 without a user agent. */
 export const RPC_CLIENT_USER_AGENT = "pulsechain-mcp" as const;

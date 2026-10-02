@@ -6,7 +6,7 @@ You can give your AI agent its own PLS and other tokens in a local wallet it con
 
 Sending PLS and swaps on PulseX/Piteas have been successful.
 
-**Version `1.0.11`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
+**Version `1.0.12`** · MCP TypeScript SDK **2.0.0** (stable) · dual-era `2026-07-28` + `2025-11-25`
 
 ## Features
 
@@ -47,7 +47,7 @@ Default install intent is **research-only**. Promote to wallets-on only when the
 ## Questions for an agent
 - pHEX: "Which of my pHEX stakes end in the next 30 days?" `hex_stake_summary` is a read-only estimate, not an endStake payout or financial advice.
 - Buy and burn: "Is PulseX buy and burn running, and how much PLSX is in the dead address?" `pulsex_buy_and_burn` is a contract read, not financial advice.
-
+- Pump.tires: "Is this Pump.tires coin still on the curve, or has it graduated?" `pump_tires_coin` is read-only, meme, not financial advice.
 ## License
 
 MIT

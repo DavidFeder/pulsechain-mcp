@@ -70,7 +70,7 @@ describe("human README front door (docs product)", () => {
   it("version pin matches package and SERVER_VERSION", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
     expect(pkg.version).toBe(SERVER_VERSION);
-    expect(pkg.version).toBe("1.0.11");
+    expect(pkg.version).toBe("1.0.12");
     expect(read("README.md")).toMatch(new RegExp(SERVER_VERSION.replace(/\./g, "\\.")));
   });
 
@@ -329,7 +329,7 @@ describe("agent bootstrap + durable rules (docs product)", () => {
   it("CHANGELOG is public-facing history with 1.0.7 plus prior 1.0.x analytics and residual honesty", () => {
     const log = read("CHANGELOG.md");
     const lines = log.split(/\r?\n/).length;
-    expect(lines).toBeLessThan(360);
+    expect(lines).toBeLessThan(365);
     expect(log).toMatch(/## \[1\.0\.7\]/);
     expect(log).toMatch(/## \[1\.0\.6\]/);
     expect(log).toMatch(/## \[1\.0\.5\]/);

@@ -1,3 +1,14 @@
+# Release notes — pulsechain-mcp 1.0.12
+
+## What shipped (1.0.12)
+
+- `pump_tires_coin` is a read-only chain 369 status check. It says whether a coin is still on the Pump.tires curve or has graduated.
+- The platform PUMP token is labeled as the platform token, not a launched coin. An address the factory does not list is not marked graduated.
+- Progress uses the documented 200,000,000 PLS bid only when the factory exposes it. The tool does not create, buy, or burn a coin.
+- Tool counts **90** / **80** slim. Full profile **105** / **95**.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.12**.
+
 # Release notes — pulsechain-mcp 1.0.11
 
 ## What shipped (1.0.11)

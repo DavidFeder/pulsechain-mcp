@@ -22,6 +22,7 @@ import { registerTierATools } from "./tierA.js";
 import { registerTierBTools } from "./tierB.js";
 import { registerLiquidLoansTools } from "./liquidLoans.js";
 import { registerPulsexBuyAndBurnTool } from "./pulsexBuyAndBurn.js";
+import { registerPumpTiresCoinTool } from "./pumpTires.js";
 import {
   labelSubgraphPairRow,
   labelSubgraphSwapRow,
@@ -83,6 +84,8 @@ export function registerAnalyticsTools(
   registerLiquidLoansTools(server, config);
   // PulseX buy-and-burn status (read-only; does not call buyAndBurn or convertLps)
   registerPulsexBuyAndBurnTool(server, config);
+  // Pump.tires coin status (read-only; does not create, buy, or burn)
+  registerPumpTiresCoinTool(server, config);
 
   // Low-level subgraph access (kept for power users / debugging)
   registerTool(server, config, {
