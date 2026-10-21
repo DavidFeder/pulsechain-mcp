@@ -15,7 +15,7 @@ Also available as MCP resource: **`pulsechain://guidance/ro-research`**.
 Covered step-by-step in [BOOTSTRAP.md](BOOTSTRAP.md). Summary:
 
 ```bash
-# Node.js 20+ required
+# Node.js 24.22.1+ (or 22.23.4+ / 26.12.1+). Not Node 20.
 git clone https://github.com/DavidFeder/pulsechain-mcp.git
 cd pulsechain-mcp
 npm install

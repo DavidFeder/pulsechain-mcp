@@ -38,7 +38,7 @@ npm install          # may already build via prepare
 npm run build        # requires dist/index.js; fine to re-run after pull
 ```
 
-Node **20+** must be on `PATH` (or set `command` to an absolute `node` path).
+Node **24.22.1+** (or **22.23.4+** / **26.12.1+**) must be on `PATH` (or set `command` to an absolute `node` path). Node 20 is end of life and is not a supported engine.
 
 ## Replace placeholders
 
@@ -112,6 +112,6 @@ Split: **pre-reload** (host doctor/logs only) vs **post-reload** (tools). Full d
 3. `get_rpc_health` (optional `probe: true`)  
 4. Optional: `get_token_balance` or `dexscreener_search`  
 
-If the server never appears: confirm `npm run build`, absolute paths, Node 20+, research-only or launcher+`.env.wallet`, and that host logs show no fatal JSON on stderr (`CONFIG_ERROR`, missing `dist/index.js`, etc.).
+If the server never appears: confirm `npm run build`, absolute paths, a patched Node (**24.22.1**, **22.23.4**, or **26.12.1**, or newer on that line), research-only or launcher+`.env.wallet`, and that host logs show no fatal JSON on stderr (`CONFIG_ERROR`, missing `dist/index.js`, etc.). Restart the host after a Node upgrade.
 
 After rebuilding, **restart / reload** the MCP host so it launches the fresh entry.

@@ -21,7 +21,7 @@
 
 ## 1. Clone and build
 
-Node.js **20+** required.
+Node.js **24.22.1** (Active LTS) or newer on a supported line. **22.23.4** and **26.12.1** are the other 21 October 2026 security releases and are fine. Node.js 20 is end of life — do not install it. Check with `node -v` before `npm install`. Details: [SECURITY.md](SECURITY.md#nodejs-runtime-21-october-2026).
 
 **Recommended clone locations** (operator choice):
 
@@ -170,7 +170,7 @@ Call **after** reload, in order:
 
 When wallets are on: **funding authorizes** (operator-trust) — if you later fund a wallet, the agent can spend it. Use `kill_switch` in emergencies. Do **not** fund during bootstrap smoke.
 
-If the server never appears: rebuild, fix absolute paths, Node 20+ on PATH, research-only or launcher+`.env.wallet`, and check host stderr for `CONFIG_ERROR`.
+If the server never appears: rebuild, fix absolute paths, put a patched Node (**24.22.1**, **22.23.4**, or **26.12.1**, or newer on that line) on PATH, research-only or launcher+`.env.wallet`, and check host stderr for `CONFIG_ERROR`. Restart the host after upgrading Node so it spawns the new binary.
 
 ---
 

@@ -1,6 +1,8 @@
 # Multi-stage production image for pulsechain-mcp
 # - Builds TypeScript → dist/
 # - Runtime: production deps only, non-root, no secrets
+# - Base image is the 21 October 2026 Active LTS security release (24.22.1).
+#   Do not float back to Node 20; that line is end of life and unpatched.
 # - Image ENV: AGENT_WALLET_ENABLED=false (secretless container; runtime
 #   default is also research-only — wallets-on must opt in with a master key)
 # - Primary production path remains host stdio (Cursor/Grok/Claude);
@@ -9,7 +11,7 @@
 # -----------------------------------------------------------------------------
 # Builder
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:24.22.1-alpine AS builder
 
 WORKDIR /app
 
@@ -22,7 +24,7 @@ RUN npm ci && npm run build
 # -----------------------------------------------------------------------------
 # Runtime
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:24.22.1-alpine AS runner
 
 WORKDIR /app
 

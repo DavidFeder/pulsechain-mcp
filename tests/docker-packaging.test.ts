@@ -22,8 +22,8 @@ function read(rel: string): string {
 describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
   it("Dockerfile builds TS, runs dist/index.js, non-root, secretless wallets-off image ENV", () => {
     const df = read("Dockerfile");
-    expect(df).toMatch(/FROM node:20-alpine AS builder/);
-    expect(df).toMatch(/FROM node:20-alpine AS runner/);
+    expect(df).toMatch(/FROM node:24\.22\.1-alpine AS builder/);
+    expect(df).toMatch(/FROM node:24\.22\.1-alpine AS runner/);
     expect(df).toMatch(/npm run build/);
     expect(df).toMatch(/ENTRYPOINT\s*\[\s*"node"\s*,\s*"dist\/index\.js"\s*\]/);
     expect(df).toMatch(/USER\s+node/);
@@ -99,6 +99,14 @@ describe("Docker packaging (v0.1.20 shipped artifacts)", () => {
     expect(operator).toMatch(/AGENT_WALLET_ENABLED/);
     expect(operator).toMatch(/## Client hosts \(stdio\)|Client hosts/i);
     expect(operator).toMatch(/research-only default|defaults to|product default/i);
+    expect(readme).toMatch(/24\.22\.1/);
+    expect(boot).toMatch(/24\.22\.1/);
+    expect(agent).toMatch(/24\.22\.1/);
+    expect(operator).toMatch(/24\.22\.1/);
+    expect(read("docs/SECURITY.md")).toMatch(/24\.22\.1/);
+    expect(read("examples/README.md")).toMatch(/24\.22\.1/);
+    const pkg = JSON.parse(read("package.json")) as { engines: { node: string } };
+    expect(pkg.engines.node).toBe("^22.23.4 || ^24.22.1 || >=26.12.1");
   });
 
   it("Docker packaging posture is documented after changelog flatten", () => {

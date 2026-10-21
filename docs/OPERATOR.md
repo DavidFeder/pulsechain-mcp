@@ -64,7 +64,7 @@ When `PULSECHAIN_NETWORK=testnet` and explorer/subgraph env vars are unset, the 
 
 ## Client hosts (stdio)
 
-1. Node 20+ as `command`.  
+1. Patched Node as `command`. Prefer **24.22.1** (`node -v`). **22.23.4+** and **26.12.1+** are the other supported lines. See [SECURITY.md](SECURITY.md#nodejs-runtime-21-october-2026).  
 2. Absolute path to `dist/index.js` (or wallet launcher).  
 3. Research-only by default (no master key). Master key required only when `AGENT_WALLET_ENABLED=true`.  
 4. **Unset** `HTTP_TRANSPORT_PORT` for Cursor/Grok/Claude/Codex.  
@@ -91,7 +91,7 @@ docker compose up --build
 
 | Artifact | Role |
 |----------|------|
-| `Dockerfile` | Multi-stage Node 20; non-root; no secrets; image ENV wallets **false** (secretless) |
+| `Dockerfile` | Multi-stage Node **24.22.1** (Alpine); non-root; no secrets; image ENV wallets **false** (secretless) |
 | `docker-compose.yml` | `env_file: .env.docker` (required); wallet volume commented |
 | `.env.docker.example` | Template → gitignored `.env.docker` |
 

@@ -34,7 +34,7 @@ Do **not** treat other docs as a competing install path until bootstrap smoke pa
 | [AGENT_GUIDANCE.md](AGENT_GUIDANCE.md) | Research/swap workflows, hard rules, kill switch, trust/noise |
 | [TOKEN_IDENTITY.md](TOKEN_IDENTITY.md) | e*/p*, pHEX exception, ticker traps |
 | [AGGREGATORS.md](AGGREGATORS.md) | Piteas / Switch quote → prepare |
-| [SECURITY.md](SECURITY.md) | Short essentials (first-run) |
+| [SECURITY.md](SECURITY.md) | Short essentials (first-run), including the patched Node.js runtime |
 | [SECURITY_DEEP.md](SECURITY_DEEP.md) | Optional residual detail — not required for bootstrap |
 | [OPERATOR.md](OPERATOR.md) | Env table, multi-RPC, Docker |
 | [../examples/README.md](../examples/README.md) | Client samples (Cursor / Claude / Grok / Codex) |

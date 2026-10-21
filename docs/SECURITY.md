@@ -58,13 +58,17 @@ Dedicated launcher: `scripts/start-wallet-mcp.mjs` + gitignored `.env.wallet` (s
 
 Windows: POSIX modes are best-effort; use NTFS ACLs or keep secrets off shared folders.
 
+## Node.js runtime (21 October 2026)
+
+Use **24.22.1** (Active LTS), or **22.23.4** / **26.12.1** (or newer on that line). Node 20 is end of life. Check `node -v`, then restart the host after an upgrade. Docker image: `node:24.22.1-alpine`. Why it matters: [SECURITY_DEEP.md](SECURITY_DEEP.md#nodejs-21-october-2026).
+
 ## Gas (one line)
 
 PulseChain gas often costs **tens–hundreds of PLS** even for small value transfers. Fund **value + gas headroom**, not Ethereum-dust amounts.
 
 ## Operational checklist
 
-1. Bootstrap smoke passes ([BOOTSTRAP.md](BOOTSTRAP.md)) — research-only first unless signing was requested.
+1. `node -v` is **24.22.1**, **22.23.4**, or **26.12.1** (or newer on that line). Then bootstrap smoke passes ([BOOTSTRAP.md](BOOTSTRAP.md)) — research-only first unless signing was requested.
 2. Master key only in `.env.wallet` **or** research-only disable.
 3. Unique wallet dir; multiproc strict recommended for dedicated wallet process.
 4. Fund only what you accept the agent may spend (never during bootstrap).

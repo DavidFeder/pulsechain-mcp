@@ -6,6 +6,36 @@
 Also: [AGENT_GUIDANCE.md](AGENT_GUIDANCE.md) · [TOKEN_IDENTITY.md](TOKEN_IDENTITY.md) · [OPERATOR.md](OPERATOR.md).
 
 ---
+
+## Node.js (21 October 2026)
+
+The short pin is in [SECURITY.md](SECURITY.md#nodejs-runtime-21-october-2026). Install one of these builds, or a newer release on the same line. Source: [Node.js security releases, 21 October 2026](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+
+| Line | Minimum | Role |
+|------|---------|------|
+| **24.x** | **24.22.1** | Active LTS. Use this for host stdio and for Docker (`node:24.22.1-alpine`). |
+| 26.x | 26.12.1 | Current. Same high-severity fixes, plus two low fixes that exist only on 26.x. |
+| 22.x | 22.23.4 | Maintenance LTS. Patched, but not the line to install fresh. |
+
+`engines` is `^22.23.4 || ^24.22.1 || >=26.12.1`. Node.js 20 and older are end of life. They were not part of this release, and end-of-life lines stay vulnerable when a security release ships. Do not install Node 20 because an older doc said "20+".
+
+This process is an outbound HTTPS client (JSON-RPC, explorer, subgraph, quotes) on Node's HTTP stack, plus `node:crypto` for wallet blobs. The fixes that sit on that path:
+
+- **TLS hostname checks (high).** CVE-2026-106069 (22.x, 24.x, 26.x) and CVE-2026-105483 (24.x, 26.x) reject non-canonical IP names, including fullwidth digits and hosts that only loosely resolve to an address. CVE-2026-106072 (medium) stops a non-canonical IPv4 name from being treated as authenticated by a DNS SAN. RPC and explorer URLs are operator-configured; a bad name or a hostile peer is how this shows up.
+- **DNS NUL truncation (high).** CVE-2026-105482. `dns.resolve` no longer accepts a name containing a NUL byte. This repo does not call `dns.resolve` directly. c-ares is still on the lookup path and was updated in the same builds.
+- **Brotli decoder (high).** CVE-2026-111497. An out-of-bounds write in Node's Brotli decoder can become remote code execution when Node decompresses a response. Remote RPC, explorer, and subgraph bytes are the input.
+- **Keep-alive response mix-up (medium).** CVE-2026-105481. A reused connection can accept a response written before the next request. Multi-RPC failover keeps connections to those hosts.
+- **Bundled dependencies.** c-ares 1.34.9, Undici, and the root store (NSS 3.131.1, dropping a compromised eMudhra intermediate) on 22.x, 24.x, and 26.x. OpenSSL 3.5.9 on 22.x and 24.x. SQLite on 22.x only. This repo does not ship its own Undici; it uses the one inside Node.
+
+Fixes that do **not** change wallet key generation here:
+
+- CVE-2026-106074 (medium) repeats `crypto.randomUUID()` / `randomInt()` values when a startup snapshot or single-executable image captured the entropy cache. Wallet keys use `randomBytes` (see Encryption below). This repo does not build a snapshot or a single-executable image.
+- CVE-2026-106070 (low, 26.x only) is `ZipFile` prefix bytes after a failed header check. This server does not read zips through Node's zlib.
+- CVE-2026-106071 (low, 26.x) and CVE-2026-106073 (low) are permission-model filesystem bypasses. This server does not run with `--permission`.
+
+After upgrading, restart Cursor, Claude, Grok, or Codex so the stdio child is the new `node` binary. `node -v` in a shell is not the version the host already spawned.
+
+---
 ## Product default (v0.3.0+)
 
 1. **`AGENT_WALLET_ENABLED` defaults to `false`** — research-only until you opt in.
@@ -137,7 +167,7 @@ Use a machine you control, a strong master key, and a unique wallet directory wh
 
 ## Encryption (AES-256-GCM)
 
-Implementation: `src/wallet/crypto.ts` (Node.js `crypto` only).
+Implementation: `src/wallet/crypto.ts` (Node.js `crypto` only). Key bytes come from `randomBytes`. Runtime pin: [Node.js (21 October 2026)](#nodejs-21-october-2026).
 
 | Property | Value |
 |----------|--------|

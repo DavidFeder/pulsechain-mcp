@@ -25,7 +25,7 @@ Sending PLS and swaps on PulseX/Piteas have been successful.
 
 ## Setup (humans)
 
-1. Install **Node.js 20+** if needed or have your agent do it.
+1. Install **Node.js 24.22.1** (Active LTS) or a newer build on a supported line — **22.23.4**, **24.22.1**, or **26.12.1** — or have your agent do it. These are the 21 October 2026 security releases. Node.js 20 is end of life and did not receive them.
 2. Clone this repo and open it in your AI app (Cursor, Claude, Grok, Codex, …) or have your agent do it.
 3. **Ask your AI agent to finish setup** — it should start **research-only** (no signing secrets), reload, and smoke-check. Ask again later if you want agent wallets for signing.
 
