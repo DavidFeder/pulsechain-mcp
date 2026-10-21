@@ -1,3 +1,13 @@
+# Release notes — pulsechain-mcp 1.0.13
+
+## What shipped (1.0.13)
+
+- Run Node.js **24.22.1** (Active LTS). **22.23.4** and **26.12.1** are the other 21 October 2026 security releases. Node.js 20 is end of life and is not an accepted engine.
+- Docker base image is `node:24.22.1-alpine`. CI tests 22.23.4, 24.22.1, and 26.12.1.
+- No tool or wallet behavior change. After upgrading Node, restart the MCP host so `pulsechain_health.version` is **1.0.13**.
+
+Version surfaces: package, `SERVER_VERSION`, health, and Docker tag **1.0.13**.
+
 # Release notes — pulsechain-mcp 1.0.12
 
 ## What shipped (1.0.12)

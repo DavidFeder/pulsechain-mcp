@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Node.js **24.22.1** (or 22.23.4 / 26.12.1). Node 20 is unsupported. Docker image `node:24.22.1-alpine`.
+## [1.0.13] - 2026-10-21 — Node.js **24.22.1** (or 22.23.4 / 26.12.1). Node 20 is unsupported. Docker image `node:24.22.1-alpine`.
 
 ## [1.0.12] - 2026-10-02
 Read-only `pump_tires_coin` on chain 369. Slim counts **90** / **80** (full **105** / **95**). Phase comes from the verified token template `launched()` view. Progress is documented 200,000,000 PLS bid liquidity only when the factory exposes `plsReceived`. The platform PUMP token is not a launched coin. An address the creation-tx factory does not list is not marked graduated. Does not create, buy, or burn a coin. Meme coin, not financial advice.
